@@ -78,6 +78,12 @@ class Settings(BaseSettings):
 
     instagram_enabled: bool = Field(default=False, alias="INSTAGRAM_ENABLED")
     bitrix_enabled: bool = Field(default=False, alias="BITRIX_ENABLED")
+    bitrix_webhook_secret: SecretStr | None = Field(
+        default=None, alias="BITRIX_WEBHOOK_SECRET"
+    )
+    bitrix_notify_chat_id: str | None = Field(
+        default=None, alias="BITRIX_NOTIFY_CHAT_ID"
+    )
     erpnext_enabled: bool = Field(default=False, alias="ERPNEXT_ENABLED")
     crm_provider: str = Field(default="none", alias="CRM_PROVIDER")
 

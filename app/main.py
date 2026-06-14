@@ -18,6 +18,10 @@ app = FastAPI(
     version="0.1.0",
 )
 
+from app.api.bitrix_webhook import router as bitrix_router
+
+app.include_router(bitrix_router)
+
 
 @app.get("/health")
 async def health() -> dict[str, str]:
