@@ -7,11 +7,12 @@ app_port: 7860
 # Growly
 
 Growly is an AI-powered content factory, marketing intelligence, and approval
-automation backend for businesses. It collects manually approved market evidence,
-builds content plans, generates drafts through GitHub Models with Groq fallback,
-handles approvals in Telegram,
-stores technical state in Supabase PostgreSQL, and presents client-facing data in
-Notion.
+automation backend for businesses. It maintains a manually curated list of
+competitor and reference sources, collects public market evidence from them
+automatically via Tavily, builds content plans, generates drafts through GitHub
+Models with Groq fallback, and routes every draft through human approval in
+Telegram before publishing. It stores technical state in Supabase PostgreSQL and
+presents client-facing data in Notion.
 
 This version intentionally has no custom website, n8n workflow, or Google Sheets
 dependency.

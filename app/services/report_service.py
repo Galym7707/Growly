@@ -18,10 +18,11 @@ logger = logging.getLogger(__name__)
 class ReportService:
     def __init__(
         self,
-        groq: AIService | None = None,
+        ai: AIService | None = None,
         notion: NotionService | None = None,
+        groq: AIService | None = None,
     ) -> None:
-        self.groq = groq or AIService()
+        self.ai = ai or groq or AIService()
         self.notion = notion or NotionService()
 
     async def list_latest(self, limit: int = 10) -> list[Report]:
@@ -55,7 +56,7 @@ class ReportService:
         start_dt = datetime.combine(week_start, time.min, tzinfo=UTC)
         end_dt = datetime.combine(week_end + timedelta(days=1), time.min, tzinfo=UTC)
         context = await asyncio.to_thread(self._performance_context, start_dt, end_dt)
-        text = await self.groq.generate_weekly_performance_report(context)
+        text = await self.ai.generate_weekly_performance_report(context)
 
         def save() -> Report:
             with session_scope() as session:

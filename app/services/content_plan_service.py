@@ -33,10 +33,11 @@ ContentPlanProgress = Callable[[str], Awaitable[None]]
 class ContentPlanService:
     def __init__(
         self,
-        groq: AIService | None = None,
+        ai: AIService | None = None,
         notion: NotionService | None = None,
+        groq: AIService | None = None,
     ) -> None:
-        self.groq = groq or AIService()
+        self.ai = ai or groq or AIService()
         self.notion = notion or NotionService()
         self.reduced_context_used = False
 
@@ -64,7 +65,7 @@ class ContentPlanService:
             "Шаг 3/4: генерирую контент-план...",
         )
         try:
-            response = await self.groq.generate_content_plan(context)
+            response = await self.ai.generate_content_plan(context)
         except AIServiceError as exc:
             if exc.status != 413:
                 raise
@@ -73,7 +74,7 @@ class ContentPlanService:
                 "Content plan payload was rejected with 413; retrying with "
                 "report-summary-only context."
             )
-            response = await self.groq.generate_content_plan(
+            response = await self.ai.generate_content_plan(
                 self._summary_only_context(context)
             )
         payload = parse_json_response(response)
@@ -122,7 +123,7 @@ class ContentPlanService:
             start=1,
         ):
             batch = source_items[start : start + CONTENT_PLAN_BATCH_SIZE]
-            response = await self.groq.summarize_content_plan_sources(
+            response = await self.ai.summarize_content_plan_sources(
                 {
                     "batch_number": batch_number,
                     "source_items": [

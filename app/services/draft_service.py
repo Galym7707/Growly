@@ -67,11 +67,12 @@ class DraftService:
     def __init__(
         self,
         settings: Settings | None = None,
-        groq: AIService | None = None,
+        ai: AIService | None = None,
         notion: NotionService | None = None,
+        groq: AIService | None = None,
     ) -> None:
         self.settings = settings or get_settings()
-        self.groq = groq or AIService(self.settings)
+        self.ai = ai or groq or AIService(self.settings)
         self.notion = notion or NotionService(self.settings)
 
     async def create_asset_post(self, context: dict[str, Any]) -> Draft:
@@ -192,7 +193,7 @@ class DraftService:
                     title=title,
                     draft_text=draft_text,
                     ai_model=(
-                        getattr(self.groq, "last_model_name", None)
+                        getattr(self.ai, "last_model_name", None)
                         or self.settings.ai_model_name()
                     ),
                     prompt_name=prompt_name,
@@ -501,7 +502,7 @@ class DraftService:
         for attempt in range(2):
             if violations:
                 generation_context["revision_required"] = violations
-            response = await self.groq.generate_content_draft(
+            response = await self.ai.generate_content_draft(
                 spec.prompt_name, generation_context
             )
             payload = parse_json_response(response)
@@ -521,7 +522,7 @@ class DraftService:
     async def _analyze_brief(
         self, context: dict[str, Any], spec: ContentTypeSpec
     ) -> dict[str, Any]:
-        response = await self.groq.analyze_draft_brief(
+        response = await self.ai.analyze_draft_brief(
             {
                 **context,
                 "requested_content_type": spec.label,
