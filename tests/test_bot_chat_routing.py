@@ -1,8 +1,10 @@
 from datetime import UTC, datetime
 
 from telegram import Bot, Chat, Message, MessageEntity, Update, User
+from telegram.ext import ConversationHandler
 
-from app.bot.bot import build_application
+from app.bot.bot import build_application, clear_active_conversations
+from app.bot.states import BotState
 from app.config import Settings
 
 
@@ -31,6 +33,25 @@ def command_update(command: str, chat_type: str) -> Update:
     )
     message.set_bot(bot)
     return Update(update_id=1, message=message)
+
+
+def text_update(text: str) -> Update:
+    message = Message(
+        message_id=2,
+        date=datetime.now(UTC),
+        chat=Chat(id=12345, type="private"),
+        from_user=User(id=77, first_name="Tester", is_bot=False),
+        text=text,
+    )
+    bot = Bot(token="123:test-token")
+    bot._bot_user = User(  # type: ignore[attr-defined]
+        id=123,
+        first_name="Growly",
+        is_bot=True,
+        username="GrowlyBot",
+    )
+    message.set_bot(bot)
+    return Update(update_id=2, message=message)
 
 
 def command_handler(application: object, callback_name: str) -> object:
@@ -134,3 +155,26 @@ def test_polling_retries_transient_bootstrap_failures(
 
     assert captured["bootstrap_retries"] == -1
     assert captured["timeout"] == 30
+
+
+def test_menu_button_interrupts_active_content_plan_before_reports() -> None:
+    application = build_application(
+        Settings(_env_file=None, TELEGRAM_BOT_API_KEY="123:test-token")
+    )
+    update = text_update("Reports")
+    content_plan = next(
+        handler
+        for handlers in application.handlers.values()
+        for handler in handlers
+        if isinstance(handler, ConversationHandler)
+        and BotState.PLAN_GOAL in handler.states
+    )
+    key = (12345, 77)
+    content_plan._conversations[key] = BotState.PLAN_GOAL
+
+    assert content_plan.check_update(update)
+    assert clear_active_conversations(application, update) == 1
+    assert not content_plan.check_update(update)
+
+    reports_handler = command_handler(application, "reports_menu")
+    assert reports_handler.check_update(update)

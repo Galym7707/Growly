@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
+from io import BytesIO
 from typing import Any
 
 from telegram import (
@@ -11,6 +13,7 @@ from telegram import (
     BotCommandScopeAllGroupChats,
     BotCommandScopeAllPrivateChats,
     BotCommandScopeDefault,
+    InputFile,
     Update,
 )
 from telegram.constants import ChatType
@@ -20,12 +23,16 @@ from telegram.ext import ContextTypes, ConversationHandler
 from app.bot.keyboards import (
     approval_keyboard,
     approved_keyboard,
+    competitor_report_actions_keyboard,
     create_post_menu_keyboard,
     main_menu_keyboard,
     market_scan_actions_keyboard,
     market_scan_pending_keyboard,
     more_menu_keyboard,
     new_business_confirmation_keyboard,
+    report_post_type_keyboard,
+    reports_menu_keyboard,
+    settings_menu_keyboard,
     source_actions_keyboard,
     sources_menu_keyboard,
 )
@@ -71,7 +78,7 @@ HELP_TEXT = """Доступные команды:
 /retry_analysis — повторить AI-анализ сохранённых результатов поиска
 /status — показать состояние последней длительной задачи
 /create_post — создать пост
-/create_case — создать анонимизированный кейс
+/create_case — создать пост о результате клиента: ситуация, действия, результат
 /content_plan — недельный контент-план
 /generate_from_plan — создать черновик из контент-плана
 /competitor_report — конкурентный отчёт
@@ -99,7 +106,7 @@ PRIVATE_BOT_COMMANDS = [
     BotCommand("retry_analysis", "Повторить AI-анализ сохранённого поиска"),
     BotCommand("status", "Статус последней длительной задачи"),
     BotCommand("create_post", "Создать пост"),
-    BotCommand("create_case", "Создать кейс"),
+    BotCommand("create_case", "Пост о результате клиента"),
     BotCommand("content_plan", "Создать контент-план"),
     BotCommand("generate_from_plan", "Создать черновик из плана"),
     BotCommand("competitor_report", "Создать конкурентный отчёт"),
@@ -124,6 +131,10 @@ POST_TYPE_PRESETS = {
     "Educational post": (
         "educational_post",
         "Опишите тему, аудиторию, практический вопрос или процесс, факты и CTA.",
+    ),
+    "Client result post": (
+        "case_post",
+        "Опишите исходную ситуацию, выполненные действия, подтверждённый результат и CTA.",
     ),
     "Case post": (
         "case_post",
@@ -324,8 +335,30 @@ async def more_menu(
 ) -> None:
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Дополнительные действия:",
+            "Инструменты:",
             reply_markup=more_menu_keyboard(),
+        )
+
+
+async def reports_menu(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    if update.effective_message:
+        await update.effective_message.reply_text(
+            "Отчёты:",
+            reply_markup=reports_menu_keyboard(),
+        )
+
+
+async def settings_menu(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    if update.effective_message:
+        await update.effective_message.reply_text(
+            "Настройки:",
+            reply_markup=settings_menu_keyboard(),
         )
 
 
@@ -382,7 +415,7 @@ async def settings_status(
     ]
     await update.effective_message.reply_text(
         "\n".join(lines),
-        reply_markup=more_menu_keyboard(),
+        reply_markup=settings_menu_keyboard(),
     )
 
 
@@ -575,8 +608,9 @@ async def create_case_start(
 ) -> BotState:
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Опишите исходную ситуацию, выполненные действия и подтверждённый результат. "
-            "Названия будут обезличены, если вы явно не разрешите публикацию."
+            "Опишите результат клиента: какая была ситуация, что вы сделали и "
+            "какой подтверждённый результат получили. Имена клиентов и компаний "
+            "не попадут в пост без вашего явного разрешения."
         )
     return BotState.WAITING_CASE
 
@@ -1138,6 +1172,55 @@ async def send_market_scan_result(
     )
 
 
+async def send_competitor_report_summary(
+    bot: Any,
+    chat_id: int,
+    report: Any,
+) -> None:
+    payload = report.raw_json or {}
+
+    def names() -> str:
+        rows = payload.get("competitors")
+        if not isinstance(rows, list):
+            return "Не идентифицированы по сохранённым данным"
+        values = [
+            str(row.get("competitor") or "").strip()
+            for row in rows[:5]
+            if isinstance(row, dict) and str(row.get("competitor") or "").strip()
+        ]
+        return ", ".join(values) or "Не идентифицированы по сохранённым данным"
+
+    def top(key: str, limit: int = 3) -> str:
+        rows = payload.get(key)
+        values = rows if isinstance(rows, list) else []
+        return "\n".join(f"- {truncate(str(value), 180)}" for value in values[:limit]) or (
+            "- Нет подтверждённых данных"
+        )
+
+    message = "\n\n".join(
+        [
+            f"Конкурентный отчёт #{report.id} сохранён.",
+            truncate(
+                str(
+                    payload.get("executive_summary")
+                    or report.summary
+                    or "Нет подтверждённого вывода."
+                ),
+                700,
+            ),
+            f"Конкуренты: {names()}",
+            "Контентные пробелы:\n" + top("content_gaps"),
+            "Действия на неделю:\n" + top("actions_this_week", limit=5),
+            f"Проверено источников: {report.sources_count}",
+        ]
+    )
+    await bot.send_message(
+        chat_id,
+        message,
+        reply_markup=competitor_report_actions_keyboard(report.id),
+    )
+
+
 async def retry_analysis(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -1256,12 +1339,7 @@ async def market_scan_action_callback(
     if action == "competitor":
         await context.bot.send_message(chat.id, "Формирую конкурентный отчёт…")
         report = await MarketIntelligenceService().generate_competitor_report()
-        await TelegramService().send_long_text(
-            context.bot,
-            chat.id,
-            report.body or report.report_text or "Отчёт сохранён.",
-            reply_markup=main_menu_keyboard(),
-        )
+        await send_competitor_report_summary(context.bot, chat.id, report)
     elif action == "content_plan":
         items = await generate_content_plan_with_progress(
             context,
@@ -1331,6 +1409,129 @@ async def market_scan_action_callback(
             "\n\n".join(lines),
             reply_markup=market_scan_pending_keyboard(report_id),
         )
+
+
+async def report_action_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    query = update.callback_query
+    chat = update.effective_chat
+    if not query or not query.data or not chat:
+        return
+    if not await answer_callback_safely(
+        query,
+        context,
+        chat.id,
+        show_alert=chat.type != ChatType.PRIVATE,
+    ):
+        return
+    if chat.type != ChatType.PRIVATE:
+        return
+
+    _, action, report_id_value = query.data.split(":", 2)
+    report_id = int(report_id_value)
+    service = ReportService()
+    report = await service.get_report(report_id)
+    if report is None:
+        await context.bot.send_message(chat.id, "Отчёт не найден.")
+        return
+
+    if action == "view":
+        body = report.body or report.report_text or report.summary or "Отчёт пуст."
+        await context.bot.send_document(
+            chat.id,
+            document=InputFile(
+                BytesIO(body.encode("utf-8")),
+                filename=f"growly-report-{report.id}.txt",
+            ),
+            caption=f"Полный отчёт #{report.id}.",
+        )
+    elif action == "content_plan":
+        payload = report.raw_json or {}
+        items = await generate_content_plan_with_progress(
+            context,
+            chat.id,
+            {
+                "goal": f"Создать контент-план по конкурентному отчёту #{report.id}.",
+                "latest_competitor_report": {
+                    "summary": report.summary,
+                    "content_gaps": payload.get("content_gaps", []),
+                    "recommended_positioning": payload.get(
+                        "recommended_positioning", []
+                    ),
+                    "actions_this_week": payload.get("actions_this_week", []),
+                },
+            },
+        )
+        await context.bot.send_message(
+            chat.id,
+            f"Контент-план сохранён: {len(items)} элементов.",
+            reply_markup=main_menu_keyboard(),
+        )
+    elif action == "create_post":
+        await context.bot.send_message(
+            chat.id,
+            "Выберите тип поста по выводам отчёта:",
+            reply_markup=report_post_type_keyboard(report.id),
+        )
+    elif action == "notion":
+        try:
+            url = await service.sync_report_to_notion(report.id)
+            message = f"Отчёт #{report.id} синхронизирован с Notion:\n{url}"
+        except (TimeoutError, GrowlyError):
+            message = (
+                f"Отчёт #{report.id} сохранён в Supabase, но синхронизация "
+                "с Notion сейчас не завершилась."
+            )
+        await context.bot.send_message(chat.id, message)
+
+
+async def report_post_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    query = update.callback_query
+    chat = update.effective_chat
+    if not query or not query.data or not chat:
+        return
+    if not await answer_callback_safely(
+        query,
+        context,
+        chat.id,
+        show_alert=chat.type != ChatType.PRIVATE,
+    ):
+        return
+    if chat.type != ChatType.PRIVATE:
+        return
+
+    _, report_id_value, post_type = query.data.split(":", 2)
+    report = await ReportService().get_report(int(report_id_value))
+    if report is None:
+        await context.bot.send_message(chat.id, "Отчёт не найден.")
+        return
+    payload = report.raw_json or {}
+    evidence = {
+        "executive_summary": payload.get("executive_summary") or report.summary,
+        "content_gaps": payload.get("content_gaps", []),
+        "recommended_positioning": payload.get("recommended_positioning", []),
+        "actions_this_week": payload.get("actions_this_week", []),
+        "source_urls": (payload.get("source_urls") or report.evidence_json or [])[:8],
+    }
+    await context.bot.send_message(chat.id, "Генерирую черновик по отчёту…")
+    draft = await DraftService().create_post(
+        {
+            "title": f"Post from competitor report #{report.id}",
+            "brief": (
+                f"Content type: {post_type}\n"
+                "Создай пост только по подтверждённым выводам конкурентного отчёта. "
+                "Не придумывай цены, результаты или заявления конкурентов.\n"
+                + json.dumps(evidence, ensure_ascii=False)
+            ),
+            "channel": "Telegram",
+        }
+    )
+    await send_draft(update, context, draft)
 
 
 async def content_plan_start(
@@ -1555,11 +1756,10 @@ async def competitor_report(
         return BotState.COMPETITOR_REPORT_TOPIC
     await update.effective_message.reply_text("Формирую конкурентный отчёт…")
     report = await service.generate_competitor_report()
-    await TelegramService().send_long_text(
+    await send_competitor_report_summary(
         context.bot,
         update.effective_chat.id,
-        report.body or report.report_text or "Отчёт сохранён.",
-        reply_markup=main_menu_keyboard(),
+        report,
     )
     return ConversationHandler.END
 
@@ -1580,11 +1780,10 @@ async def competitor_report_topic(
         competitor_keywords="нет",
     )
     report = await service.generate_competitor_report(query=topic)
-    await TelegramService().send_long_text(
+    await send_competitor_report_summary(
         context.bot,
         update.effective_chat.id,
-        report.body or report.report_text or "Отчёт сохранён.",
-        reply_markup=main_menu_keyboard(),
+        report,
     )
     return ConversationHandler.END
 
@@ -1609,17 +1808,19 @@ async def reports(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     rows = await ReportService().list_latest()
     if not rows:
         await update.effective_message.reply_text(
-            "Отчёты ещё не созданы.", reply_markup=main_menu_keyboard()
+            "Отчёты ещё не созданы.", reply_markup=reports_menu_keyboard()
         )
         return
     summary = "\n\n".join(
-        f"{row.title}\n{truncate(row.body or row.report_text, 500)}" for row in rows
+        (
+            f"#{row.id} · {row.title}\n"
+            f"{truncate(row.summary or row.body or row.report_text, 220)}"
+        )
+        for row in rows[:5]
     )
-    await TelegramService().send_long_text(
-        context.bot,
-        update.effective_chat.id,
+    await update.effective_message.reply_text(
         summary,
-        reply_markup=main_menu_keyboard(),
+        reply_markup=reports_menu_keyboard(),
     )
 
 

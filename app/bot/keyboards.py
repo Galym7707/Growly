@@ -3,14 +3,69 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 
+MAIN_MENU_ROWS = [
+    ["Market scan", "Content plan"],
+    ["Create post", "Drafts"],
+    ["Reports", "Sources"],
+    ["Settings", "Help"],
+]
+
+SOURCES_MENU_ROWS = [
+    ["View sources"],
+    ["Find new sources", "Check saved sources"],
+    ["Back"],
+]
+
+CREATE_POST_MENU_ROWS = [
+    ["Promo post", "Educational post"],
+    ["Client result post", "FAQ post"],
+    ["News post", "Custom post"],
+    ["Back"],
+]
+
+REPORTS_MENU_ROWS = [
+    ["View latest reports"],
+    ["Competitor report", "Performance report"],
+    ["Back"],
+]
+
+SETTINGS_MENU_ROWS = [
+    ["View settings", "New business"],
+    ["Tools", "Sync Notion"],
+    ["Back"],
+]
+
+TOOLS_MENU_ROWS = [
+    ["Web search", "Review analysis"],
+    ["Back"],
+]
+
+NAVIGATION_BUTTON_LABELS = frozenset(
+    label
+    for rows in (
+        MAIN_MENU_ROWS,
+        SOURCES_MENU_ROWS,
+        CREATE_POST_MENU_ROWS,
+        REPORTS_MENU_ROWS,
+        SETTINGS_MENU_ROWS,
+        TOOLS_MENU_ROWS,
+    )
+    for row in rows
+    for label in row
+) | {
+    # Keep stale keyboards and old shortcuts safe during deployments.
+    "Discover sources",
+    "Monitor sources",
+    "Case post",
+    "Create case",
+    "Pending drafts",
+    "More",
+}
+
+
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [
-            ["Market scan", "Content plan"],
-            ["Create post", "Sources"],
-            ["Drafts", "Reports"],
-            ["More"],
-        ],
+        MAIN_MENU_ROWS,
         resize_keyboard=True,
         is_persistent=True,
     )
@@ -18,11 +73,7 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
 
 def sources_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [
-            ["View sources"],
-            ["Discover sources", "Monitor sources"],
-            ["Back"],
-        ],
+        SOURCES_MENU_ROWS,
         resize_keyboard=True,
         is_persistent=True,
     )
@@ -30,12 +81,23 @@ def sources_menu_keyboard() -> ReplyKeyboardMarkup:
 
 def create_post_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [
-            ["Promo post", "Educational post"],
-            ["Case post", "FAQ post"],
-            ["News post", "Custom post"],
-            ["Back"],
-        ],
+        CREATE_POST_MENU_ROWS,
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+
+
+def reports_menu_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        REPORTS_MENU_ROWS,
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+
+
+def settings_menu_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        SETTINGS_MENU_ROWS,
         resize_keyboard=True,
         is_persistent=True,
     )
@@ -43,12 +105,7 @@ def create_post_menu_keyboard() -> ReplyKeyboardMarkup:
 
 def more_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [
-            ["Web search", "Review analysis"],
-            ["Sync Notion", "Settings"],
-            ["Help"],
-            ["Back"],
-        ],
+        TOOLS_MENU_ROWS,
         resize_keyboard=True,
         is_persistent=True,
     )
@@ -84,7 +141,7 @@ def market_scan_actions_keyboard(report_id: int) -> InlineKeyboardMarkup:
         [
             [
                 InlineKeyboardButton(
-                    "Generate Competitor Report",
+                    "Competitor report",
                     callback_data=f"market:competitor:{report_id}",
                 )
             ],
@@ -102,6 +159,70 @@ def market_scan_actions_keyboard(report_id: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     "New Search",
                     callback_data="market:new_search",
+                ),
+            ],
+        ]
+    )
+
+
+def competitor_report_actions_keyboard(report_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "View full report",
+                    callback_data=f"report:view:{report_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Generate content plan",
+                    callback_data=f"report:content_plan:{report_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Create post from report",
+                    callback_data=f"report:create_post:{report_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Sync Notion",
+                    callback_data=f"report:notion:{report_id}",
+                )
+            ],
+        ]
+    )
+
+
+def report_post_type_keyboard(report_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "Promo post",
+                    callback_data=f"report_post:{report_id}:promo_post",
+                ),
+                InlineKeyboardButton(
+                    "Educational post",
+                    callback_data=f"report_post:{report_id}:educational_post",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "Client result post",
+                    callback_data=f"report_post:{report_id}:case_post",
+                ),
+                InlineKeyboardButton(
+                    "FAQ post",
+                    callback_data=f"report_post:{report_id}:faq_post",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "News post",
+                    callback_data=f"report_post:{report_id}:news_post",
                 ),
             ],
         ]

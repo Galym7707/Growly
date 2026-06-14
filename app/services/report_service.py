@@ -31,6 +31,25 @@ class ReportService:
 
         return await asyncio.to_thread(load)
 
+    async def get_report(self, report_id: int) -> Report | None:
+        def load() -> Report | None:
+            with session_scope() as session:
+                return ReportsRepository(session).get_report(report_id)
+
+        return await asyncio.to_thread(load)
+
+    async def sync_report_to_notion(self, report_id: int) -> str:
+        report = await self.get_report(report_id)
+        if report is None:
+            raise ValueError("Отчёт не найден.")
+        page = await asyncio.wait_for(
+            self.notion.sync_report(report),
+            timeout=30,
+        )
+        page_id = str(page["id"])
+        await asyncio.to_thread(self._save_page_id, report.id, page_id)
+        return self.notion.page_url(page_id)
+
     async def generate_weekly_performance_report(self) -> Report:
         week_start, week_end = self._previous_week()
         start_dt = datetime.combine(week_start, time.min, tzinfo=UTC)

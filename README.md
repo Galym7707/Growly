@@ -193,7 +193,9 @@ Private-chat commands:
 
 - `/start`: register the Telegram user and show the menu.
 - `/create_post`: collect a brief and generate an asset/product post.
-- `/create_case`: collect facts and generate an anonymized case post.
+- `/create_case`: create a client-result post from the starting situation,
+  completed actions, and verified outcome; client/company names stay private
+  unless explicitly approved for publication.
 - `/add_source`: register a manual intelligence source and sync it to Notion.
 - `/sources`: list active sources grouped by type and priority.
 - `/disable_source`: disable a source by ID or exact name.

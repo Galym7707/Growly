@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import re
 
+from telegram import Update
 from telegram.ext import (
     Application,
     ApplicationBuilder,
@@ -17,8 +19,54 @@ from app.bot.states import BotState
 from app.config import Settings, get_settings
 from app.runtime_status import telegram_initialized
 from app.services.scheduler_service import SchedulerService
+from app.bot.keyboards import NAVIGATION_BUTTON_LABELS
 
 logger = logging.getLogger(__name__)
+
+NAVIGATION_COMMANDS = (
+    "start",
+    "help",
+    "create_post",
+    "drafts",
+    "reports",
+    "sources",
+    "monitor_sources",
+    "performance_report",
+    "sync_notion",
+    "retry_analysis",
+    "status",
+    "debug_notion_status",
+    "discover_sources",
+    "web_search",
+    "market_scan",
+    "competitor_report",
+    "add_source",
+    "disable_source",
+    "import_source_items",
+    "content_plan",
+    "generate_from_plan",
+    "update_publication_metrics",
+    "create_case",
+    "review_analysis",
+    "new_business",
+    "cancel",
+)
+
+
+def clear_active_conversations(application: Application, update: Update) -> int:
+    """End every active private-chat flow for the current chat and user."""
+    cleared = 0
+    for group_handlers in application.handlers.values():
+        for handler in group_handlers:
+            if not isinstance(handler, ConversationHandler):
+                continue
+            try:
+                key = handler._get_key(update)
+            except RuntimeError:
+                continue
+            if handler._conversations.pop(key, None) is not None:
+                cleared += 1
+    return cleared
 
 
 def build_application(settings: Settings | None = None) -> Application:
@@ -44,6 +92,28 @@ def build_application(settings: Settings | None = None) -> Application:
     )
 
     private_chat = filters.ChatType.PRIVATE
+
+    async def interrupt_active_flow(update: Update, context: object) -> None:
+        clear_active_conversations(application, update)
+        user_data = getattr(context, "user_data", None)
+        if user_data is not None:
+            user_data.clear()
+
+    navigation_pattern = "^(?:" + "|".join(
+        re.escape(label) for label in sorted(NAVIGATION_BUTTON_LABELS)
+    ) + ")$"
+    command_pattern = r"^/(?:" + "|".join(NAVIGATION_COMMANDS) + r")(?:@\w+)?(?:\s|$)"
+    application.add_handler(
+        MessageHandler(
+            private_chat
+            & (
+                filters.Regex(command_pattern)
+                | filters.Regex(navigation_pattern)
+            ),
+            interrupt_active_flow,
+        ),
+        group=-1,
+    )
 
     def conversation_fallbacks() -> list[CommandHandler]:
         return [
@@ -128,7 +198,8 @@ def build_application(settings: Settings | None = None) -> Application:
                     filters=private_chat,
                 ),
                 MessageHandler(
-                    private_chat & filters.Regex(r"^Discover sources$"),
+                    private_chat
+                    & filters.Regex(r"^(Find new sources|Discover sources)$"),
                     handlers.discover_sources_start,
                 ),
             ],
@@ -248,7 +319,7 @@ def build_application(settings: Settings | None = None) -> Application:
                     private_chat
                     & filters.Regex(
                         r"^(Promo post|Educational post|Case post|FAQ post|"
-                        r"News post|Custom post|Create one-off post)$"
+                        r"Client result post|News post|Custom post|Create one-off post)$"
                     ),
                     handlers.create_post_type_start,
                 ),
@@ -430,7 +501,8 @@ def build_application(settings: Settings | None = None) -> Application:
                     filters=private_chat,
                 ),
                 MessageHandler(
-                    private_chat & filters.Regex(r"^Create case$"),
+                    private_chat
+                    & filters.Regex(r"^(Create case|Client result post)$"),
                     handlers.create_case_start,
                 ),
             ],
@@ -489,21 +561,28 @@ def build_application(settings: Settings | None = None) -> Application:
         "Create post": handlers.create_post_menu,
         "Sources": handlers.sources_menu,
         "View sources": handlers.sources,
+        "Find new sources": handlers.discover_sources_start,
         "Monitor sources": handlers.monitor_sources,
+        "Check saved sources": handlers.monitor_sources,
         "Drafts": handlers.drafts,
         "Pending drafts": handlers.drafts,
-        "Reports": handlers.reports,
+        "Reports": handlers.reports_menu,
+        "View latest reports": handlers.reports,
+        "Competitor report": handlers.competitor_report,
         "More": handlers.more_menu,
+        "Tools": handlers.more_menu,
         "Performance report": handlers.performance_report,
         "Sync Notion": handlers.sync_notion,
-        "Settings": handlers.settings_status,
+        "Settings": handlers.settings_menu,
+        "View settings": handlers.settings_status,
+        "New business": handlers.new_business_start,
         "Help": handlers.help_command,
         "Back": handlers.main_menu,
     }
     for label, callback in button_handlers.items():
         application.add_handler(
             MessageHandler(
-                private_chat & filters.Regex(f"^{label}$"),
+                private_chat & filters.Regex(f"^{re.escape(label)}$"),
                 callback,
             )
         )
@@ -524,6 +603,21 @@ def build_application(settings: Settings | None = None) -> Application:
         CallbackQueryHandler(
             handlers.market_scan_action_callback,
             pattern=r"^market:(competitor|content_plan|limited_plan|notion|retry|view_sources):\d+$",
+        )
+    )
+    application.add_handler(
+        CallbackQueryHandler(
+            handlers.report_action_callback,
+            pattern=r"^report:(view|content_plan|create_post|notion):\d+$",
+        )
+    )
+    application.add_handler(
+        CallbackQueryHandler(
+            handlers.report_post_callback,
+            pattern=(
+                r"^report_post:\d+:"
+                r"(promo_post|educational_post|case_post|faq_post|news_post)$"
+            ),
         )
     )
     application.add_handler(

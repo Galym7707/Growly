@@ -51,9 +51,17 @@ CONTENT_TYPES = (
     ),
     ContentTypeSpec(
         key="case_post",
-        label="Case post",
+        label="Client result post",
         prompt_name="case_post.md",
-        aliases=("case post", "case_post", "кейс", "пост-кейс"),
+        aliases=(
+            "client result post",
+            "result story",
+            "case post",
+            "case_post",
+            "кейс",
+            "пост-кейс",
+            "история результата",
+        ),
     ),
     ContentTypeSpec(
         key="educational_post",

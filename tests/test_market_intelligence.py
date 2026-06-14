@@ -85,6 +85,75 @@ def test_market_scan_report_renderer_keeps_evidence_and_limitations() -> None:
     assert "https://example.com/source" in text
 
 
+def test_competitor_report_renderer_has_required_business_structure() -> None:
+    payload = {
+        "executive_summary": "Три конкурента повторяют один оффер.",
+        "competitors": [
+            {
+                "competitor": "Alpha",
+                "channel": "Website",
+                "offer": "Audit",
+                "price_value": "Не подтверждено",
+                "content_style": "Guides",
+                "cta": "Book a call",
+                "strengths": "Clear offer",
+                "weaknesses": "Few cases",
+                "opportunity": "Show proof",
+                "source_urls": ["https://example.com/alpha"],
+            }
+        ],
+        "repeating_offers": ["Audit"],
+        "repeating_ctas": ["Book a call"],
+        "content_gaps": ["Detailed cases"],
+        "recommended_positioning": ["Evidence-led"],
+        "actions_this_week": ["Publish one case"],
+        "source_urls": ["https://example.com/alpha"],
+        "limitations": ["Public web evidence only"],
+    }
+
+    text = MarketIntelligenceService.render_competitor_report(payload)
+
+    for heading in (
+        "Executive summary",
+        "Competitor table",
+        "Repeating offers",
+        "Repeating CTAs",
+        "Content gaps",
+        "Recommended positioning",
+        "5 actions for this week",
+        "Source URLs",
+    ):
+        assert heading in text
+    assert "| Alpha | Website | Audit |" in text
+    assert "https://example.com/alpha" in text
+
+
+def test_competitor_report_rejects_rows_without_verified_urls() -> None:
+    payload = MarketIntelligenceService._normalize_competitor_report(
+        {
+            "executive_summary": "Summary",
+            "competitors": [
+                {
+                    "competitor": "Verified",
+                    "source_urls": ["https://example.com/verified"],
+                },
+                {
+                    "competitor": "Invented",
+                    "source_urls": ["https://invented.example/profile"],
+                },
+            ],
+            "source_urls": [
+                "https://example.com/verified",
+                "https://invented.example/profile",
+            ],
+        },
+        ["https://example.com/verified"],
+    )
+
+    assert [row["competitor"] for row in payload["competitors"]] == ["Verified"]
+    assert payload["source_urls"] == ["https://example.com/verified"]
+
+
 def test_partial_market_scan_report_status_is_persisted() -> None:
     session = FakeSession()
 

@@ -580,11 +580,22 @@ class MarketIntelligenceService:
             raise ValueError(
                 "Нет сохранённых Source Items. Сначала выполните /market_scan."
             )
-        text = await self.groq.generate_competitor_report(context)
-        evidence = [
-            row["url"] for row in context["source_items"] if row.get("url")
+        response = await asyncio.wait_for(
+            self.groq.generate_competitor_report(context),
+            timeout=GROQ_GENERATION_TIMEOUT_SECONDS,
+        )
+        payload = self._parse_dict(response, "Competitor report")
+        allowed_urls = [
+            str(row["url"])
+            for row in context["source_items"]
+            if row.get("url")
         ]
-        summary = text.split("\n\n", 1)[0][:1800]
+        payload = self._normalize_competitor_report(payload, allowed_urls)
+        text = self.render_competitor_report(payload)
+        evidence = payload["source_urls"]
+        summary = str(payload.get("executive_summary") or "Нет подтверждённого вывода.")[
+            :1800
+        ]
         report = await asyncio.to_thread(
             self._save_competitor_report,
             query,
@@ -592,6 +603,7 @@ class MarketIntelligenceService:
             summary,
             evidence,
             context,
+            payload,
         )
         await self._sync_report(report)
         return report
@@ -758,6 +770,150 @@ class MarketIntelligenceService:
                 section("Источники", payload.get("evidence_urls")),
             ]
         )
+
+    @staticmethod
+    def render_competitor_report(payload: dict[str, Any]) -> str:
+        def clean_cell(value: Any) -> str:
+            return str(value or "Не подтверждено").replace("|", "/").replace("\n", " ")
+
+        def bullets(values: Any, *, empty: str = "Нет подтверждённых данных") -> str:
+            rows = values if isinstance(values, list) else []
+            return "\n".join(f"- {clean_cell(row)}" for row in rows) or f"- {empty}"
+
+        table = [
+            "| Competitor | Channel | Offer | Price/value | Content style | CTA | "
+            "Strengths | Weaknesses | Opportunity |",
+            "|---|---|---|---|---|---|---|---|---|",
+        ]
+        evidence_by_competitor: list[str] = []
+        for row in payload.get("competitors", []):
+            table.append(
+                "| "
+                + " | ".join(
+                    clean_cell(row.get(field))
+                    for field in (
+                        "competitor",
+                        "channel",
+                        "offer",
+                        "price_value",
+                        "content_style",
+                        "cta",
+                        "strengths",
+                        "weaknesses",
+                        "opportunity",
+                    )
+                )
+                + " |"
+            )
+            evidence_by_competitor.append(
+                f"- {clean_cell(row.get('competitor'))}: "
+                + ", ".join(row.get("source_urls") or [])
+            )
+        if len(table) == 2:
+            table.append(
+                "| Не идентифицированы | Не подтверждено | Не подтверждено | "
+                "Не подтверждено | Не подтверждено | Не подтверждено | "
+                "Не подтверждено | Не подтверждено | Требуется больше данных |"
+            )
+
+        return "\n\n".join(
+            [
+                "Executive summary\n"
+                + clean_cell(payload.get("executive_summary") or "Нет подтверждённого вывода"),
+                "Competitor table\n" + "\n".join(table),
+                "Repeating offers\n" + bullets(payload.get("repeating_offers")),
+                "Repeating CTAs\n" + bullets(payload.get("repeating_ctas")),
+                "Content gaps\n" + bullets(payload.get("content_gaps")),
+                "Recommended positioning\n"
+                + bullets(payload.get("recommended_positioning")),
+                "5 actions for this week\n"
+                + bullets(payload.get("actions_this_week")),
+                "Source URLs\n" + bullets(payload.get("source_urls")),
+                "Evidence by competitor\n"
+                + (
+                    "\n".join(evidence_by_competitor)
+                    or "- Нет конкурентов с подтверждёнными URL"
+                ),
+                "Limitations\n" + bullets(payload.get("limitations")),
+            ]
+        )
+
+    @classmethod
+    def _normalize_competitor_report(
+        cls,
+        payload: dict[str, Any],
+        allowed_urls: list[str],
+    ) -> dict[str, Any]:
+        allowed = set(allowed_urls)
+
+        def strings(value: Any, limit: int) -> list[str]:
+            if not isinstance(value, list):
+                return []
+            return [
+                str(item).strip()
+                for item in value
+                if str(item).strip()
+            ][:limit]
+
+        competitors: list[dict[str, Any]] = []
+        for value in cls._list(payload.get("competitors")):
+            if not isinstance(value, dict):
+                continue
+            urls = [
+                url
+                for url in strings(value.get("source_urls"), 10)
+                if url in allowed
+            ]
+            if not urls:
+                continue
+            competitors.append(
+                {
+                    field: str(value.get(field) or "Не подтверждено").strip()
+                    for field in (
+                        "competitor",
+                        "channel",
+                        "offer",
+                        "price_value",
+                        "content_style",
+                        "cta",
+                        "strengths",
+                        "weaknesses",
+                        "opportunity",
+                    )
+                }
+                | {"source_urls": urls}
+            )
+
+        requested_urls = [
+            url
+            for url in strings(payload.get("source_urls"), 50)
+            if url in allowed
+        ]
+        competitor_urls = [
+            url
+            for row in competitors
+            for url in row["source_urls"]
+        ]
+        source_urls = cls._deduplicate_values(requested_urls + competitor_urls)
+        if not source_urls:
+            source_urls = allowed_urls[:50]
+
+        return {
+            "executive_summary": str(
+                payload.get("executive_summary")
+                or "Недостаточно данных для подтверждённого конкурентного вывода."
+            ).strip(),
+            "competitors": competitors[:30],
+            "repeating_offers": strings(payload.get("repeating_offers"), 12),
+            "repeating_ctas": strings(payload.get("repeating_ctas"), 12),
+            "content_gaps": strings(payload.get("content_gaps"), 12),
+            "recommended_positioning": strings(
+                payload.get("recommended_positioning"), 10
+            ),
+            "actions_this_week": strings(payload.get("actions_this_week"), 5),
+            "source_urls": source_urls,
+            "limitations": strings(payload.get("limitations"), 10),
+        }
 
     @staticmethod
     def _parse_dict(response: str, label: str) -> dict[str, Any]:
@@ -1161,6 +1317,7 @@ class MarketIntelligenceService:
         summary: str,
         evidence: list[str],
         context: dict[str, Any],
+        payload: dict[str, Any],
     ) -> Report:
         with session_scope() as session:
             return ReportsRepository(session).create_report(
@@ -1171,9 +1328,10 @@ class MarketIntelligenceService:
                 query=query,
                 sources_count=len(context["source_items"]),
                 evidence=evidence,
-                recommendations=[],
+                recommendations=payload.get("actions_this_week", []),
                 raw_json={
                     "query": query,
+                    **payload,
                     "source_item_ids": [
                         row["id"] for row in context["source_items"]
                     ],
@@ -1212,13 +1370,26 @@ class MarketIntelligenceService:
                     "social-media data or unlinked competitor claims are permitted."
                 ),
                 "source_items": [
-                    MarketIntelligenceService.source_item_to_dict(item)
-                    for item in items
+                    {
+                        "id": item.id,
+                        "source_name": item.source_name,
+                        "source_type": item.source_type,
+                        "title": str(item.title or "")[:200],
+                        "url": item.url,
+                        "snippet": str(item.snippet or "")[:500],
+                        "ai_summary": str(item.ai_summary or "")[:500],
+                        "offers": item.offers_json,
+                        "ctas": item.ctas_json,
+                        "content_gaps": item.content_gaps_json,
+                    }
+                    for item in items[:60]
                 ],
                 "latest_market_scan": (
                     {
                         "summary": market_scan.summary,
-                        "body": market_scan.body or market_scan.report_text,
+                        "body": str(
+                            market_scan.body or market_scan.report_text or ""
+                        )[:2500],
                         "evidence": market_scan.evidence_json,
                     }
                     if market_scan
