@@ -61,3 +61,34 @@ class TelegramService:
         if not message_ids:
             raise RuntimeError("Telegram did not return publication message IDs.")
         return message_ids
+
+    def publish_targets(self) -> list[str]:
+        targets: list[str] = []
+        channel = (self.settings.telegram_channel_id or "").strip()
+        group = (self.settings.telegram_publish_chat_id or "").strip()
+        if getattr(self.settings, "publish_to_channel", False) and channel:
+            targets.append(channel)
+        if getattr(self.settings, "publish_to_group", False) and group:
+            targets.append(group)
+        any_flag_enabled = bool(
+            getattr(self.settings, "publish_to_channel", False)
+            or getattr(self.settings, "publish_to_group", False)
+        )
+        if not targets and any_flag_enabled:
+            fallback = self.settings.telegram_publish_target()
+            if fallback:
+                targets.append(fallback)
+        seen: set[str] = set()
+        return [t for t in targets if not (t in seen or seen.add(t))]
+
+    async def publish_to_targets(self, bot: Bot, draft: Draft) -> dict[str, list[int]]:
+        targets = self.publish_targets()
+        if not targets:
+            raise ValueError(
+                "No publish destination configured. Set PUBLISH_TO_CHANNEL/"
+                "PUBLISH_TO_GROUP with TELEGRAM_CHANNEL_ID/TELEGRAM_PUBLISH_CHAT_ID."
+            )
+        results: dict[str, list[int]] = {}
+        for chat_id in targets:
+            results[chat_id] = await self.send_text_chunks(bot, chat_id, draft.draft_text)
+        return results

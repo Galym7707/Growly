@@ -1943,18 +1943,16 @@ async def publish_approved_draft(
         raise ValueError("Draft was not found.")
 
     try:
-        message_ids = await TelegramService(service.settings).publish_to_group(
+        results = await TelegramService(service.settings).publish_to_targets(
             bot, draft
         )
     except Exception:
         await service.fail_publication(reservation.publication.id)
         raise
 
-    await service.complete_publication(
-        reservation.publication.id,
-        message_ids,
-    )
-    return True, f"published in {len(message_ids)} message(s)"
+    message_ids = [mid for ids in results.values() for mid in ids]
+    await service.complete_publication(reservation.publication.id, message_ids)
+    return True, f"published to {len(results)} destination(s)"
 
 
 async def approval_callback(

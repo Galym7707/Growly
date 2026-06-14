@@ -26,6 +26,8 @@ class Settings(BaseSettings):
         default=None, alias="TELEGRAM_PUBLISH_CHAT_ID"
     )
     telegram_channel_id: str | None = Field(default=None, alias="TELEGRAM_CHANNEL_ID")
+    publish_to_channel: bool = Field(default=True, alias="PUBLISH_TO_CHANNEL")
+    publish_to_group: bool = Field(default=False, alias="PUBLISH_TO_GROUP")
 
     groq_api_key: SecretStr | None = Field(default=None, alias="GROQ_API_KEY")
     groq_model: str = Field(
