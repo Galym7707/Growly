@@ -38,6 +38,13 @@ class ReportService:
 
         return await asyncio.to_thread(load)
 
+    async def latest_report(self, report_type: str) -> Report | None:
+        def load() -> Report | None:
+            with session_scope() as session:
+                return ReportsRepository(session).latest_report(report_type)
+
+        return await asyncio.to_thread(load)
+
     async def sync_report_to_notion(self, report_id: int) -> str:
         report = await self.get_report(report_id)
         if report is None:
@@ -50,24 +57,27 @@ class ReportService:
         await asyncio.to_thread(self._save_page_id, report.id, page_id)
         return self.notion.page_url(page_id)
 
-    async def generate_weekly_performance_report(self) -> Report:
+    async def generate_weekly_performance_report(self) -> Report | None:
         week_start, week_end = self._previous_week()
         start_dt = datetime.combine(week_start, time.min, tzinfo=UTC)
         end_dt = datetime.combine(week_end + timedelta(days=1), time.min, tzinfo=UTC)
         context = await asyncio.to_thread(self._performance_context, start_dt, end_dt)
+        if not self._has_useful_performance_data(context):
+            return None
+        context["language"] = "ru"
         text = await self.groq.generate_weekly_performance_report(context)
 
         def save() -> Report:
             with session_scope() as session:
                 return ReportsRepository(session).create_report(
                     report_type="performance",
-                    title=f"Weekly performance report: {week_start.isoformat()}",
+                    title=f"Отчёт по публикациям: {week_start.isoformat()}",
                     report_text=text,
                     week_start=week_start,
                     week_end=week_end,
                     summary=(
-                        f"Drafts: {context['counts']['drafts']}; "
-                        f"published: {context['counts']['published']}."
+                        f"Черновиков: {context['counts']['drafts']}; "
+                        f"опубликовано: {context['counts']['published']}."
                     ),
                 )
 
@@ -79,6 +89,18 @@ class ReportService:
         except NotionServiceError:
             logger.warning("Performance report %s could not sync to Notion.", report.id)
         return report
+
+    @staticmethod
+    def _has_useful_performance_data(context: dict[str, Any]) -> bool:
+        counts = context.get("counts") or {}
+        if int(counts.get("published") or 0) == 0:
+            return False
+        metric_fields = ("views", "reactions", "comments", "clicks", "leads")
+        return any(
+            any(row.get(field) is not None for field in metric_fields)
+            for row in context.get("publication_metrics", [])
+            if isinstance(row, dict)
+        )
 
     async def list_recent_publications(self, limit: int = 20) -> list[Publication]:
         def load() -> list[Publication]:
@@ -100,14 +122,14 @@ class ReportService:
     ) -> Publication:
         values = (views, reactions, comments, clicks, leads)
         if any(value < 0 for value in values):
-            raise ValueError("Publication metrics cannot be negative.")
+            raise ValueError("Метрики публикации не могут быть отрицательными.")
 
         def update() -> Publication:
             with session_scope() as session:
                 repo = ReportsRepository(session)
                 publication = repo.get_publication(publication_id)
                 if publication is None:
-                    raise ValueError("Publication was not found.")
+                    raise ValueError("Публикация не найдена.")
                 return repo.update_publication_metrics(
                     publication,
                     views=views,

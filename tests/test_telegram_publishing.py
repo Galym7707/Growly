@@ -58,7 +58,7 @@ async def test_duplicate_reservation_does_not_send_again() -> None:
     )
 
     assert published is False
-    assert result == "already published"
+    assert result == "уже опубликован"
     assert bot.messages == []
 
 
@@ -66,7 +66,7 @@ def test_publish_button_targets_telegram_group() -> None:
     keyboard = approved_keyboard(7, telegram_publish_enabled=True)
     assert keyboard is not None
     labels = [button.text for row in keyboard.inline_keyboard for button in row]
-    assert "Publish to Telegram Group" in labels
+    assert "Опубликовать в Telegram" in labels
 
 
 def test_pending_draft_has_no_publish_button() -> None:

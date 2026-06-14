@@ -161,7 +161,7 @@ def test_menu_button_interrupts_active_content_plan_before_reports() -> None:
     application = build_application(
         Settings(_env_file=None, TELEGRAM_BOT_API_KEY="123:test-token")
     )
-    update = text_update("Reports")
+    update = text_update("Отчёты")
     content_plan = next(
         handler
         for handlers in application.handlers.values()

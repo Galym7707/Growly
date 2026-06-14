@@ -114,14 +114,14 @@ def test_competitor_report_renderer_has_required_business_structure() -> None:
     text = MarketIntelligenceService.render_competitor_report(payload)
 
     for heading in (
-        "Executive summary",
-        "Competitor table",
-        "Repeating offers",
-        "Repeating CTAs",
-        "Content gaps",
-        "Recommended positioning",
-        "5 actions for this week",
-        "Source URLs",
+        "Главный вывод",
+        "Таблица конкурентов",
+        "Повторяющиеся предложения",
+        "Повторяющиеся призывы к действию",
+        "Пробелы в контенте",
+        "Рекомендуемое позиционирование",
+        "5 действий на эту неделю",
+        "Ссылки на источники",
     ):
         assert heading in text
     assert "| Alpha | Website | Audit |" in text
@@ -508,10 +508,10 @@ async def test_market_scan_saves_before_groq_and_syncs_after_failure(
     assert "Шаг 2/5: найдено 4 результатов." in progress_messages
     assert "Шаг 3/5: сохраняю источники в Supabase..." in progress_messages
     assert (
-        "Источники сохранены: 4. Даже если AI-анализ не завершится, "
+        "Источники сохранены: 4. Даже если ИИ-анализ не завершится, "
         "данные уже не потеряются."
     ) in progress_messages
-    assert "Шаг 4/5: анализирую источники через AI..." in progress_messages
+    assert "Шаг 4/5: анализирую источники через ИИ..." in progress_messages
     assert "Шаг 5/5: сохраняю отчет в Notion..." in progress_messages
     assert progress_messages[-1] == "Готово."
 

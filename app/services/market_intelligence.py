@@ -213,18 +213,18 @@ class MarketIntelligenceService:
         await self._emit_progress(
             progress,
             (
-                f"Источники сохранены: {len(saved)}. Даже если AI-анализ не "
+                f"Источники сохранены: {len(saved)}. Даже если ИИ-анализ не "
                 "завершится, данные уже не потеряются."
             ),
         )
 
         await self._set_job_step(
             job_id,
-            "Шаг 4/5: анализирую источники через AI...",
+            "Шаг 4/5: анализирую источники через ИИ...",
         )
         await self._emit_progress(
             progress,
-            "Шаг 4/5: анализирую источники через AI...",
+            "Шаг 4/5: анализирую источники через ИИ...",
         )
         logger.info("groq_analysis_started")
         try:
@@ -268,7 +268,7 @@ class MarketIntelligenceService:
             error_message=(
                 None
                 if report.status == "ready"
-                else "AI analysis did not complete."
+                else "ИИ-анализ не завершён."
             ),
         )
 
@@ -286,13 +286,14 @@ class MarketIntelligenceService:
         logger.info("notion_sync_finished")
         final_errors: list[str] = []
         if report.status != "ready":
-            final_errors.append("AI analysis did not complete.")
+            final_errors.append("ИИ-анализ не завершён.")
         if source_sync_failures:
             final_errors.append(
-                f"Notion source sync incomplete: {source_sync_failures} items."
+                "Синхронизация источников с Notion завершена не полностью: "
+                f"{source_sync_failures}."
             )
         if not report_synced:
-            final_errors.append("Notion report sync incomplete.")
+            final_errors.append("Отчёт не синхронизирован с Notion.")
         await self._set_job_step(
             job_id,
             "Готово.",
@@ -317,9 +318,11 @@ class MarketIntelligenceService:
             report_id,
         )
         if report is None:
-            raise ValueError("No market scan is waiting for AI analysis.")
+            raise ValueError("Нет анализа рынка, ожидающего ИИ-анализа.")
         if not saved:
-            raise ValueError("The pending market scan has no saved source items.")
+            raise ValueError(
+                "У ожидающего анализа рынка нет сохранённых источников."
+            )
 
         metadata = report.raw_json or {}
         queries = [
@@ -332,12 +335,12 @@ class MarketIntelligenceService:
         job_id = await asyncio.to_thread(self._job_id_for_report, report.id)
         await self._set_job_step(
             job_id,
-            "Шаг 4/5: анализирую источники через AI...",
+            "Шаг 4/5: анализирую источники через ИИ...",
             status="running",
         )
         await self._emit_progress(
             progress,
-            "Шаг 4/5: анализирую источники через AI...",
+            "Шаг 4/5: анализирую источники через ИИ...",
         )
         logger.info("groq_analysis_started")
 
@@ -367,9 +370,9 @@ class MarketIntelligenceService:
             final_error = None
             if source_sync_failures or not report_synced:
                 final_error = (
-                    "Notion sync incomplete: "
-                    f"source_items_failed={source_sync_failures}, "
-                    f"report_synced={report_synced}."
+                    "Синхронизация с Notion завершена не полностью. "
+                    f"Не сохранено источников: {source_sync_failures}; "
+                    f"отчёт сохранён: {'да' if report_synced else 'нет'}."
                 )
             await self._set_job_step(
                 job_id,
@@ -405,10 +408,10 @@ class MarketIntelligenceService:
             logger.info("notion_sync_finished")
             await self._set_job_step(
                 job_id,
-                "AI-анализ ожидает повторного запуска.",
+                "ИИ-анализ ожидает повторного запуска.",
                 status="analysis_pending",
                 report_id=pending.id,
-                error_message="AI analysis did not complete.",
+                error_message="ИИ-анализ не завершён.",
             )
             logger.info("report_status=%s", pending.status)
             return pending, saved
@@ -482,7 +485,7 @@ class MarketIntelligenceService:
         ):
             batch = saved[start : start + MARKET_ANALYSIS_BATCH_SIZE]
             batch_step = (
-                f"Шаг 4/5: AI-пакет {batch_number}/{batch_count}, "
+                f"Шаг 4/5: пакет ИИ {batch_number}/{batch_count}, "
                 f"источников {len(batch)}..."
             )
             await self._set_job_step(job_id, batch_step)
@@ -510,7 +513,7 @@ class MarketIntelligenceService:
                 if isinstance(row, dict) and row.get("url") in known_urls
             ]
             analyses.append(payload)
-        synthesis_step = "Шаг 4/5: объединяю результаты AI-анализа..."
+        synthesis_step = "Шаг 4/5: объединяю результаты ИИ-анализа..."
         await self._set_job_step(job_id, synthesis_step)
         await self._emit_progress(progress, synthesis_step)
         return self._merge_batch_analyses(analyses), [
@@ -578,7 +581,8 @@ class MarketIntelligenceService:
         context = await asyncio.to_thread(self._competitor_context, query)
         if not context["source_items"]:
             raise ValueError(
-                "Нет сохранённых Source Items. Сначала выполните /market_scan."
+                "Нет сохранённых материалов источников. Сначала выполните "
+                "анализ рынка."
             )
         response = await asyncio.wait_for(
             self.groq.generate_competitor_report(context),
@@ -781,8 +785,8 @@ class MarketIntelligenceService:
             return "\n".join(f"- {clean_cell(row)}" for row in rows) or f"- {empty}"
 
         table = [
-            "| Competitor | Channel | Offer | Price/value | Content style | CTA | "
-            "Strengths | Weaknesses | Opportunity |",
+            "| Конкурент | Канал | Предложение | Цена/ценность | Стиль контента | "
+            "Призыв | Сильные стороны | Слабые стороны | Возможность |",
             "|---|---|---|---|---|---|---|---|---|",
         ]
         evidence_by_competitor: list[str] = []
@@ -818,23 +822,25 @@ class MarketIntelligenceService:
 
         return "\n\n".join(
             [
-                "Executive summary\n"
+                "Главный вывод\n"
                 + clean_cell(payload.get("executive_summary") or "Нет подтверждённого вывода"),
-                "Competitor table\n" + "\n".join(table),
-                "Repeating offers\n" + bullets(payload.get("repeating_offers")),
-                "Repeating CTAs\n" + bullets(payload.get("repeating_ctas")),
-                "Content gaps\n" + bullets(payload.get("content_gaps")),
-                "Recommended positioning\n"
+                "Таблица конкурентов\n" + "\n".join(table),
+                "Повторяющиеся предложения\n"
+                + bullets(payload.get("repeating_offers")),
+                "Повторяющиеся призывы к действию\n"
+                + bullets(payload.get("repeating_ctas")),
+                "Пробелы в контенте\n" + bullets(payload.get("content_gaps")),
+                "Рекомендуемое позиционирование\n"
                 + bullets(payload.get("recommended_positioning")),
-                "5 actions for this week\n"
+                "5 действий на эту неделю\n"
                 + bullets(payload.get("actions_this_week")),
-                "Source URLs\n" + bullets(payload.get("source_urls")),
-                "Evidence by competitor\n"
+                "Ссылки на источники\n" + bullets(payload.get("source_urls")),
+                "Источники по конкурентам\n"
                 + (
                     "\n".join(evidence_by_competitor)
                     or "- Нет конкурентов с подтверждёнными URL"
                 ),
-                "Limitations\n" + bullets(payload.get("limitations")),
+                "Ограничения\n" + bullets(payload.get("limitations")),
             ]
         )
 
@@ -1147,7 +1153,7 @@ class MarketIntelligenceService:
         with session_scope() as session:
             return ReportsRepository(session).create_report(
                 report_type="market_scan",
-                title=f"Market scan: {query}",
+                title=f"Анализ рынка: {query}",
                 report_text=body,
                 summary=str(payload.get("executive_summary") or "")[:1800],
                 query=query,
@@ -1173,18 +1179,17 @@ class MarketIntelligenceService:
     ) -> Report:
         if groq_status == "rate_limited":
             message = (
-                "Search results were saved, but AI analysis is delayed due to "
-                "Groq rate limits."
+                "Результаты поиска сохранены, но ИИ-анализ отложен из-за "
+                "ограничения запросов."
             )
         else:
             message = (
-                "Search results were saved, but AI analysis is temporarily "
-                "unavailable."
+                "Результаты поиска сохранены, но ИИ-анализ временно недоступен."
             )
         with session_scope() as session:
             return ReportsRepository(session).create_report(
                 report_type="market_scan",
-                title=f"Market scan: {query}",
+                title=f"Анализ рынка: {query}",
                 report_text=message,
                 summary=message,
                 query=query,
@@ -1322,7 +1327,7 @@ class MarketIntelligenceService:
         with session_scope() as session:
             return ReportsRepository(session).create_report(
                 report_type="competitor_report",
-                title=f"Competitor report: {query or 'latest evidence'}",
+                title=f"Конкурентный отчёт: {query or 'последние источники'}",
                 report_text=text,
                 summary=summary,
                 query=query,

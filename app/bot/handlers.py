@@ -25,6 +25,7 @@ from app.bot.keyboards import (
     approved_keyboard,
     competitor_report_actions_keyboard,
     create_post_menu_keyboard,
+    empty_performance_actions_keyboard,
     main_menu_keyboard,
     market_scan_actions_keyboard,
     market_scan_pending_keyboard,
@@ -60,9 +61,48 @@ STALE_CALLBACK_MESSAGE = (
     "Эта кнопка устарела. Откройте /start и выберите действие заново."
 )
 
+STATUS_LABELS = {
+    "ready": "готов",
+    "active": "активен",
+    "disabled": "отключён",
+    "requires_review": "требует проверки",
+    "search_saved_analysis_pending": "источники сохранены, анализ ожидается",
+    "analysis_pending": "анализ ожидается",
+    "running": "выполняется",
+    "completed": "завершено",
+    "draft": "черновик",
+    "pending": "ожидает согласования",
+    "drafted": "черновик создан",
+    "approved": "одобрен",
+    "rejected": "отклонён",
+    "published": "опубликован",
+}
+
+SOURCE_TYPE_LABELS = {
+    "website": "Сайт",
+    "web_search": "Веб-поиск",
+    "source_monitoring": "Проверка источника",
+    "instagram": "Instagram",
+    "telegram": "Telegram",
+    "tiktok": "TikTok",
+    "youtube": "YouTube",
+    "other": "Другое",
+}
+
+
+def user_error_text(value: Any) -> str:
+    text = str(value or "").lower()
+    if "timeout" in text or "time out" in text:
+        return "превышено время ожидания"
+    if "rate" in text or "429" in text or "quota" in text:
+        return "временно достигнут лимит запросов"
+    if "notion" in text:
+        return "синхронизация с Notion завершилась с ошибкой"
+    return "операция завершилась с ошибкой"
+
 MENU_TEXT = (
     "Growly управляет источниками, рыночной аналитикой, контент-планами, "
-    "AI-черновиками и согласованием через Telegram и Notion."
+    "ИИ-черновиками и согласованием через Telegram и Notion."
 )
 
 HELP_TEXT = """Доступные команды:
@@ -74,8 +114,8 @@ HELP_TEXT = """Доступные команды:
 /discover_sources — найти публичные источники и конкурентов через Tavily
 /monitor_sources — проверить публичную информацию об активных источниках
 /web_search — найти и сохранить публичные веб-источники через Tavily
-/market_scan — выполнить рыночный поиск и AI-анализ
-/retry_analysis — повторить AI-анализ сохранённых результатов поиска
+/market_scan — выполнить рыночный поиск и ИИ-анализ
+/retry_analysis — повторить ИИ-анализ сохранённых результатов поиска
 /status — показать состояние последней длительной задачи
 /create_post — создать пост
 /create_case — создать пост о результате клиента: ситуация, действия, результат
@@ -102,8 +142,8 @@ PRIVATE_BOT_COMMANDS = [
     BotCommand("discover_sources", "Найти публичные источники"),
     BotCommand("monitor_sources", "Проверить активные источники"),
     BotCommand("web_search", "Поиск публичных веб-источников"),
-    BotCommand("market_scan", "Рыночный поиск и AI-анализ"),
-    BotCommand("retry_analysis", "Повторить AI-анализ сохранённого поиска"),
+    BotCommand("market_scan", "Рыночный поиск и ИИ-анализ"),
+    BotCommand("retry_analysis", "Повторить ИИ-анализ сохранённого поиска"),
     BotCommand("status", "Статус последней длительной задачи"),
     BotCommand("create_post", "Создать пост"),
     BotCommand("create_case", "Пост о результате клиента"),
@@ -112,9 +152,9 @@ PRIVATE_BOT_COMMANDS = [
     BotCommand("competitor_report", "Создать конкурентный отчёт"),
     BotCommand("review_analysis", "Проанализировать отзывы"),
     BotCommand("update_publication_metrics", "Обновить метрики"),
-    BotCommand("performance_report", "Отчёт по эффективности"),
-    BotCommand("drafts", "Ожидающие черновики"),
-    BotCommand("reports", "Последние отчёты"),
+    BotCommand("performance_report", "Отчёт по публикациям"),
+    BotCommand("drafts", "Черновики"),
+    BotCommand("reports", "Отчёты"),
     BotCommand("sync_notion", "Синхронизировать Notion"),
     BotCommand("new_business", "Начать контекст нового бизнеса"),
     BotCommand("help", "Справка"),
@@ -124,37 +164,61 @@ PRIVATE_BOT_COMMANDS = [
 GROUP_BOT_COMMANDS: list[BotCommand] = []
 
 POST_TYPE_PRESETS = {
+    "Рекламный пост": (
+        "promo_post",
+        "Опишите предложение, аудиторию, подтверждённые преимущества, условия и призыв к действию.",
+    ),
     "Promo post": (
         "promo_post",
-        "Опишите предложение, аудиторию, подтверждённые преимущества, условия и CTA.",
+        "Опишите предложение, аудиторию, подтверждённые преимущества, условия и призыв к действию.",
+    ),
+    "Обучающий пост": (
+        "educational_post",
+        "Опишите тему, аудиторию, практический вопрос или процесс, факты и призыв к действию.",
     ),
     "Educational post": (
         "educational_post",
-        "Опишите тему, аудиторию, практический вопрос или процесс, факты и CTA.",
+        "Опишите тему, аудиторию, практический вопрос или процесс, факты и призыв к действию.",
+    ),
+    "Пост о результате клиента": (
+        "case_post",
+        "Опишите исходную ситуацию, выполненные действия, подтверждённый результат и призыв к действию.",
     ),
     "Client result post": (
         "case_post",
-        "Опишите исходную ситуацию, выполненные действия, подтверждённый результат и CTA.",
+        "Опишите исходную ситуацию, выполненные действия, подтверждённый результат и призыв к действию.",
     ),
     "Case post": (
         "case_post",
-        "Опишите исходную ситуацию, выполненные действия, подтверждённый результат и CTA.",
+        "Опишите исходную ситуацию, выполненные действия, подтверждённый результат и призыв к действию.",
+    ),
+    "FAQ-пост": (
+        "faq_post",
+        "Пришлите реальные вопросы клиентов, подтверждённые ответы, контекст и призыв к действию.",
     ),
     "FAQ post": (
         "faq_post",
-        "Пришлите реальные вопросы клиентов, подтверждённые ответы, контекст и CTA.",
+        "Пришлите реальные вопросы клиентов, подтверждённые ответы, контекст и призыв к действию.",
+    ),
+    "Новостной пост": (
+        "news_post",
+        "Опишите подтверждённую новость: что изменилось, для кого, дату при наличии и призыв к действию.",
     ),
     "News post": (
         "news_post",
-        "Опишите подтверждённую новость: что изменилось, для кого, дату при наличии и CTA.",
+        "Опишите подтверждённую новость: что изменилось, для кого, дату при наличии и призыв к действию.",
+    ),
+    "Свой вариант": (
+        None,
+        "Опишите тип контента, продукт или услугу, аудиторию, задачу, факты, канал и призыв к действию.",
     ),
     "Custom post": (
         None,
-        "Опишите тип контента, продукт или услугу, аудиторию, задачу, факты, канал и CTA.",
+        "Опишите тип контента, продукт или услугу, аудиторию, задачу, факты, канал и призыв к действию.",
     ),
     "Create one-off post": (
         None,
-        "Опишите тип контента, продукт или услугу, аудиторию, задачу, факты, канал и CTA.",
+        "Опишите тип контента, продукт или услугу, аудиторию, задачу, факты, канал и призыв к действию.",
     ),
 }
 
@@ -228,7 +292,7 @@ async def generate_content_plan_with_progress(
             chat_id,
             (
                 "Детальный контекст источников был сокращён из-за ограничения "
-                "размера Groq. Контент-план создан по сводке отчетов и ключевым "
+                "размера запроса. Контент-план создан по сводке отчётов и ключевым "
                 "доказательствам."
             ),
         )
@@ -242,20 +306,26 @@ async def format_notion_sync_result(
     links = await service.configured_database_links()
     lines = [
         "Синхронизация Notion завершена.",
-        f"Source Items updated: {counts.get('source_items', 0)}",
-        f"Reports updated: {counts.get('reports', 0)}",
-        f"Content Calendar updated: {counts.get('content', 0)}",
-        f"Drafts updated: {counts.get('drafts', 0)}",
+        f"Материалы источников обновлены: {counts.get('source_items', 0)}",
+        f"Отчёты обновлены: {counts.get('reports', 0)}",
+        f"Контент-календарь обновлён: {counts.get('content', 0)}",
+        f"Черновики обновлены: {counts.get('drafts', 0)}",
     ]
     if counts.get("content", 0) == 0:
         lines.append(
-            "Content Calendar не изменился, потому что новые content plan "
-            "items не были созданы."
+            "Контент-календарь не изменился, потому что новые элементы "
+            "контент-плана не были созданы."
         )
     if links:
         lines.append("")
+        link_labels = {
+            "Source Items": "Материалы источников",
+            "Reports": "Отчёты",
+            "Content Calendar": "Контент-календарь",
+            "Drafts": "Черновики",
+        }
         lines.extend(
-            f"{label}: {url}"
+            f"{link_labels.get(label, label)}: {url}"
             for label, url in links.items()
         )
     return "\n".join(lines)
@@ -335,7 +405,7 @@ async def more_menu(
 ) -> None:
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Инструменты:",
+            "Ещё:",
             reply_markup=more_menu_keyboard(),
         )
 
@@ -346,7 +416,7 @@ async def reports_menu(
 ) -> None:
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Отчёты:",
+            "Отчёты\n\nВыберите, что открыть:",
             reply_markup=reports_menu_keyboard(),
         )
 
@@ -397,19 +467,19 @@ async def settings_status(
     )
     lines = [
         "Настройки Growly:",
-        f"AI primary: {settings.ai_primary_provider}",
-        f"GitHub Models: {'configured' if github_configured else 'not configured'}",
-        f"AI fallback: {settings.ai_fallback_provider}",
-        f"Groq: {'configured' if groq_configured else 'not configured'}",
-        f"Search provider: {settings.search_provider or 'not configured'}",
-        f"Notion: {'configured' if notion_configured else 'not configured'}",
+        f"Основной ИИ: {settings.ai_primary_provider}",
+        f"GitHub Models: {'настроен' if github_configured else 'не настроен'}",
+        f"Резервный ИИ: {settings.ai_fallback_provider}",
+        f"Groq: {'настроен' if groq_configured else 'не настроен'}",
+        f"Поиск: {settings.search_provider or 'не настроен'}",
+        f"Notion: {'настроен' if notion_configured else 'не настроен'}",
         (
-            "Telegram publishing: configured"
+            "Публикация в Telegram: настроена"
             if settings.telegram_publish_target()
-            else "Telegram publishing: not configured"
+            else "Публикация в Telegram: не настроена"
         ),
-        f"Scheduler: {'enabled' if settings.scheduler_enabled else 'disabled'}",
-        f"Timezone: {settings.timezone}",
+        f"Планировщик: {'включён' if settings.scheduler_enabled else 'выключен'}",
+        f"Часовой пояс: {settings.timezone}",
         "",
         "Секретные ключи и токены не показываются.",
     ]
@@ -431,7 +501,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         task_entry["task"].cancel()
     if update.effective_message:
         message = (
-            "Текущий ввод отменён. Запущена отмена Market Scan."
+            "Текущий ввод отменён. Запущена отмена анализа рынка."
             if task_entry
             else "Текущий ввод отменён."
         )
@@ -466,14 +536,18 @@ async def task_status(
         )
         return
     lines = [
-        f"Задача: {job['task_type']}",
-        f"Статус: {job['status']}",
+        "Задача: анализ рынка",
+        f"Статус: {STATUS_LABELS.get(job['status'], job['status'])}",
         f"Текущий шаг: {job['current_step'] or 'не указан'}",
         f"Сохранено источников: {job['sources_count']}",
-        f"Статус отчёта: {job['report_status'] or 'ещё не создан'}",
+        "Статус отчёта: "
+        + STATUS_LABELS.get(
+            job["report_status"],
+            job["report_status"] or "ещё не создан",
+        ),
     ]
     if job["error_message"]:
-        lines.append(f"Последняя ошибка: {job['error_message']}")
+        lines.append(f"Последняя ошибка: {user_error_text(job['error_message'])}")
     await update.effective_message.reply_text(
         "\n".join(lines),
         reply_markup=main_menu_keyboard(),
@@ -563,8 +637,8 @@ async def create_post_start(
     if update.effective_message:
         await update.effective_message.reply_text(
             "Опишите тип контента, продукт/услугу, аудиторию, главную боль, "
-            "бизнес-контекст, канал, допустимые факты и CTA. Например: "
-            "«Тип контента: pain-point post». "
+            "бизнес-контекст, канал, допустимые факты и призыв к действию. Например: "
+            "«Тип контента: пост о проблеме клиента». "
             "Не добавляйте конфиденциальные данные без разрешения на публикацию."
         )
     return BotState.WAITING_POST
@@ -578,7 +652,10 @@ async def create_post_type_start(
         return BotState.WAITING_POST
     post_type, prompt = POST_TYPE_PRESETS.get(
         update.effective_message.text,
-        (None, "Опишите задачу, аудиторию, факты, канал и CTA."),
+        (
+            None,
+            "Опишите задачу, аудиторию, факты, канал и призыв к действию.",
+        ),
     )
     if post_type:
         context.user_data["post_type"] = post_type
@@ -667,22 +744,32 @@ async def add_source_start(
 async def add_source_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> BotState:
     context.user_data["new_source"]["name"] = update.effective_message.text.strip()
     await update.effective_message.reply_text(
-        "Тип: Instagram / Telegram / TikTok / YouTube / Website / Other"
+        "Выберите тип: Instagram, Telegram, TikTok, YouTube, сайт или другое."
     )
     return BotState.ADD_SOURCE_TYPE
 
 
 async def add_source_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> BotState:
-    context.user_data["new_source"]["source_type"] = update.effective_message.text.strip()
-    await update.effective_message.reply_text("URL или username источника:")
+    value = update.effective_message.text.strip()
+    source_types = {
+        "сайт": "website",
+        "другое": "other",
+    }
+    context.user_data["new_source"]["source_type"] = source_types.get(
+        value.lower(),
+        value,
+    )
+    await update.effective_message.reply_text(
+        "Укажите ссылку или имя пользователя источника:"
+    )
     return BotState.ADD_SOURCE_URL
 
 
 async def add_source_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> BotState:
     context.user_data["new_source"]["url"] = update.effective_message.text.strip()
     await update.effective_message.reply_text(
-        "Категория: real estate / construction / barter / B2B / development / "
-        "investment / equipment / materials / other"
+        "Укажите категорию своими словами, например: недвижимость, строительство, "
+        "B2B, инвестиции, оборудование или материалы."
     )
     return BotState.ADD_SOURCE_CATEGORY
 
@@ -691,7 +778,9 @@ async def add_source_category(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> BotState:
     context.user_data["new_source"]["category"] = update.effective_message.text.strip()
-    await update.effective_message.reply_text("Приоритет: high / medium / low")
+    await update.effective_message.reply_text(
+        "Выберите приоритет: высокий, средний или низкий."
+    )
     return BotState.ADD_SOURCE_PRIORITY
 
 
@@ -699,12 +788,22 @@ async def add_source_priority(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> BotState:
     value = update.effective_message.text.strip().lower()
-    if value not in {"high", "medium", "low"}:
-        await update.effective_message.reply_text("Введите high, medium или low.")
+    priorities = {
+        "высокий": "high",
+        "средний": "medium",
+        "низкий": "low",
+        "high": "high",
+        "medium": "medium",
+        "low": "low",
+    }
+    if value not in priorities:
+        await update.effective_message.reply_text(
+            "Введите: высокий, средний или низкий."
+        )
         return BotState.ADD_SOURCE_PRIORITY
-    context.user_data["new_source"]["priority"] = value
+    context.user_data["new_source"]["priority"] = priorities[value]
     await update.effective_message.reply_text(
-        "Частота проверки: daily / twice_weekly / weekly"
+        "Как часто проверять источник: ежедневно, два раза в неделю или раз в неделю?"
     )
     return BotState.ADD_SOURCE_FREQUENCY
 
@@ -713,13 +812,21 @@ async def add_source_finish(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
     value = update.effective_message.text.strip().lower()
-    if value not in {"daily", "twice_weekly", "weekly"}:
+    frequencies = {
+        "ежедневно": "daily",
+        "два раза в неделю": "twice_weekly",
+        "раз в неделю": "weekly",
+        "daily": "daily",
+        "twice_weekly": "twice_weekly",
+        "weekly": "weekly",
+    }
+    if value not in frequencies:
         await update.effective_message.reply_text(
-            "Введите daily, twice_weekly или weekly."
+            "Введите: ежедневно, два раза в неделю или раз в неделю."
         )
         return BotState.ADD_SOURCE_FREQUENCY
     payload = dict(context.user_data.get("new_source") or {})
-    payload["check_frequency"] = value
+    payload["check_frequency"] = frequencies[value]
     source = await SourceAnalysisService().add_source(**payload)
     context.user_data.pop("new_source", None)
     await update.effective_message.reply_text(
@@ -733,18 +840,22 @@ async def sources(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     rows = await SourceAnalysisService().list_sources(active_only=False)
     if not rows:
         await update.effective_message.reply_text(
-            "Сохранённых источников нет. Используйте /discover_sources или /add_source.",
+            "Сохранённых источников нет. Нажмите «Найти новые источники» "
+            "или используйте /add_source.",
             reply_markup=main_menu_keyboard(),
         )
         return
     groups: dict[tuple[str, str], list[Any]] = {}
     for row in rows:
         groups.setdefault(
-            (row.source_type or "Other", row.status or "unknown"), []
+            (row.source_type or "other", row.status or "unknown"), []
         ).append(row)
     lines = ["Сохранённые источники по типу и статусу:"]
     for (source_type, status), items in sorted(groups.items()):
-        lines.append(f"\n{source_type} · {status}")
+        lines.append(
+            f"\n{SOURCE_TYPE_LABELS.get(source_type.lower(), source_type)} · "
+            f"{STATUS_LABELS.get(status, status)}"
+        )
         lines.extend(
             f"#{item.id} {item.name} · {item.url or 'URL не указан'}"
             for item in items
@@ -772,7 +883,7 @@ async def discover_sources_niche(
         update.effective_message.text.strip()
     )
     await update.effective_message.reply_text(
-        "Укажите регион, например: Казахстан / Алматы / global:"
+        "Укажите регион, например: Казахстан, Алматы или весь мир:"
     )
     return BotState.DISCOVER_SOURCES_REGION
 
@@ -785,7 +896,7 @@ async def discover_sources_region(
     )
     await update.effective_message.reply_text(
         "Какие платформы искать? Через запятую: "
-        "website, Telegram, Instagram, TikTok, YouTube"
+        "сайты, Telegram, Instagram, TikTok, YouTube"
     )
     return BotState.DISCOVER_SOURCES_PLATFORMS
 
@@ -794,8 +905,15 @@ async def discover_sources_finish(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
     payload = dict(context.user_data.get("source_discovery") or {})
+    platform_names = {
+        "сайт": "website",
+        "сайты": "website",
+        "веб-сайт": "website",
+        "веб-сайты": "website",
+    }
     payload["platforms"] = [
-        value.strip() for value in update.effective_message.text.split(",")
+        platform_names.get(value.strip().lower(), value.strip())
+        for value in update.effective_message.text.split(",")
     ]
     await update.effective_message.reply_text(
         "Ищу публичные источники через Tavily и сохраняю кандидатов на проверку…"
@@ -812,11 +930,13 @@ async def discover_sources_finish(
 
     lines = [
         f"Найдено кандидатов: {len(rows)}.",
-        "Новые источники имеют статус requires_review.",
+        "Новые источники сохранены со статусом «требует проверки».",
         "",
     ]
     lines.extend(
-        f"#{row.id} · {row.source_type} · {row.status}\n"
+        f"#{row.id} · "
+        f"{SOURCE_TYPE_LABELS.get((row.source_type or '').lower(), row.source_type)} · "
+        f"{STATUS_LABELS.get(row.status, row.status)}\n"
         f"{row.name}\n{row.url or 'URL не указан'}"
         for row in rows
     )
@@ -826,8 +946,8 @@ async def discover_sources_finish(
             "Важно: Tavily показывает публичные поисковые свидетельства. "
             "Это не полный мониторинг Instagram, TikTok или YouTube.",
             "Telegram-каналы здесь только обнаруживаются; полный сбор постов "
-            "требует отдельного Telegram collector.",
-            "Метрики YouTube Shorts требуют YouTube Data API.",
+            "требует отдельного сборщика Telegram.",
+            "Для полных метрик YouTube Shorts нужен официальный API YouTube.",
         ]
     )
     await TelegramService().send_long_text(
@@ -875,13 +995,14 @@ async def monitor_sources(
 ) -> None:
     await update.effective_message.reply_text(
         "Проверяю публичную веб-информацию об активных источниках. "
-        "Это поиск свидетельств через Tavily, а не полный scraping платформ…"
+        "Это поиск публичных свидетельств через Tavily, а не полный сбор "
+        "данных с платформ…"
     )
     report, items = await SourceDiscoveryService().monitor_active_sources()
     summary = report.body or report.report_text or "Сводка сохранена."
     header = (
         f"Проверено активных источников: {report.sources_count}.\n"
-        f"Сохранено findings: {len(items)}.\n\n"
+        f"Сохранено новых материалов: {len(items)}.\n\n"
     )
     await TelegramService().send_long_text(
         context.bot,
@@ -935,7 +1056,7 @@ async def import_source_select(
         return BotState.IMPORT_SOURCE_SELECT
     context.user_data["import_source_id"] = source.id
     await update.effective_message.reply_text(
-        "Вставьте посты, ссылки, captions, наблюдения, метрики, комментарии или "
+        "Вставьте посты, ссылки, подписи, наблюдения, метрики, комментарии или "
         "экспортированный текст. Разделяйте элементы пустой строкой или строкой ---."
     )
     return BotState.IMPORT_SOURCE_TEXT
@@ -996,9 +1117,7 @@ async def web_search_finish(
     lines.extend(
         [
             "",
-            "Supabase IDs: "
-            + (", ".join(str(item.id) for item in items) or "нет"),
-            "Дальше: /market_scan или /competitor_report",
+            "Дальше можно открыть «Анализ рынка» или «Конкуренты».",
         ]
     )
     await TelegramService().send_long_text(
@@ -1022,7 +1141,7 @@ async def market_scan_start(
     if task_entry and not task_entry["task"].done():
         if update.effective_message:
             await update.effective_message.reply_text(
-                "Market Scan уже выполняется. Используйте /status или /cancel.",
+                "Анализ рынка уже выполняется. Используйте /status или /cancel.",
                 reply_markup=main_menu_keyboard(),
             )
         return ConversationHandler.END
@@ -1102,7 +1221,7 @@ async def market_scan_finish(
             )
             await context.bot.send_message(
                 chat_id,
-                "Market Scan завершился с ошибкой. Сохранённые источники не удалены. "
+                "Анализ рынка завершился с ошибкой. Сохранённые источники не удалены. "
                 "Проверьте /status и повторите попытку.",
                 reply_markup=main_menu_keyboard(),
             )
@@ -1130,7 +1249,7 @@ async def send_market_scan_result(
     analysis = report.raw_json or {}
     if report.status == "search_saved_analysis_pending":
         message = (
-            "Источники сохранены, но AI-анализ пока не завершился. "
+            "Источники сохранены, но ИИ-анализ пока не завершился. "
             "Можно повторить позже."
         )
         await TelegramService().send_long_text(
@@ -1139,7 +1258,7 @@ async def send_market_scan_result(
             (
                 f"{message}\n\n"
                 f"Сохранено источников: {len(items)}\n"
-                f"Статус отчёта: {report.status}"
+                "Статус отчёта: источники сохранены, ИИ-анализ ожидается"
             ),
             reply_markup=market_scan_pending_keyboard(report.id),
         )
@@ -1153,7 +1272,7 @@ async def send_market_scan_result(
 
     summary = "\n\n".join(
         [
-            f"Market scan #{report.id}",
+            f"Анализ рынка #{report.id}",
             str(analysis.get("executive_summary") or report.summary or "Нет вывода."),
             f"Проанализировано источников: {len(items)}",
             "Доминирующие темы:\n" + top(analysis.get("dominant_topics")),
@@ -1197,10 +1316,19 @@ async def send_competitor_report_summary(
             "- Нет подтверждённых данных"
         )
 
+    def numbered(key: str, limit: int = 5) -> str:
+        rows = payload.get(key)
+        values = rows if isinstance(rows, list) else []
+        return "\n".join(
+            f"{index}. {truncate(str(value), 180)}"
+            for index, value in enumerate(values[:limit], start=1)
+        ) or "Нет подтверждённых рекомендаций."
+
     message = "\n\n".join(
         [
-            f"Конкурентный отчёт #{report.id} сохранён.",
-            truncate(
+            "Конкурентный отчёт сохранён.",
+            "Главный вывод:\n"
+            + truncate(
                 str(
                     payload.get("executive_summary")
                     or report.summary
@@ -1208,9 +1336,14 @@ async def send_competitor_report_summary(
                 ),
                 700,
             ),
-            f"Конкуренты: {names()}",
-            "Контентные пробелы:\n" + top("content_gaps"),
-            "Действия на неделю:\n" + top("actions_this_week", limit=5),
+            f"Найденные конкуренты:\n- {names()}",
+            "Что они предлагают:\n" + top("repeating_offers"),
+            "Где у них слабые места:\n"
+            + top("content_gaps"),
+            "Возможность:\n"
+            + top("recommended_positioning", limit=2),
+            "Что сделать на этой неделе:\n"
+            + numbered("actions_this_week"),
             f"Проверено источников: {report.sources_count}",
         ]
     )
@@ -1254,7 +1387,7 @@ async def schedule_retry_analysis(
     if current and not current["task"].done():
         await context.bot.send_message(
             chat_id,
-            "Market Scan уже выполняется. Используйте /status или /cancel.",
+            "Анализ рынка уже выполняется. Используйте /status или /cancel.",
             reply_markup=main_menu_keyboard(),
         )
         return
@@ -1262,7 +1395,7 @@ async def schedule_retry_analysis(
     service = MarketIntelligenceService()
     await context.bot.send_message(
         chat_id,
-        "Повторяю AI-анализ по сохранённым источникам…",
+        "Повторяю ИИ-анализ по сохранённым источникам…",
     )
     logger.info("telegram_response_sent")
 
@@ -1297,12 +1430,12 @@ async def schedule_retry_analysis(
             safe_error = (
                 str(exc)
                 if isinstance(exc, GrowlyError)
-                else f"Unexpected {type(exc).__name__}"
+                else f"Непредвиденная ошибка: {type(exc).__name__}"
             )
             await service.fail_market_scan_job(job_id, safe_error)
             await context.bot.send_message(
                 chat_id,
-                "Повторный AI-анализ завершился с ошибкой. Проверьте /status.",
+                "Повторный ИИ-анализ завершился с ошибкой. Проверьте /status.",
                 reply_markup=main_menu_keyboard(),
             )
             logger.info("telegram_response_sent")
@@ -1344,7 +1477,7 @@ async def market_scan_action_callback(
         items = await generate_content_plan_with_progress(
             context,
             chat.id,
-            {"goal": "Использовать последний market scan и конкурентный отчёт."}
+            {"goal": "Использовать последний анализ рынка и конкурентный отчёт."}
         )
         await context.bot.send_message(
             chat.id,
@@ -1358,7 +1491,7 @@ async def market_scan_action_callback(
             {
                 "goal": (
                     "Создать осторожный контент-план по сохранённым публичным "
-                    "source_items. Полный market scan недоступен; не делать "
+                    "материалам источников. Полный анализ рынка недоступен; не делать "
                     "неподтверждённых выводов."
                 ),
                 "evidence_limited": True,
@@ -1394,13 +1527,14 @@ async def market_scan_action_callback(
         if not items:
             await context.bot.send_message(
                 chat.id,
-                "No saved source items were found for this report.",
+                "Для этого отчёта не найдены сохранённые источники.",
                 reply_markup=main_menu_keyboard(),
             )
             return
-        lines = [f"Saved source items for market scan #{report_id}:"]
+        lines = [f"Сохранённые источники для анализа рынка #{report_id}:"]
         lines.extend(
-            f"{index}. #{item.id} {item.title or 'Untitled'}\n{item.url or 'No URL'}"
+            f"{index}. #{item.id} {item.title or 'Без названия'}\n"
+            f"{item.url or 'Ссылка не указана'}"
             for index, item in enumerate(items, start=1)
         )
         await TelegramService().send_long_text(
@@ -1443,7 +1577,7 @@ async def report_action_callback(
             chat.id,
             document=InputFile(
                 BytesIO(body.encode("utf-8")),
-                filename=f"growly-report-{report.id}.txt",
+                filename=f"growly-otchet-{report.id}.txt",
             ),
             caption=f"Полный отчёт #{report.id}.",
         )
@@ -1521,7 +1655,7 @@ async def report_post_callback(
     await context.bot.send_message(chat.id, "Генерирую черновик по отчёту…")
     draft = await DraftService().create_post(
         {
-            "title": f"Post from competitor report #{report.id}",
+            "title": f"Пост по конкурентному отчёту #{report.id}",
             "brief": (
                 f"Content type: {post_type}\n"
                 "Создай пост только по подтверждённым выводам конкурентного отчёта. "
@@ -1534,6 +1668,36 @@ async def report_post_callback(
     await send_draft(update, context, draft)
 
 
+async def quick_content_plan_start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> BotState | int:
+    query = update.callback_query
+    chat = update.effective_chat
+    if not query or not chat:
+        return ConversationHandler.END
+    if not await answer_callback_safely(query, context, chat.id):
+        return ConversationHandler.END
+    return await content_plan_start(update, context)
+
+
+async def quick_action_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    query = update.callback_query
+    chat = update.effective_chat
+    if not query or not query.data or not chat:
+        return
+    if not await answer_callback_safely(query, context, chat.id):
+        return
+    action = query.data.split(":", 1)[1]
+    if action == "create_post":
+        await create_post_menu(update, context)
+    elif action == "drafts":
+        await drafts(update, context)
+
+
 async def content_plan_start(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> BotState:
@@ -1541,12 +1705,18 @@ async def content_plan_start(
     intelligence = await ContentPlanService().intelligence_status()
     if not any(intelligence.values()):
         await update.effective_message.reply_text(
-            "Предупреждение: market scan, competitor report и Source Items не найдены. "
-            "План будет основан только на ограниченных внутренних данных."
+            "Предупреждение: анализ рынка, конкурентный отчёт и материалы "
+            "источников не найдены. План будет основан на ограниченных данных."
         )
     await update.effective_message.reply_text(
-        "Главная цель недели: leads / trust / education / sales / engagement / "
-        "product awareness"
+        "Какая главная цель контента на эту неделю?\n\n"
+        "Выберите или напишите свой вариант:\n\n"
+        "1. Получить больше заявок\n"
+        "2. Повысить доверие\n"
+        "3. Объяснить пользу продукта\n"
+        "4. Продать конкретный товар\n"
+        "5. Увеличить активность аудитории\n"
+        "6. Повысить узнаваемость продукта"
     )
     return BotState.PLAN_GOAL
 
@@ -1554,9 +1724,24 @@ async def content_plan_start(
 async def content_plan_goal(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> BotState:
-    context.user_data["plan_brief"]["goal"] = update.effective_message.text.strip()
+    value = update.effective_message.text.strip()
+    goals = {
+        "1": "Получить больше заявок",
+        "2": "Повысить доверие",
+        "3": "Объяснить пользу продукта",
+        "4": "Продать конкретный товар",
+        "5": "Увеличить активность аудитории",
+        "6": "Повысить узнаваемость продукта",
+    }
+    context.user_data["plan_brief"]["goal"] = goals.get(value, value)
     await update.effective_message.reply_text(
-        "Главная аудитория: small business owners / marketers / B2B / real estate / custom"
+        "Кто главная аудитория?\n\n"
+        "Например:\n\n"
+        "1. Владельцы малого бизнеса\n"
+        "2. Маркетологи\n"
+        "3. Покупатели в Instagram\n"
+        "4. B2B-клиенты\n"
+        "5. Другое — напишите своими словами"
     )
     return BotState.PLAN_AUDIENCE
 
@@ -1564,8 +1749,19 @@ async def content_plan_goal(
 async def content_plan_audience(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> BotState:
-    context.user_data["plan_brief"]["audience"] = update.effective_message.text.strip()
-    await update.effective_message.reply_text("Главный оффер или продукт недели:")
+    value = update.effective_message.text.strip()
+    audiences = {
+        "1": "Владельцы малого бизнеса",
+        "2": "Маркетологи",
+        "3": "Покупатели в Instagram",
+        "4": "B2B-клиенты",
+    }
+    context.user_data["plan_brief"]["audience"] = audiences.get(value, value)
+    await update.effective_message.reply_text(
+        "Какой продукт, услугу или оффер продвигаем на этой неделе?\n\n"
+        "Пример:\n"
+        "«Наборы женских прокладок на месяц с доставкой по Казахстану»"
+    )
     return BotState.PLAN_OFFER
 
 
@@ -1574,7 +1770,8 @@ async def content_plan_offer(
 ) -> BotState:
     context.user_data["plan_brief"]["offer"] = update.effective_message.text.strip()
     await update.effective_message.reply_text(
-        "Каналы через запятую: Telegram / Instagram / Reels / WhatsApp / Website"
+        "Где будем публиковать? Укажите каналы через запятую, например: "
+        "Telegram, Instagram, Reels, WhatsApp или сайт."
     )
     return BotState.PLAN_CHANNELS
 
@@ -1584,7 +1781,7 @@ async def content_plan_channels(
 ) -> BotState:
     context.user_data["plan_brief"]["channels"] = update.effective_message.text.strip()
     await update.effective_message.reply_text(
-        "Интенсивность: light / normal / aggressive"
+        "Выберите интенсивность публикаций: лёгкая, обычная или активная."
     )
     return BotState.PLAN_INTENSITY
 
@@ -1592,7 +1789,20 @@ async def content_plan_channels(
 async def content_plan_finish(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
-    context.user_data["plan_brief"]["intensity"] = update.effective_message.text.strip()
+    value = update.effective_message.text.strip()
+    intensity = {
+        "лёгкая": "лёгкая",
+        "легкая": "лёгкая",
+        "обычная": "обычная",
+        "активная": "активная",
+        "light": "лёгкая",
+        "normal": "обычная",
+        "aggressive": "активная",
+    }
+    context.user_data["plan_brief"]["intensity"] = intensity.get(
+        value.lower(),
+        value,
+    )
     items = await generate_content_plan_with_progress(
         context,
         update.effective_chat.id,
@@ -1602,7 +1812,8 @@ async def content_plan_finish(
     lines = [f"Контент-план сохранён: {len(items)} идей."]
     lines.extend(
         f"{index}. #{item.id} · {item.publish_date:%Y-%m-%d %H:%M} · "
-        f"{item.content_type} · {item.topic}\nПочему: {item.why_recommended}"
+        f"{content_type_label(item.content_type)} · {item.topic}\n"
+        f"Почему: {item.why_recommended}"
         for index, item in enumerate(items, start=1)
     )
     await TelegramService().send_long_text(
@@ -1620,7 +1831,8 @@ async def generate_from_plan_start(
     items = await ContentPlanService().list_draft_items()
     if not items:
         await update.effective_message.reply_text(
-            "Нет элементов плана со статусом draft. Сначала используйте /content_plan.",
+            "В контент-плане нет элементов, из которых можно создать черновик. "
+            "Сначала используйте /content_plan.",
             reply_markup=main_menu_keyboard(),
         )
         return ConversationHandler.END
@@ -1694,7 +1906,8 @@ async def update_metrics_select(
         choices[number - 1] if 1 <= number <= len(choices) else number
     )
     await update.effective_message.reply_text(
-        "Введите: views, reactions, comments, clicks, leads, notes\n"
+        "Введите через запятую: просмотры, реакции, комментарии, переходы, "
+        "заявки и необязательную заметку.\n"
         "Пример: 1200, 45, 8, 12, 3, Получили вопросы по цене"
     )
     return BotState.METRICS_VALUES
@@ -1732,13 +1945,24 @@ async def update_metrics_finish(
 async def performance_report(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    await update.effective_message.reply_text("Формирую отчёт по эффективности…")
+    await update.effective_message.reply_text("Проверяю данные публикаций…")
     report = await ReportService().generate_weekly_performance_report()
+    if report is None:
+        await update.effective_message.reply_text(
+            "Пока нет данных для отчёта.\n\n"
+            "За выбранный период нет опубликованных постов или метрик.\n"
+            "Чтобы отчёт стал полезным:\n\n"
+            "1. Создайте контент-план\n"
+            "2. Подготовьте и опубликуйте посты\n"
+            "3. Вернитесь к отчёту после публикаций",
+            reply_markup=empty_performance_actions_keyboard(),
+        )
+        return
     await TelegramService().send_long_text(
         context.bot,
         update.effective_chat.id,
         report.report_text or "Отчёт сохранён.",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=reports_menu_keyboard(),
     )
 
 
@@ -1750,8 +1974,8 @@ async def competitor_report(
     service = MarketIntelligenceService()
     if not await service.has_source_items():
         await update.effective_message.reply_text(
-            "Source Items пока пусты. Введите нишу или тему, чтобы сначала выполнить "
-            "поиск, либо используйте /market_scan для выбора региона и конкурентов."
+            "Сохранённых материалов источников пока нет. Введите нишу или тему, "
+            "чтобы сначала выполнить поиск, либо откройте «Анализ рынка»."
         )
         return BotState.COMPETITOR_REPORT_TOPIC
     await update.effective_message.reply_text("Формирую конкурентный отчёт…")
@@ -1802,6 +2026,62 @@ async def drafts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await send_draft(update, context, draft)
 
 
+def report_type_title(report_type: str | None) -> str:
+    return {
+        "market_scan": "Анализ рынка",
+        "competitor_report": "Конкурентный отчёт",
+        "performance": "Отчёт по публикациям",
+        "content_plan_context": "Сводка для контент-плана",
+        "source_monitoring": "Проверка источников",
+    }.get(report_type or "", "Отчёт")
+
+
+async def latest_market_report(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    if not update.effective_message:
+        return
+    report = await ReportService().latest_report("market_scan")
+    if report is None:
+        await update.effective_message.reply_text(
+            "Анализ рынка ещё не создан.",
+            reply_markup=reports_menu_keyboard(),
+        )
+        return
+    payload = report.raw_json or {}
+    summary = truncate(
+        str(payload.get("executive_summary") or report.summary or "Нет вывода."),
+        900,
+    )
+    await update.effective_message.reply_text(
+        f"Анализ рынка #{report.id}\n\n"
+        f"{summary}\n\n"
+        f"Проверено источников: {report.sources_count}",
+        reply_markup=market_scan_actions_keyboard(report.id),
+    )
+
+
+async def latest_competitor_report(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    if not update.effective_message:
+        return
+    report = await ReportService().latest_report("competitor_report")
+    if report is None:
+        await update.effective_message.reply_text(
+            "Конкурентный отчёт ещё не создан.",
+            reply_markup=reports_menu_keyboard(),
+        )
+        return
+    await send_competitor_report_summary(
+        context.bot,
+        update.effective_chat.id,
+        report,
+    )
+
+
 async def reports(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_message:
         return
@@ -1813,8 +2093,9 @@ async def reports(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     summary = "\n\n".join(
         (
-            f"#{row.id} · {row.title}\n"
-            f"{truncate(row.summary or row.body or row.report_text, 220)}"
+            f"#{row.id} · {report_type_title(row.report_type)}\n"
+            f"Статус: {STATUS_LABELS.get(row.status, row.status)} · "
+            f"источников: {row.sources_count}"
         )
         for row in rows[:5]
     )
@@ -1846,9 +2127,10 @@ async def debug_notion_status(
         return
     status = await NotionService().debug_status()
     lines = [
-        f"NOTION_ROOT_PAGE_ID: {status['notion_root_page_id'] or 'not configured'}",
+        "Корневая страница Notion: "
+        f"{status['notion_root_page_id'] or 'не настроена'}",
         "",
-        "Configured database IDs:",
+        "Настроенные базы данных:",
     ]
     database_ids = status["database_ids"]
     if database_ids:
@@ -1857,13 +2139,13 @@ async def debug_notion_status(
             for key, value in sorted(database_ids.items())
         )
     else:
-        lines.append("none")
-    lines.extend(["", "Latest Supabase counts:"])
+        lines.append("нет")
+    lines.extend(["", "Последние значения в Supabase:"])
     lines.extend(
         f"{key}: {value}"
         for key, value in status["supabase_counts"].items()
     )
-    lines.extend(["", "Latest Notion sync counts:"])
+    lines.extend(["", "Последняя синхронизация Notion:"])
     latest_sync = status["latest_sync_counts"]
     if latest_sync:
         lines.extend(
@@ -1871,13 +2153,13 @@ async def debug_notion_status(
             for key, value in latest_sync.items()
         )
     else:
-        lines.append("none")
+        lines.append("нет")
     lines.extend(
         [
             "",
-            f"Latest report id: {status['latest_report_id'] or 'none'}",
+            f"Последний отчёт: {status['latest_report_id'] or 'нет'}",
             (
-                "Latest content plan count: "
+                "Элементов последнего контент-плана: "
                 f"{status['latest_content_plan_count']}"
             ),
         ]
@@ -1912,7 +2194,8 @@ async def send_draft(
 
 def format_draft_message(draft: Any) -> str:
     header = (
-        f"Черновик #{draft.id} · версия {draft.version} · статус {draft.status}\n"
+        f"Черновик #{draft.id} · версия {draft.version} · "
+        f"статус {STATUS_LABELS.get(draft.status, draft.status)}\n"
         f"Тип контента: {content_type_label(draft.draft_type)}\n"
         f"{draft.title or ''}\n\n"
     )
@@ -1934,13 +2217,13 @@ async def publish_approved_draft(
     reservation = await service.reserve_publication(draft_id)
     if not reservation.should_publish:
         if reservation.publication.status == "published":
-            return False, "already published"
-        return False, "publication is already in progress"
+            return False, "уже опубликован"
+        return False, "публикация уже выполняется"
 
     draft = await service.get(draft_id)
     if draft is None:
         await service.fail_publication(reservation.publication.id)
-        raise ValueError("Draft was not found.")
+        raise ValueError("Черновик не найден.")
 
     try:
         message_ids = await TelegramService(service.settings).publish_to_group(
@@ -1954,7 +2237,7 @@ async def publish_approved_draft(
         reservation.publication.id,
         message_ids,
     )
-    return True, f"published in {len(message_ids)} message(s)"
+    return True, f"опубликован сообщениями: {len(message_ids)}"
 
 
 async def approval_callback(
@@ -2070,8 +2353,7 @@ async def error_handler(
     effective_message = getattr(update, "effective_message", None)
     if effective_message:
         message = (
-            str(error)
-            if isinstance(error, GrowlyError)
-            else "Не удалось выполнить запрос. Попробуйте позже или проверьте интеграции."
+            "Не удалось выполнить запрос. Попробуйте позже или проверьте "
+            "настройки интеграций."
         )
         await effective_message.reply_text(message, reply_markup=main_menu_keyboard())

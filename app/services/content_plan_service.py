@@ -49,13 +49,13 @@ class ContentPlanService:
         self.reduced_context_used = False
         await self._emit_progress(
             progress,
-            "Шаг 1/4: беру последний market scan...",
+            "Шаг 1/4: беру последний анализ рынка...",
         )
         data = await asyncio.to_thread(self._load_context_data, business_context)
 
         await self._emit_progress(
             progress,
-            "Шаг 2/4: сжимаю источники для AI...",
+            "Шаг 2/4: сжимаю источники для ИИ...",
         )
         context = await self._build_bounded_context(data)
 
@@ -87,7 +87,7 @@ class ContentPlanService:
         items = await asyncio.to_thread(self._save_plan_items, normalized)
         await self._emit_progress(
             progress,
-            "Шаг 4/4: сохраняю в Notion Content Calendar...",
+            "Шаг 4/4: сохраняю в контент-календарь Notion...",
         )
         for item in items:
             try:

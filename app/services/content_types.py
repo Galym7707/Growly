@@ -22,6 +22,7 @@ CONTENT_TYPES = (
             "promo_post",
             "promotional post",
             "sales post",
+            "рекламный пост",
         ),
     ),
     ContentTypeSpec(
@@ -56,6 +57,7 @@ CONTENT_TYPES = (
         aliases=(
             "client result post",
             "result story",
+            "пост о результате клиента",
             "case post",
             "case_post",
             "кейс",
@@ -84,6 +86,7 @@ CONTENT_TYPES = (
             "faq_post",
             "frequently asked questions",
             "questions and answers",
+            "faq-пост",
         ),
     ),
     ContentTypeSpec(
@@ -95,6 +98,7 @@ CONTENT_TYPES = (
             "news_post",
             "announcement post",
             "company news",
+            "новостной пост",
         ),
     ),
     ContentTypeSpec(
@@ -184,4 +188,17 @@ def detect_content_type(brief: str, *, default: str = "asset_post") -> ContentTy
 
 
 def content_type_label(value: str | None) -> str:
-    return normalize_content_type(value).label
+    spec = normalize_content_type(value)
+    return {
+        "promo_post": "Рекламный пост",
+        "pain_point_post": "Пост о проблеме клиента",
+        "asset_post": "Пост о продукте",
+        "case_post": "Пост о результате клиента",
+        "educational_post": "Обучающий пост",
+        "faq_post": "FAQ-пост",
+        "news_post": "Новостной пост",
+        "comparison_post": "Сравнительный пост",
+        "weekly_digest": "Недельный дайджест",
+        "reels_shorts_script": "Сценарий короткого видео",
+        "whatsapp_template": "Шаблон сообщения WhatsApp",
+    }.get(spec.key, spec.label)

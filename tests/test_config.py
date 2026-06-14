@@ -10,6 +10,8 @@ def test_defaults_are_safe() -> None:
     settings = Settings(_env_file=None)
     assert settings.app_name == "Growly"
     assert settings.environment == "development"
+    assert settings.default_language == "ru"
+    assert "Russian" in settings.user_language_instruction()
     assert settings.ai_primary_provider == "github_models"
     assert settings.ai_fallback_provider == "groq"
     assert settings.github_models_base_url == "https://models.github.ai/inference"

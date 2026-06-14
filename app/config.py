@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     app_name: str = Field(default="Growly", alias="APP_NAME")
     environment: str = Field(default="development", alias="ENVIRONMENT")
+    default_language: str = Field(default="ru", alias="DEFAULT_LANGUAGE")
 
     telegram_bot_api_key: SecretStr | None = Field(
         default=None, alias="TELEGRAM_BOT_API_KEY"
@@ -138,6 +139,18 @@ class Settings(BaseSettings):
 
     def notion_token(self) -> str:
         return self.require_secret("notion_api_key", "NOTION_API_KEY")
+
+    def user_language_instruction(self) -> str:
+        if self.default_language.strip().lower() == "ru":
+            return (
+                "Write all user-facing text in Russian. Keep only required "
+                "JSON keys, URLs, brand names, and channel names unchanged."
+            )
+        return (
+            f"Write all user-facing text in {self.default_language.strip()}. "
+            "Keep only required JSON keys, URLs, brand names, and channel "
+            "names unchanged."
+        )
 
 
 @lru_cache(maxsize=1)

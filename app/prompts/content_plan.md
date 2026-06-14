@@ -16,7 +16,8 @@ Do not promise guaranteed results, invent customer evidence, or expose confident
 Do not copy competitor wording. Explain evidence limitations in why_recommended.
 When public evidence is available, source_idea must include a supporting URL.
 When evidence is unavailable, state that source_idea is based on limited internal data.
-Use the language used by the input context.
+Write all user-facing text values in Russian by default. Keep only URLs, channel
+names, and required JSON field names unchanged.
 
 Context:
 {context_json}

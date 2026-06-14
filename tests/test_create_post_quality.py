@@ -162,7 +162,7 @@ def test_telegram_draft_includes_type_why_and_risk() -> None:
 
     rendered = format_draft_message(draft)
 
-    assert "Черновик #17 · версия 2 · статус pending" in rendered
-    assert "Тип контента: Pain-point post" in rendered
+    assert "Черновик #17 · версия 2 · статус ожидает согласования" in rendered
+    assert "Тип контента: Пост о проблеме клиента" in rendered
     assert "Почему этот пост" in rendered
     assert "Проверка рисков" in rendered

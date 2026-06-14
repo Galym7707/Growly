@@ -128,7 +128,7 @@ class DraftService:
 
         item = await asyncio.to_thread(load)
         if item is None:
-            raise ValueError("Content plan item was not found.")
+            raise ValueError("Элемент контент-плана не найден.")
         context = {
             "content_plan": {
                 "id": item.id,
@@ -149,7 +149,7 @@ class DraftService:
             {
                 **context,
                 "channel": item.channel or "Telegram",
-                "title": item.topic or f"Content plan item {item.id}",
+                "title": item.topic or f"Элемент контент-плана {item.id}",
                 "cta": item.cta,
             },
             spec,

@@ -40,10 +40,10 @@ def test_pending_keyboard_has_recovery_actions() -> None:
     }
 
     assert buttons == {
-        "Retry AI analysis": "market:retry:17",
-        "View sources": "market:view_sources:17",
-        "Sync Notion": "market:notion:17",
-        "Generate content plan from limited data": "market:limited_plan:17",
+        "Повторить ИИ-анализ": "market:retry:17",
+        "Открыть источники": "market:view_sources:17",
+        "Синхронизировать с Notion": "market:notion:17",
+        "Создать план по доступным данным": "market:limited_plan:17",
     }
 
 
@@ -72,7 +72,7 @@ async def test_cancel_clears_conversation_and_cancels_background_task() -> None:
     assert result == handlers.ConversationHandler.END
     assert context.user_data == {}
     assert task.cancelled
-    assert "Запущена отмена Market Scan" in message.messages[0][0]
+    assert "Запущена отмена анализа рынка" in message.messages[0][0]
 
 
 @pytest.mark.asyncio
@@ -105,10 +105,10 @@ async def test_status_renders_latest_job(monkeypatch: pytest.MonkeyPatch) -> Non
     await handlers.task_status(update, context)
 
     text = message.messages[0][0]
-    assert "Задача: market_scan" in text
+    assert "Задача: анализ рынка" in text
     assert "Сохранено источников: 33" in text
-    assert "Статус отчёта: search_saved_analysis_pending" in text
-    assert "Последняя ошибка: AI timeout" in text
+    assert "Статус отчёта: источники сохранены, анализ ожидается" in text
+    assert "Последняя ошибка: превышено время ожидания" in text
 
 
 @pytest.mark.asyncio

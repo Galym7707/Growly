@@ -75,11 +75,11 @@ async def test_notion_sync_message_explains_empty_content_calendar() -> None:
         },
     )
 
-    assert "Source Items updated: 25" in text
-    assert "Reports updated: 1" in text
-    assert "Content Calendar updated: 0" in text
+    assert "Материалы источников обновлены: 25" in text
+    assert "Отчёты обновлены: 1" in text
+    assert "Контент-календарь обновлён: 0" in text
     assert (
-        "Content Calendar не изменился, потому что новые content plan "
-        "items не были созданы."
+        "Контент-календарь не изменился, потому что новые элементы "
+        "контент-плана не были созданы."
     ) in text
     assert "https://notion.so/content-calendar" in text

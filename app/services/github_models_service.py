@@ -157,7 +157,8 @@ class GitHubModelsService:
                         "role": "system",
                         "content": (
                             "Follow the task exactly. Never fabricate facts, "
-                            "metrics, quotes, customer evidence, or guarantees."
+                            "metrics, quotes, customer evidence, or guarantees. "
+                            + self.settings.user_language_instruction()
                         ),
                     },
                     {"role": "user", "content": prompt},

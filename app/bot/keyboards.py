@@ -4,40 +4,43 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMa
 
 
 MAIN_MENU_ROWS = [
-    ["Market scan", "Content plan"],
-    ["Create post", "Drafts"],
-    ["Reports", "Sources"],
-    ["Settings", "Help"],
+    ["Анализ рынка", "Контент-план"],
+    ["Создать пост", "Источники"],
+    ["Черновики", "Отчёты"],
+    ["Ещё"],
 ]
 
 SOURCES_MENU_ROWS = [
-    ["View sources"],
-    ["Find new sources", "Check saved sources"],
-    ["Back"],
+    ["Просмотреть источники"],
+    ["Найти новые источники", "Проверить источники"],
+    ["Назад"],
 ]
 
 CREATE_POST_MENU_ROWS = [
-    ["Promo post", "Educational post"],
-    ["Client result post", "FAQ post"],
-    ["News post", "Custom post"],
-    ["Back"],
+    ["Рекламный пост", "Обучающий пост"],
+    ["Пост о результате клиента", "FAQ-пост"],
+    ["Новостной пост", "Свой вариант"],
+    ["Назад"],
 ]
 
 REPORTS_MENU_ROWS = [
-    ["View latest reports"],
-    ["Competitor report", "Performance report"],
-    ["Back"],
+    ["Последний анализ рынка"],
+    ["Последний конкурентный отчёт"],
+    ["Отчёт по публикациям"],
+    ["Все отчёты"],
+    ["Назад"],
 ]
 
 SETTINGS_MENU_ROWS = [
-    ["View settings", "New business"],
-    ["Tools", "Sync Notion"],
-    ["Back"],
+    ["Показать настройки", "Новый бизнес"],
+    ["Синхронизировать с Notion"],
+    ["Назад"],
 ]
 
 TOOLS_MENU_ROWS = [
-    ["Web search", "Review analysis"],
-    ["Back"],
+    ["Веб-поиск", "Анализ отзывов"],
+    ["Настройки", "Справка"],
+    ["Назад"],
 ]
 
 NAVIGATION_BUTTON_LABELS = frozenset(
@@ -60,6 +63,33 @@ NAVIGATION_BUTTON_LABELS = frozenset(
     "Create case",
     "Pending drafts",
     "More",
+    "Market scan",
+    "Content plan",
+    "Create post",
+    "Drafts",
+    "Reports",
+    "Sources",
+    "Settings",
+    "Help",
+    "View sources",
+    "Find new sources",
+    "Check saved sources",
+    "Promo post",
+    "Educational post",
+    "Client result post",
+    "FAQ post",
+    "News post",
+    "Custom post",
+    "View latest reports",
+    "Competitor report",
+    "Performance report",
+    "View settings",
+    "New business",
+    "Tools",
+    "Sync Notion",
+    "Web search",
+    "Review analysis",
+    "Back",
 }
 
 
@@ -120,14 +150,14 @@ def source_actions_keyboard(sources: list[object]) -> InlineKeyboardMarkup | Non
         if status != "active":
             buttons.append(
                 InlineKeyboardButton(
-                    f"Approve #{source_id}",
+                    f"Подтвердить #{source_id}",
                     callback_data=f"source:approve:{source_id}",
                 )
             )
         if status != "disabled":
             buttons.append(
                 InlineKeyboardButton(
-                    f"Disable #{source_id}",
+                    f"Отключить #{source_id}",
                     callback_data=f"source:disable:{source_id}",
                 )
             )
@@ -141,23 +171,23 @@ def market_scan_actions_keyboard(report_id: int) -> InlineKeyboardMarkup:
         [
             [
                 InlineKeyboardButton(
-                    "Competitor report",
+                    "Конкуренты",
                     callback_data=f"market:competitor:{report_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "Generate Content Plan",
+                    "Создать контент-план",
                     callback_data=f"market:content_plan:{report_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "Save to Notion",
+                    "Синхронизировать с Notion",
                     callback_data=f"market:notion:{report_id}",
                 ),
                 InlineKeyboardButton(
-                    "New Search",
+                    "Новый поиск",
                     callback_data="market:new_search",
                 ),
             ],
@@ -170,25 +200,25 @@ def competitor_report_actions_keyboard(report_id: int) -> InlineKeyboardMarkup:
         [
             [
                 InlineKeyboardButton(
-                    "View full report",
+                    "Открыть полный отчёт",
                     callback_data=f"report:view:{report_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "Generate content plan",
+                    "Создать контент-план",
                     callback_data=f"report:content_plan:{report_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "Create post from report",
+                    "Создать пост по отчёту",
                     callback_data=f"report:create_post:{report_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "Sync Notion",
+                    "Синхронизировать с Notion",
                     callback_data=f"report:notion:{report_id}",
                 )
             ],
@@ -201,27 +231,27 @@ def report_post_type_keyboard(report_id: int) -> InlineKeyboardMarkup:
         [
             [
                 InlineKeyboardButton(
-                    "Promo post",
+                    "Рекламный пост",
                     callback_data=f"report_post:{report_id}:promo_post",
                 ),
                 InlineKeyboardButton(
-                    "Educational post",
+                    "Обучающий пост",
                     callback_data=f"report_post:{report_id}:educational_post",
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    "Client result post",
+                    "Пост о результате",
                     callback_data=f"report_post:{report_id}:case_post",
                 ),
                 InlineKeyboardButton(
-                    "FAQ post",
+                    "FAQ-пост",
                     callback_data=f"report_post:{report_id}:faq_post",
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    "News post",
+                    "Новостной пост",
                     callback_data=f"report_post:{report_id}:news_post",
                 ),
             ],
@@ -234,23 +264,23 @@ def market_scan_pending_keyboard(report_id: int) -> InlineKeyboardMarkup:
         [
             [
                 InlineKeyboardButton(
-                    "Retry AI analysis",
+                    "Повторить ИИ-анализ",
                     callback_data=f"market:retry:{report_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "View sources",
+                    "Открыть источники",
                     callback_data=f"market:view_sources:{report_id}",
                 ),
                 InlineKeyboardButton(
-                    "Sync Notion",
+                    "Синхронизировать с Notion",
                     callback_data=f"market:notion:{report_id}",
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    "Generate content plan from limited data",
+                    "Создать план по доступным данным",
                     callback_data=f"market:limited_plan:{report_id}",
                 )
             ],
@@ -280,12 +310,15 @@ def new_business_confirmation_keyboard() -> InlineKeyboardMarkup:
 def approval_keyboard(draft_id: int) -> InlineKeyboardMarkup:
     rows = [
         [
-            InlineKeyboardButton("Approve", callback_data=f"approve:{draft_id}"),
-            InlineKeyboardButton("Regenerate", callback_data=f"regenerate:{draft_id}"),
+            InlineKeyboardButton("Одобрить", callback_data=f"approve:{draft_id}"),
+            InlineKeyboardButton("Создать заново", callback_data=f"regenerate:{draft_id}"),
         ],
         [
-            InlineKeyboardButton("Reject", callback_data=f"reject:{draft_id}"),
-            InlineKeyboardButton("Save to Notion", callback_data=f"notion:{draft_id}"),
+            InlineKeyboardButton("Отклонить", callback_data=f"reject:{draft_id}"),
+            InlineKeyboardButton(
+                "Сохранить в Notion",
+                callback_data=f"notion:{draft_id}",
+            ),
         ],
     ]
     return InlineKeyboardMarkup(rows)
@@ -297,7 +330,7 @@ def approved_keyboard(
     rows = [
         [
             InlineKeyboardButton(
-                "Save to Notion", callback_data=f"notion:{draft_id}"
+                "Сохранить в Notion", callback_data=f"notion:{draft_id}"
             )
         ]
     ]
@@ -305,9 +338,34 @@ def approved_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    "Publish to Telegram Group",
+                    "Опубликовать в Telegram",
                     callback_data=f"publish:{draft_id}",
                 )
             ]
         )
     return InlineKeyboardMarkup(rows) if rows else None
+
+
+def empty_performance_actions_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "Создать контент-план",
+                    callback_data="quick:content_plan",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Создать пост",
+                    callback_data="quick:create_post",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Открыть черновики",
+                    callback_data="quick:drafts",
+                )
+            ],
+        ]
+    )

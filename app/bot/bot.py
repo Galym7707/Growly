@@ -199,7 +199,9 @@ def build_application(settings: Settings | None = None) -> Application:
                 ),
                 MessageHandler(
                     private_chat
-                    & filters.Regex(r"^(Find new sources|Discover sources)$"),
+                    & filters.Regex(
+                        r"^(Найти новые источники|Find new sources|Discover sources)$"
+                    ),
                     handlers.discover_sources_start,
                 ),
             ],
@@ -234,7 +236,7 @@ def build_application(settings: Settings | None = None) -> Application:
                     "web_search", handlers.web_search_start, filters=private_chat
                 ),
                 MessageHandler(
-                    private_chat & filters.Regex(r"^Web search$"),
+                    private_chat & filters.Regex(r"^(Веб-поиск|Web search)$"),
                     handlers.web_search_start,
                 ),
                 CallbackQueryHandler(
@@ -260,7 +262,7 @@ def build_application(settings: Settings | None = None) -> Application:
                     "market_scan", handlers.market_scan_start, filters=private_chat
                 ),
                 MessageHandler(
-                    private_chat & filters.Regex(r"^Market scan$"),
+                    private_chat & filters.Regex(r"^(Анализ рынка|Market scan)$"),
                     handlers.market_scan_start,
                 ),
             ],
@@ -296,7 +298,11 @@ def build_application(settings: Settings | None = None) -> Application:
                     filters=private_chat,
                 ),
                 MessageHandler(
-                    private_chat & filters.Regex(r"^(Competitor report|Generate competitor report)$"),
+                    private_chat
+                    & filters.Regex(
+                        r"^(Конкуренты|"
+                        r"Competitor report|Generate competitor report)$"
+                    ),
                     handlers.competitor_report,
                 ),
             ],
@@ -318,8 +324,10 @@ def build_application(settings: Settings | None = None) -> Application:
                 MessageHandler(
                     private_chat
                     & filters.Regex(
-                        r"^(Promo post|Educational post|Case post|FAQ post|"
-                        r"Client result post|News post|Custom post|Create one-off post)$"
+                        r"^(Рекламный пост|Обучающий пост|Пост о результате клиента|"
+                        r"FAQ-пост|Новостной пост|Свой вариант|Promo post|"
+                        r"Educational post|Case post|FAQ post|Client result post|"
+                        r"News post|Custom post|Create one-off post)$"
                     ),
                     handlers.create_post_type_start,
                 ),
@@ -340,7 +348,7 @@ def build_application(settings: Settings | None = None) -> Application:
             entry_points=[
                 CommandHandler("add_source", handlers.add_source_start, filters=private_chat),
                 MessageHandler(
-                    private_chat & filters.Regex(r"^Add source$"),
+                    private_chat & filters.Regex(r"^(Добавить источник|Add source)$"),
                     handlers.add_source_start,
                 ),
             ],
@@ -392,7 +400,10 @@ def build_application(settings: Settings | None = None) -> Application:
                     "import_source_items", handlers.import_source_start, filters=private_chat
                 ),
                 MessageHandler(
-                    private_chat & filters.Regex(r"^Import competitor posts$"),
+                    private_chat
+                    & filters.Regex(
+                        r"^(Импортировать материалы конкурентов|Import competitor posts)$"
+                    ),
                     handlers.import_source_start,
                 ),
             ],
@@ -417,8 +428,15 @@ def build_application(settings: Settings | None = None) -> Application:
         ConversationHandler(
             entry_points=[
                 CommandHandler("content_plan", handlers.content_plan_start, filters=private_chat),
+                CallbackQueryHandler(
+                    handlers.quick_content_plan_start,
+                    pattern=r"^quick:content_plan$",
+                ),
                 MessageHandler(
-                    private_chat & filters.Regex(r"^(Content plan|Generate content plan)$"),
+                    private_chat
+                    & filters.Regex(
+                        r"^(Контент-план|Content plan|Generate content plan)$"
+                    ),
                     handlers.content_plan_start,
                 ),
             ],
@@ -449,7 +467,10 @@ def build_application(settings: Settings | None = None) -> Application:
                     "generate_from_plan", handlers.generate_from_plan_start, filters=private_chat
                 ),
                 MessageHandler(
-                    private_chat & filters.Regex(r"^Generate draft from plan$"),
+                    private_chat
+                    & filters.Regex(
+                        r"^(Создать черновик из плана|Generate draft from plan)$"
+                    ),
                     handlers.generate_from_plan_start,
                 ),
             ],
@@ -471,7 +492,7 @@ def build_application(settings: Settings | None = None) -> Application:
                     "update_publication_metrics", handlers.update_metrics_start, filters=private_chat
                 ),
                 MessageHandler(
-                    private_chat & filters.Regex(r"^Update metrics$"),
+                    private_chat & filters.Regex(r"^(Обновить метрики|Update metrics)$"),
                     handlers.update_metrics_start,
                 ),
             ],
@@ -502,7 +523,9 @@ def build_application(settings: Settings | None = None) -> Application:
                 ),
                 MessageHandler(
                     private_chat
-                    & filters.Regex(r"^(Create case|Client result post)$"),
+                    & filters.Regex(
+                        r"^(Пост о результате клиента|Create case|Client result post)$"
+                    ),
                     handlers.create_case_start,
                 ),
             ],
@@ -526,7 +549,7 @@ def build_application(settings: Settings | None = None) -> Application:
                     filters=private_chat,
                 ),
                 MessageHandler(
-                    private_chat & filters.Regex(r"^Review analysis$"),
+                    private_chat & filters.Regex(r"^(Анализ отзывов|Review analysis)$"),
                     handlers.review_start,
                 ),
             ],
@@ -558,25 +581,46 @@ def build_application(settings: Settings | None = None) -> Application:
     )
 
     button_handlers = {
+        "Создать пост": handlers.create_post_menu,
         "Create post": handlers.create_post_menu,
+        "Источники": handlers.sources_menu,
         "Sources": handlers.sources_menu,
+        "Просмотреть источники": handlers.sources,
         "View sources": handlers.sources,
+        "Найти новые источники": handlers.discover_sources_start,
         "Find new sources": handlers.discover_sources_start,
         "Monitor sources": handlers.monitor_sources,
+        "Проверить источники": handlers.monitor_sources,
         "Check saved sources": handlers.monitor_sources,
+        "Черновики": handlers.drafts,
         "Drafts": handlers.drafts,
         "Pending drafts": handlers.drafts,
+        "Отчёты": handlers.reports_menu,
         "Reports": handlers.reports_menu,
+        "Все отчёты": handlers.reports,
         "View latest reports": handlers.reports,
+        "Последний анализ рынка": handlers.latest_market_report,
+        "Последний конкурентный отчёт": handlers.latest_competitor_report,
+        "Конкуренты": handlers.competitor_report,
         "Competitor report": handlers.competitor_report,
+        "Ещё": handlers.more_menu,
         "More": handlers.more_menu,
+        "Веб-поиск": handlers.web_search_start,
+        "Анализ отзывов": handlers.review_start,
         "Tools": handlers.more_menu,
+        "Отчёт по публикациям": handlers.performance_report,
         "Performance report": handlers.performance_report,
+        "Синхронизировать с Notion": handlers.sync_notion,
         "Sync Notion": handlers.sync_notion,
+        "Настройки": handlers.settings_menu,
         "Settings": handlers.settings_menu,
+        "Показать настройки": handlers.settings_status,
         "View settings": handlers.settings_status,
+        "Новый бизнес": handlers.new_business_start,
         "New business": handlers.new_business_start,
+        "Справка": handlers.help_command,
         "Help": handlers.help_command,
+        "Назад": handlers.main_menu,
         "Back": handlers.main_menu,
     }
     for label, callback in button_handlers.items():
@@ -618,6 +662,12 @@ def build_application(settings: Settings | None = None) -> Application:
                 r"^report_post:\d+:"
                 r"(promo_post|educational_post|case_post|faq_post|news_post)$"
             ),
+        )
+    )
+    application.add_handler(
+        CallbackQueryHandler(
+            handlers.quick_action_callback,
+            pattern=r"^quick:(create_post|drafts)$",
         )
     )
     application.add_handler(
