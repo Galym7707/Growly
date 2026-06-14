@@ -111,3 +111,26 @@ def test_all_management_commands_are_private_only() -> None:
         assert not any_handler_matches(
             application, command_update(f"/{command}", "supergroup")
         )
+
+
+def test_polling_retries_transient_bootstrap_failures(
+    monkeypatch: object,
+) -> None:
+    from app.bot import bot
+
+    captured: dict[str, object] = {}
+
+    class FakeApplication:
+        def run_polling(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr(  # type: ignore[union-attr]
+        bot,
+        "build_application",
+        lambda: FakeApplication(),
+    )
+
+    bot.run_bot()
+
+    assert captured["bootstrap_retries"] == -1
+    assert captured["timeout"] == 30

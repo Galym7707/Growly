@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.database import session_scope
+from app.runtime_status import telegram_initialized
 from app.utils.logging import configure_logging
 
 configure_logging()
@@ -24,6 +25,11 @@ async def health() -> dict[str, str]:
         "status": "ok",
         "app": settings.app_name,
         "environment": settings.environment,
+        "telegram": (
+            "initialized"
+            if telegram_initialized.is_set()
+            else "initializing"
+        ),
     }
 
 
@@ -35,4 +41,3 @@ async def ready() -> dict[str, str]:
 
     await asyncio.to_thread(check_database)
     return {"status": "ready", "database": "connected"}
-

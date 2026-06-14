@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from telegram.ext import (
     Application,
     ApplicationBuilder,
@@ -13,7 +15,10 @@ from telegram.ext import (
 from app.bot import handlers
 from app.bot.states import BotState
 from app.config import Settings, get_settings
+from app.runtime_status import telegram_initialized
 from app.services.scheduler_service import SchedulerService
+
+logger = logging.getLogger(__name__)
 
 
 def build_application(settings: Settings | None = None) -> Application:
@@ -23,8 +28,11 @@ def build_application(settings: Settings | None = None) -> Application:
     async def post_init(application: Application) -> None:
         await handlers.register_commands(application)
         scheduler.start_if_enabled()
+        telegram_initialized.set()
+        logger.info("telegram_bot_initialized")
 
     async def post_shutdown(application: Application) -> None:
+        telegram_initialized.clear()
         scheduler.shutdown()
 
     application = (
@@ -530,6 +538,8 @@ def build_application(settings: Settings | None = None) -> Application:
 
 def run_bot() -> None:
     build_application().run_polling(
+        timeout=30,
+        bootstrap_retries=-1,
         allowed_updates=["message", "callback_query"],
         drop_pending_updates=True,
     )
