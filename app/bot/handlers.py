@@ -2075,3 +2075,37 @@ async def error_handler(
             else "Не удалось выполнить запрос. Попробуйте позже или проверьте интеграции."
         )
         await effective_message.reply_text(message, reply_markup=main_menu_keyboard())
+
+
+async def edit_draft_start(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> int:
+    query = update.callback_query
+    chat = update.effective_chat
+    if not query or not query.data or not chat:
+        return ConversationHandler.END
+    await answer_callback_safely(query, context, chat.id)
+    _, draft_id_text = query.data.split(":", 1)
+    context.user_data["edit_draft_id"] = int(draft_id_text)
+    await context.bot.send_message(
+        chat.id,
+        "Пришлите новый текст черновика. Он заменит текущий и снова уйдёт на одобрение.",
+    )
+    return BotState.EDIT_DRAFT_TEXT
+
+
+async def edit_draft_finish(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> int:
+    draft_id = int(context.user_data.pop("edit_draft_id"))
+    text = (update.effective_message.text or "").strip()
+    if not text:
+        await update.effective_message.reply_text("Текст не может быть пустым.")
+        context.user_data["edit_draft_id"] = draft_id
+        return BotState.EDIT_DRAFT_TEXT
+    draft = await DraftService().apply_manual_edit(draft_id, text)
+    await update.effective_message.reply_text(
+        f"Черновик #{draft.id} обновлён (версия {draft.version})."
+    )
+    await send_draft(update, context, draft)
+    return ConversationHandler.END

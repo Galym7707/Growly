@@ -621,6 +621,26 @@ def build_application(settings: Settings | None = None) -> Application:
         )
     )
     application.add_handler(
+        ConversationHandler(
+            entry_points=[
+                CallbackQueryHandler(
+                    handlers.edit_draft_start,
+                    pattern=r"^edit:\d+$",
+                ),
+            ],
+            states={
+                BotState.EDIT_DRAFT_TEXT: [
+                    MessageHandler(
+                        private_chat & filters.TEXT & ~filters.COMMAND,
+                        handlers.edit_draft_finish,
+                    )
+                ],
+            },
+            fallbacks=conversation_fallbacks(),
+            per_message=False,
+        )
+    )
+    application.add_handler(
         CallbackQueryHandler(
             handlers.approval_callback,
             pattern=r"^(approve|regenerate|reject|notion|publish):\d+$",

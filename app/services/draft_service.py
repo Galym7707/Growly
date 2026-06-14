@@ -198,6 +198,24 @@ class DraftService:
         await self._safe_sync(draft)
         return draft
 
+    def _edit_in_session(self, draft_id: int, draft_text: str) -> Draft:
+        with session_scope() as session:
+            repo = DraftsRepository(session)
+            draft = repo.get(draft_id)
+            if draft is None:
+                raise ValueError("Draft was not found.")
+            if draft.status == "published":
+                raise ValueError("Published drafts cannot be edited.")
+            return repo.apply_manual_edit(draft, draft_text)
+
+    async def apply_manual_edit(self, draft_id: int, draft_text: str) -> Draft:
+        clean = draft_text.strip()
+        if not clean:
+            raise ValueError("Edited draft text cannot be empty.")
+        draft = await asyncio.to_thread(self._edit_in_session, draft_id, clean)
+        await self._safe_sync(draft)
+        return draft
+
     async def get(self, draft_id: int) -> Draft | None:
         def load() -> Draft | None:
             with session_scope() as session:

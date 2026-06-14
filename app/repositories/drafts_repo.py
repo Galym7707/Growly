@@ -93,6 +93,14 @@ class DraftsRepository:
         self.session.flush()
         return draft
 
+    def apply_manual_edit(self, draft: Draft, draft_text: str) -> Draft:
+        draft.draft_text = draft_text
+        draft.version += 1
+        draft.status = "pending"
+        draft.approved_by = None
+        self.session.flush()
+        return draft
+
     def add_approval(
         self,
         *,

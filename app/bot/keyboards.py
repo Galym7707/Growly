@@ -284,7 +284,10 @@ def approval_keyboard(draft_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton("Regenerate", callback_data=f"regenerate:{draft_id}"),
         ],
         [
+            InlineKeyboardButton("Edit", callback_data=f"edit:{draft_id}"),
             InlineKeyboardButton("Reject", callback_data=f"reject:{draft_id}"),
+        ],
+        [
             InlineKeyboardButton("Save to Notion", callback_data=f"notion:{draft_id}"),
         ],
     ]
