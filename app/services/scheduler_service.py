@@ -63,6 +63,25 @@ class SchedulerService:
             coalesce=True,
             max_instances=1,
         )
+        self._add_publish_dispatcher()
+
+    def _add_publish_dispatcher(self) -> None:
+        from telegram import Bot
+        from app.services.publishing_service import PublishingService
+
+        async def _dispatch_scheduled() -> None:
+            token = self.settings.telegram_token()
+            await PublishingService(self.settings).dispatch_due(Bot(token))
+
+        self.scheduler.add_job(
+            _dispatch_scheduled,
+            trigger="interval",
+            minutes=1,
+            id="dispatch_scheduled_publications",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+        )
 
     def start_if_enabled(self) -> bool:
         if not self.settings.scheduler_enabled:

@@ -4,8 +4,10 @@ import asyncio
 import json
 import logging
 import re
+from datetime import datetime
 from io import BytesIO
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from telegram import (
     BotCommand,
@@ -2106,4 +2108,61 @@ async def edit_draft_finish(
         f"Черновик #{draft.id} обновлён (версия {draft.version})."
     )
     await send_draft(update, context, draft)
+    return ConversationHandler.END
+
+
+def parse_schedule_datetime(text: str) -> datetime:
+    raw = text.strip().replace("Z", "+00:00")
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M", "%d.%m.%Y %H:%M"):
+        try:
+            naive = datetime.strptime(raw, fmt)
+            return naive.replace(tzinfo=ZoneInfo(get_settings().timezone))
+        except ValueError:
+            continue
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise ValueError("Unrecognized date/time format.") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=ZoneInfo(get_settings().timezone))
+    return parsed
+
+
+async def schedule_draft_start(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> int:
+    query = update.callback_query
+    chat = update.effective_chat
+    if not query or not query.data or not chat:
+        return ConversationHandler.END
+    await answer_callback_safely(query, context, chat.id)
+    _, draft_id_text = query.data.split(":", 1)
+    context.user_data["schedule_draft_id"] = int(draft_id_text)
+    await context.bot.send_message(
+        chat.id,
+        "Когда опубликовать? Формат: ГГГГ-ММ-ДД ЧЧ:ММ (например, 2026-07-01 14:30).",
+    )
+    return BotState.SCHEDULE_DATETIME
+
+
+async def schedule_draft_finish(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> int:
+    draft_id = int(context.user_data.get("schedule_draft_id"))
+    try:
+        when = parse_schedule_datetime(update.effective_message.text or "")
+    except ValueError:
+        await update.effective_message.reply_text(
+            "Не понял дату. Используйте формат 2026-07-01 14:30."
+        )
+        return BotState.SCHEDULE_DATETIME
+    try:
+        await DraftService().schedule_publication(draft_id, when)
+    except ValueError as exc:
+        await update.effective_message.reply_text(str(exc))
+        return BotState.SCHEDULE_DATETIME
+    context.user_data.pop("schedule_draft_id", None)
+    await update.effective_message.reply_text(
+        f"Черновик #{draft_id} запланирован на {when:%Y-%m-%d %H:%M %Z}."
+    )
     return ConversationHandler.END

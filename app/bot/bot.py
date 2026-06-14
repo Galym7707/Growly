@@ -641,6 +641,26 @@ def build_application(settings: Settings | None = None) -> Application:
         )
     )
     application.add_handler(
+        ConversationHandler(
+            entry_points=[
+                CallbackQueryHandler(
+                    handlers.schedule_draft_start,
+                    pattern=r"^schedule:\d+$",
+                ),
+            ],
+            states={
+                BotState.SCHEDULE_DATETIME: [
+                    MessageHandler(
+                        private_chat & filters.TEXT & ~filters.COMMAND,
+                        handlers.schedule_draft_finish,
+                    )
+                ],
+            },
+            fallbacks=conversation_fallbacks(),
+            per_message=False,
+        )
+    )
+    application.add_handler(
         CallbackQueryHandler(
             handlers.approval_callback,
             pattern=r"^(approve|regenerate|reject|notion|publish):\d+$",

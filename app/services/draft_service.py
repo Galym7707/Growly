@@ -13,6 +13,7 @@ from app.config import Settings, get_settings
 from app.database import session_scope
 from app.models import ContentPlan, Draft, Publication
 from app.repositories.drafts_repo import DraftsRepository
+from app.repositories.reports_repo import ReportsRepository
 from app.repositories.users_repo import UsersRepository
 from app.services.ai_service import AIService
 from app.services.notion_service import NotionService
@@ -215,6 +216,26 @@ class DraftService:
         draft = await asyncio.to_thread(self._edit_in_session, draft_id, clean)
         await self._safe_sync(draft)
         return draft
+
+    def _schedule_in_session(self, draft_id: int, when: datetime, channel: str):
+        with session_scope() as session:
+            draft = session.get(Draft, draft_id)
+            if draft is None:
+                raise ValueError("Draft was not found.")
+            if draft.status not in {"approved", "published"}:
+                raise ValueError("Only approved drafts can be scheduled.")
+            return ReportsRepository(session).schedule_publication(
+                draft_id=draft_id, when=when, channel=channel
+            )
+
+    async def schedule_publication(
+        self, draft_id: int, when: datetime, channel: str = "Telegram"
+    ):
+        if when <= datetime.now(UTC):
+            raise ValueError("Scheduled time must be in the future.")
+        return await asyncio.to_thread(
+            self._schedule_in_session, draft_id, when, channel
+        )
 
     async def get(self, draft_id: int) -> Draft | None:
         def load() -> Draft | None:

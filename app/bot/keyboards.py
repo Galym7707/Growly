@@ -313,4 +313,12 @@ def approved_keyboard(
                 )
             ]
         )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    "Schedule",
+                    callback_data=f"schedule:{draft_id}",
+                )
+            ]
+        )
     return InlineKeyboardMarkup(rows) if rows else None

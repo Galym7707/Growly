@@ -528,6 +528,7 @@ CREATE TABLE IF NOT EXISTS publications (
     status text NOT NULL DEFAULT 'ready',
     published_url text,
     published_at timestamptz,
+    scheduled_for timestamptz,
     telegram_message_id text,
     views integer,
     reactions integer,
