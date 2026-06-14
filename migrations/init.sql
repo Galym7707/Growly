@@ -547,6 +547,7 @@ ALTER TABLE publications ADD COLUMN IF NOT EXISTS channel text;
 ALTER TABLE publications ADD COLUMN IF NOT EXISTS status text DEFAULT 'ready';
 ALTER TABLE publications ADD COLUMN IF NOT EXISTS published_url text;
 ALTER TABLE publications ADD COLUMN IF NOT EXISTS published_at timestamptz;
+ALTER TABLE publications ADD COLUMN IF NOT EXISTS scheduled_for timestamptz;
 ALTER TABLE publications ADD COLUMN IF NOT EXISTS telegram_message_id text;
 ALTER TABLE publications ADD COLUMN IF NOT EXISTS views integer;
 ALTER TABLE publications ADD COLUMN IF NOT EXISTS reactions integer;
