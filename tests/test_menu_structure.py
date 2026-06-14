@@ -45,7 +45,8 @@ def test_submenus_match_mvp_structure() -> None:
     assert keyboard_labels(create_post_menu_keyboard()) == [
         ["Promo post", "Educational post"],
         ["Client result post", "FAQ post"],
-        ["News post", "Custom post"],
+        ["News post", "Instagram caption"],
+        ["Custom post"],
         ["Back"],
     ]
     assert keyboard_labels(reports_menu_keyboard()) == [

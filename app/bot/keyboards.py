@@ -19,7 +19,8 @@ SOURCES_MENU_ROWS = [
 CREATE_POST_MENU_ROWS = [
     ["Promo post", "Educational post"],
     ["Client result post", "FAQ post"],
-    ["News post", "Custom post"],
+    ["News post", "Instagram caption"],
+    ["Custom post"],
     ["Back"],
 ]
 

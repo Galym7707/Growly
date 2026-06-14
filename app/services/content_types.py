@@ -146,6 +146,18 @@ CONTENT_TYPES = (
             "сообщение whatsapp",
         ),
     ),
+    ContentTypeSpec(
+        key="instagram_caption",
+        label="Instagram caption",
+        prompt_name="instagram_caption.md",
+        aliases=(
+            "instagram caption",
+            "instagram post",
+            "инстаграм пост",
+            "пост для инстаграма",
+            "подпись инстаграм",
+        ),
+    ),
 )
 
 CONTENT_TYPE_BY_KEY = {spec.key: spec for spec in CONTENT_TYPES}

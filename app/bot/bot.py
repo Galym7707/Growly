@@ -319,7 +319,8 @@ def build_application(settings: Settings | None = None) -> Application:
                     private_chat
                     & filters.Regex(
                         r"^(Promo post|Educational post|Case post|FAQ post|"
-                        r"Client result post|News post|Custom post|Create one-off post)$"
+                        r"Client result post|News post|Instagram caption|"
+                        r"Custom post|Create one-off post)$"
                     ),
                     handlers.create_post_type_start,
                 ),

@@ -84,6 +84,12 @@ class DraftService:
             context, CONTENT_TYPE_BY_KEY["case_post"]
         )
 
+    async def create_instagram_caption(self, context: dict[str, Any]) -> Draft:
+        return await self._create_typed_draft(
+            {**context, "channel": "Instagram"},
+            CONTENT_TYPE_BY_KEY["instagram_caption"],
+        )
+
     async def create_post(self, context: dict[str, Any]) -> Draft:
         brief = str(context.get("brief") or "")
         spec = detect_content_type(brief)
