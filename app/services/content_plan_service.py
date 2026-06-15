@@ -33,10 +33,11 @@ ContentPlanProgress = Callable[[str], Awaitable[None]]
 class ContentPlanService:
     def __init__(
         self,
-        groq: AIService | None = None,
+        ai: AIService | None = None,
         notion: NotionService | None = None,
+        groq: AIService | None = None,
     ) -> None:
-        self.groq = groq or AIService()
+        self.ai = ai or groq or AIService()
         self.notion = notion or NotionService()
         self.reduced_context_used = False
 
@@ -64,7 +65,7 @@ class ContentPlanService:
             "Шаг 3/4: генерирую контент-план...",
         )
         try:
-            response = await self.groq.generate_content_plan(context)
+            response = await self.ai.generate_content_plan(context)
         except AIServiceError as exc:
             if exc.status != 413:
                 raise
@@ -73,7 +74,7 @@ class ContentPlanService:
                 "Content plan payload was rejected with 413; retrying with "
                 "report-summary-only context."
             )
-            response = await self.groq.generate_content_plan(
+            response = await self.ai.generate_content_plan(
                 self._summary_only_context(context)
             )
         payload = parse_json_response(response)
@@ -82,7 +83,8 @@ class ContentPlanService:
         normalized = [
             self._normalize_item(item) for item in payload if isinstance(item, dict)
         ]
-        self._validate_mix(normalized)
+        thresholds = await asyncio.to_thread(self._load_thresholds)
+        self._validate_mix(normalized, thresholds)
 
         items = await asyncio.to_thread(self._save_plan_items, normalized)
         await self._emit_progress(
@@ -121,7 +123,7 @@ class ContentPlanService:
             start=1,
         ):
             batch = source_items[start : start + CONTENT_PLAN_BATCH_SIZE]
-            response = await self.groq.summarize_content_plan_sources(
+            response = await self.ai.summarize_content_plan_sources(
                 {
                     "batch_number": batch_number,
                     "source_items": [
@@ -189,55 +191,93 @@ class ContentPlanService:
             await progress(message)
 
     @staticmethod
-    def _validate_mix(items: list[dict[str, Any]]) -> None:
-        def descriptor(item: dict[str, Any]) -> str:
-            return f"{item['channel']} {item['content_type']}".lower()
-
+    def _validate_mix(
+        items: list[dict[str, Any]],
+        thresholds: dict[str, Any],
+    ) -> None:
         video_tokens = ("reels", "short", "video", "ролик", "видео")
-        video_tokens = (*video_tokens, "ролик", "видео")
-        short_videos = sum(
-            1 for item in items if any(token in descriptor(item) for token in video_tokens)
-        )
+        post_tokens = ("telegram", "instagram", "post", "пост")
+        digest_tokens = ("digest", "дайджест")
+
+        def descriptor(item: dict[str, Any]) -> str:
+            return f"{item.get('channel', '')} {item.get('content_type', '')}".lower()
+
+        def is_video(item: dict[str, Any]) -> bool:
+            return any(token in descriptor(item) for token in video_tokens)
+
+        short_videos = sum(1 for item in items if is_video(item))
         posts = sum(
             1
             for item in items
-            if any(
-                token in descriptor(item)
-                for token in ("telegram", "instagram", "post", "пост")
-            )
-            and not any(token in descriptor(item) for token in video_tokens)
-        )
-        posts = sum(
-            1
-            for item in items
-            if any(
-                token in descriptor(item)
-                for token in ("telegram", "instagram", "post", "пост")
-            )
-            and not any(token in descriptor(item) for token in video_tokens)
+            if any(token in descriptor(item) for token in post_tokens)
+            and not is_video(item)
         )
         whatsapp = sum(1 for item in items if "whatsapp" in descriptor(item))
         digest = sum(
-            1
-            for item in items
-            if any(token in descriptor(item) for token in ("digest", "дайджест"))
+            1 for item in items if any(token in descriptor(item) for token in digest_tokens)
         )
-        digest = sum(
-            1
-            for item in items
-            if any(token in descriptor(item) for token in ("digest", "дайджест"))
-        )
-        if (
-            len(items) < 9
-            or short_videos < 2
-            or posts < 5
-            or whatsapp < 1
-            or digest < 1
-        ):
+
+        problems: list[str] = []
+        if posts < thresholds["min_posts"]:
+            problems.append(f"posts {posts}/{thresholds['min_posts']}")
+        if short_videos < thresholds["min_videos"]:
+            problems.append(f"videos {short_videos}/{thresholds['min_videos']}")
+        if thresholds.get("require_whatsapp") and whatsapp < 1:
+            problems.append("missing WhatsApp message")
+        if thresholds.get("require_digest") and digest < 1:
+            problems.append("missing weekly digest")
+        if problems:
             raise AIServiceError(
-                "The AI response did not contain the required posts, videos, "
-                "WhatsApp message, and weekly digest."
+                "Content plan does not meet the configured mix: "
+                + ", ".join(problems)
+                + "."
             )
+
+    CONTENT_PLAN_SETTING_KEYS = (
+        "content_plan_min_posts",
+        "content_plan_min_videos",
+        "content_plan_require_whatsapp",
+        "content_plan_require_digest",
+    )
+
+    @staticmethod
+    def _as_bool(value: Any) -> bool:
+        return str(value).strip().lower() in {"1", "true", "yes", "on", "да"}
+
+    @staticmethod
+    def _thresholds_from_settings(raw: dict[str, Any]) -> dict[str, Any]:
+        def as_int(key: str, default: int) -> int:
+            try:
+                return int(str(raw.get(key)).strip())
+            except (TypeError, ValueError):
+                return default
+
+        return {
+            "min_posts": as_int("content_plan_min_posts", 5),
+            "min_videos": as_int("content_plan_min_videos", 2),
+            "require_whatsapp": ContentPlanService._as_bool(
+                raw.get("content_plan_require_whatsapp", False)
+            ),
+            "require_digest": ContentPlanService._as_bool(
+                raw.get("content_plan_require_digest", False)
+            ),
+        }
+
+    def _load_thresholds(self) -> dict[str, Any]:
+        from app.repositories.settings_repo import SettingsRepository
+
+        try:
+            with session_scope() as session:
+                raw = SettingsRepository(session).get_many(
+                    list(self.CONTENT_PLAN_SETTING_KEYS)
+                )
+        except Exception:
+            logger.warning(
+                "Could not read content-plan thresholds from settings; "
+                "using TZ defaults."
+            )
+            raw = {}
+        return self._thresholds_from_settings(raw)
 
     def _load_context_data(
         self, business_context: dict[str, Any] | str | None

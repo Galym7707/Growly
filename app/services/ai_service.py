@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import logging
 from typing import Any, Protocol
 
@@ -31,7 +32,7 @@ class TextGenerationProvider(Protocol):
     ) -> str: ...
 
 
-class AIService(GroqService):
+class AIService:
     """Routes the existing AI feature interface through primary and fallback providers."""
 
     def __init__(
@@ -41,11 +42,17 @@ class AIService(GroqService):
         github_models: TextGenerationProvider | None = None,
         groq: TextGenerationProvider | None = None,
     ) -> None:
-        super().__init__(settings or get_settings())
+        self.settings = settings or get_settings()
         self.github_models = github_models or GitHubModelsService(self.settings)
         self.groq = groq or GroqService(self.settings)
         self.last_provider_name: str | None = None
         self.last_model_name: str | None = None
+
+    def __getattr__(self, name: str):
+        wrapper = getattr(GroqService, name, None)
+        if wrapper is None or not callable(wrapper):
+            raise AttributeError(name)
+        return functools.partial(wrapper, self)
 
     async def generate_text(
         self,

@@ -9,6 +9,14 @@ def test_source_import_split_supports_blank_lines_and_delimiters() -> None:
     assert items == ["First competitor post", "Second item", "Third item"]
 
 
+STRICT_MIX = {
+    "min_posts": 5,
+    "min_videos": 2,
+    "require_whatsapp": True,
+    "require_digest": True,
+}
+
+
 def test_content_plan_mix_requires_posts_video_whatsapp_and_digest() -> None:
     items = [
         {"channel": "Telegram", "content_type": "post"} for _ in range(5)
@@ -18,7 +26,7 @@ def test_content_plan_mix_requires_posts_video_whatsapp_and_digest() -> None:
         {"channel": "WhatsApp", "content_type": "message"},
         {"channel": "Telegram", "content_type": "weekly digest"},
     ]
-    ContentPlanService._validate_mix(items)
+    ContentPlanService._validate_mix(items, STRICT_MIX)
 
 
 def test_content_plan_mix_rejects_missing_digest() -> None:
@@ -30,7 +38,7 @@ def test_content_plan_mix_rejects_missing_digest() -> None:
         {"channel": "WhatsApp", "content_type": "message"},
     ]
     try:
-        ContentPlanService._validate_mix(items)
+        ContentPlanService._validate_mix(items, STRICT_MIX)
     except Exception as exc:
         assert "weekly digest" in str(exc)
     else:
@@ -47,4 +55,4 @@ def test_content_plan_mix_accepts_russian_content_type_names() -> None:
         {"channel": "WhatsApp", "content_type": "сообщение"},
         {"channel": "Telegram", "content_type": "недельный дайджест"},
     ]
-    ContentPlanService._validate_mix(items)
+    ContentPlanService._validate_mix(items, STRICT_MIX)

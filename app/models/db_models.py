@@ -325,6 +325,7 @@ class Publication(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(Text, server_default="ready", nullable=False)
     published_url: Mapped[str | None] = mapped_column(Text)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     telegram_message_id: Mapped[str | None] = mapped_column(Text)
     views: Mapped[int | None] = mapped_column(Integer)
     reactions: Mapped[int | None] = mapped_column(Integer)

@@ -43,12 +43,13 @@ class MarketIntelligenceService:
         self,
         settings: Settings | None = None,
         search_provider: BaseSearchProvider | None = None,
-        groq: AIService | None = None,
+        ai: AIService | None = None,
         notion: NotionService | None = None,
+        groq: AIService | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.search_provider = search_provider
-        self.groq = groq or AIService(self.settings)
+        self.ai = ai or groq or AIService(self.settings)
         self.notion = notion or NotionService(self.settings)
 
     def _provider(self) -> BaseSearchProvider:
@@ -491,7 +492,7 @@ class MarketIntelligenceService:
             await self._set_job_step(job_id, batch_step)
             await self._emit_progress(progress, batch_step)
             response = await asyncio.wait_for(
-                self.groq.analyze_market_search(
+                self.ai.analyze_market_search(
                     {
                         "query": query,
                         "batch_number": batch_number,
@@ -526,7 +527,7 @@ class MarketIntelligenceService:
         results: list[SearchResult],
     ) -> dict[str, Any]:
         response = await asyncio.wait_for(
-            self.groq.analyze_market_search(
+            self.ai.analyze_market_search(
                 {
                     "query": query,
                     "results": [asdict(result) for result in results],
@@ -551,7 +552,7 @@ class MarketIntelligenceService:
             self._merge_batch_analyses(batch_summaries or [])
         )
         response = await asyncio.wait_for(
-            self.groq.generate_market_scan(
+            self.ai.generate_market_scan(
                 {
                     "query": query,
                     "saved_source_item_batch_summary": aggregate_summary,
@@ -585,7 +586,7 @@ class MarketIntelligenceService:
                 "анализ рынка."
             )
         response = await asyncio.wait_for(
-            self.groq.generate_competitor_report(context),
+            self.ai.generate_competitor_report(context),
             timeout=GROQ_GENERATION_TIMEOUT_SECONDS,
         )
         payload = self._parse_dict(response, "Competitor report")

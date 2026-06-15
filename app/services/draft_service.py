@@ -13,6 +13,7 @@ from app.config import Settings, get_settings
 from app.database import session_scope
 from app.models import ContentPlan, Draft, Publication
 from app.repositories.drafts_repo import DraftsRepository
+from app.repositories.reports_repo import ReportsRepository
 from app.repositories.users_repo import UsersRepository
 from app.services.ai_service import AIService
 from app.services.notion_service import NotionService
@@ -66,11 +67,12 @@ class DraftService:
     def __init__(
         self,
         settings: Settings | None = None,
-        groq: AIService | None = None,
+        ai: AIService | None = None,
         notion: NotionService | None = None,
+        groq: AIService | None = None,
     ) -> None:
         self.settings = settings or get_settings()
-        self.groq = groq or AIService(self.settings)
+        self.ai = ai or groq or AIService(self.settings)
         self.notion = notion or NotionService(self.settings)
 
     async def create_asset_post(self, context: dict[str, Any]) -> Draft:
@@ -81,6 +83,12 @@ class DraftService:
     async def create_case_post(self, context: dict[str, Any]) -> Draft:
         return await self._create_typed_draft(
             context, CONTENT_TYPE_BY_KEY["case_post"]
+        )
+
+    async def create_instagram_caption(self, context: dict[str, Any]) -> Draft:
+        return await self._create_typed_draft(
+            {**context, "channel": "Instagram"},
+            CONTENT_TYPE_BY_KEY["instagram_caption"],
         )
 
     async def create_post(self, context: dict[str, Any]) -> Draft:
@@ -185,7 +193,7 @@ class DraftService:
                     title=title,
                     draft_text=draft_text,
                     ai_model=(
-                        getattr(self.groq, "last_model_name", None)
+                        getattr(self.ai, "last_model_name", None)
                         or self.settings.ai_model_name()
                     ),
                     prompt_name=prompt_name,
@@ -197,6 +205,44 @@ class DraftService:
         draft = await asyncio.to_thread(save)
         await self._safe_sync(draft)
         return draft
+
+    def _edit_in_session(self, draft_id: int, draft_text: str) -> Draft:
+        with session_scope() as session:
+            repo = DraftsRepository(session)
+            draft = repo.get(draft_id)
+            if draft is None:
+                raise ValueError("Draft was not found.")
+            if draft.status == "published":
+                raise ValueError("Published drafts cannot be edited.")
+            return repo.apply_manual_edit(draft, draft_text)
+
+    async def apply_manual_edit(self, draft_id: int, draft_text: str) -> Draft:
+        clean = draft_text.strip()
+        if not clean:
+            raise ValueError("Edited draft text cannot be empty.")
+        draft = await asyncio.to_thread(self._edit_in_session, draft_id, clean)
+        await self._safe_sync(draft)
+        return draft
+
+    def _schedule_in_session(self, draft_id: int, when: datetime, channel: str):
+        with session_scope() as session:
+            draft = session.get(Draft, draft_id)
+            if draft is None:
+                raise ValueError("Draft was not found.")
+            if draft.status not in {"approved", "published"}:
+                raise ValueError("Only approved drafts can be scheduled.")
+            return ReportsRepository(session).schedule_publication(
+                draft_id=draft_id, when=when, channel=channel
+            )
+
+    async def schedule_publication(
+        self, draft_id: int, when: datetime, channel: str = "Telegram"
+    ):
+        if when <= datetime.now(UTC):
+            raise ValueError("Scheduled time must be in the future.")
+        return await asyncio.to_thread(
+            self._schedule_in_session, draft_id, when, channel
+        )
 
     async def get(self, draft_id: int) -> Draft | None:
         def load() -> Draft | None:
@@ -456,7 +502,7 @@ class DraftService:
         for attempt in range(2):
             if violations:
                 generation_context["revision_required"] = violations
-            response = await self.groq.generate_content_draft(
+            response = await self.ai.generate_content_draft(
                 spec.prompt_name, generation_context
             )
             payload = parse_json_response(response)
@@ -476,7 +522,7 @@ class DraftService:
     async def _analyze_brief(
         self, context: dict[str, Any], spec: ContentTypeSpec
     ) -> dict[str, Any]:
-        response = await self.groq.analyze_draft_brief(
+        response = await self.ai.analyze_draft_brief(
             {
                 **context,
                 "requested_content_type": spec.label,

@@ -6,11 +6,12 @@ app_port: 7860
 
 # Growly
 
-Growly is a marketing intelligence and content workflow for businesses. It
-collects public market evidence, builds content plans, generates drafts through
-GitHub Models with Groq fallback, handles approvals in Telegram and on the web,
-stores technical state in Supabase PostgreSQL, and synchronizes client-facing
-data to Notion.
+Growly is an AI-powered content factory, marketing intelligence, and approval
+workflow for businesses. It monitors curated competitor and reference sources,
+collects public market evidence through Tavily, builds content plans, and
+generates drafts through GitHub Models with Groq fallback. Drafts can be
+reviewed in Telegram or on the web before publishing, while technical state is
+stored in Supabase PostgreSQL and client-facing data is synchronized to Notion.
 
 The repository contains the Python backend, Telegram bot, and a Next.js web
 application. Both interfaces call the same Python services; AI, search, and

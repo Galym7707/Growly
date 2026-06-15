@@ -246,6 +246,30 @@ class ReportsRepository:
             .where(Publication.id == publication_id)
         )
 
+    def schedule_publication(
+        self, *, draft_id: int, when: datetime, channel: str = "Telegram"
+    ) -> Publication:
+        publication = Publication(
+            draft_id=draft_id,
+            channel=channel,
+            status="scheduled",
+            scheduled_for=when,
+            metrics_json={},
+        )
+        self.session.add(publication)
+        self.session.flush()
+        return publication
+
+    def list_due_scheduled(self, now: datetime, limit: int = 20) -> list[Publication]:
+        statement = (
+            select(Publication)
+            .where(Publication.status == "scheduled")
+            .where(Publication.scheduled_for <= now)
+            .order_by(Publication.scheduled_for)
+            .limit(limit)
+        )
+        return list(self.session.scalars(statement))
+
     def update_publication_metrics(
         self,
         publication: Publication,

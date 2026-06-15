@@ -327,7 +327,8 @@ def build_application(settings: Settings | None = None) -> Application:
                         r"^(Рекламный пост|Обучающий пост|Пост о результате клиента|"
                         r"FAQ-пост|Новостной пост|Свой вариант|Promo post|"
                         r"Educational post|Case post|FAQ post|Client result post|"
-                        r"News post|Custom post|Create one-off post)$"
+                        r"News post|Instagram caption|Custom post|"
+                        r"Create one-off post)$"
                     ),
                     handlers.create_post_type_start,
                 ),
@@ -662,6 +663,46 @@ def build_application(settings: Settings | None = None) -> Application:
                 r"^report_post:\d+:"
                 r"(promo_post|educational_post|case_post|faq_post|news_post)$"
             ),
+        )
+    )
+    application.add_handler(
+        ConversationHandler(
+            entry_points=[
+                CallbackQueryHandler(
+                    handlers.edit_draft_start,
+                    pattern=r"^edit:\d+$",
+                ),
+            ],
+            states={
+                BotState.EDIT_DRAFT_TEXT: [
+                    MessageHandler(
+                        private_chat & filters.TEXT & ~filters.COMMAND,
+                        handlers.edit_draft_finish,
+                    )
+                ],
+            },
+            fallbacks=conversation_fallbacks(),
+            per_message=False,
+        )
+    )
+    application.add_handler(
+        ConversationHandler(
+            entry_points=[
+                CallbackQueryHandler(
+                    handlers.schedule_draft_start,
+                    pattern=r"^schedule:\d+$",
+                ),
+            ],
+            states={
+                BotState.SCHEDULE_DATETIME: [
+                    MessageHandler(
+                        private_chat & filters.TEXT & ~filters.COMMAND,
+                        handlers.schedule_draft_finish,
+                    )
+                ],
+            },
+            fallbacks=conversation_fallbacks(),
+            per_message=False,
         )
     )
     application.add_handler(

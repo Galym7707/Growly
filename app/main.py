@@ -49,6 +49,10 @@ async def value_error_handler(
     del request
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
+from app.api.bitrix_webhook import router as bitrix_router
+
+app.include_router(bitrix_router)
+
 
 @app.get("/health")
 async def health() -> dict[str, str]:

@@ -19,7 +19,8 @@ SOURCES_MENU_ROWS = [
 CREATE_POST_MENU_ROWS = [
     ["Рекламный пост", "Обучающий пост"],
     ["Пост о результате клиента", "FAQ-пост"],
-    ["Новостной пост", "Свой вариант"],
+    ["Новостной пост", "Instagram caption"],
+    ["Свой вариант"],
     ["Назад"],
 ]
 
@@ -314,7 +315,10 @@ def approval_keyboard(draft_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton("Создать заново", callback_data=f"regenerate:{draft_id}"),
         ],
         [
+            InlineKeyboardButton("Редактировать", callback_data=f"edit:{draft_id}"),
             InlineKeyboardButton("Отклонить", callback_data=f"reject:{draft_id}"),
+        ],
+        [
             InlineKeyboardButton(
                 "Сохранить в Notion",
                 callback_data=f"notion:{draft_id}",
@@ -340,6 +344,14 @@ def approved_keyboard(
                 InlineKeyboardButton(
                     "Опубликовать в Telegram",
                     callback_data=f"publish:{draft_id}",
+                )
+            ]
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    "Запланировать",
+                    callback_data=f"schedule:{draft_id}",
                 )
             ]
         )
