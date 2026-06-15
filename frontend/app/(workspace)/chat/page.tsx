@@ -11,6 +11,7 @@ import { useSearchParams } from "next/navigation";
 import { Icon, type IconName } from "@/components/icons";
 import { PageHeader } from "@/components/ui";
 import { apiRequest } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n";
 
 type Action =
   | "market_scan"
@@ -103,6 +104,7 @@ function ChatContent() {
   );
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
+  const { locale, t } = useLanguage();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -110,6 +112,21 @@ function ChatContent() {
       text: "Выберите действие слева и опишите задачу. Growly вызовет тот же сервисный слой, который используется Telegram-ботом.",
     },
   ]);
+
+  useEffect(() => {
+    setMessages((current) =>
+      current.map((message) =>
+        message.id === 1
+          ? {
+              ...message,
+              text: t(
+                "Выберите действие слева и опишите задачу. Growly вызовет тот же сервисный слой, который используется Telegram-ботом.",
+              ),
+            }
+          : message,
+      ),
+    );
+  }, [t]);
 
   const selected = useMemo(
     () => actions.find((item) => item.id === action)!,
@@ -124,12 +141,12 @@ function ChatContent() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const message = text.trim() || selected.placeholder;
+    const message = text.trim() || t(selected.placeholder);
     const userMessage: Message = {
       id: Date.now(),
       role: "user",
       text: message,
-      meta: selected.label,
+      meta: t(selected.label),
     };
     setMessages((current) => [...current, userMessage]);
     setText("");
@@ -153,7 +170,12 @@ function ChatContent() {
             action === "market_scan"
               ? {
                   niche: message,
-                  region_language: "Казахстан, русский язык",
+                  region_language:
+                    locale === "en"
+                      ? "Kazakhstan, English"
+                      : locale === "kk"
+                        ? "Қазақстан, қазақ тілі"
+                        : "Казахстан, русский язык",
                 }
               : action === "content_plan"
                 ? { weekly_objective: message }
@@ -167,7 +189,7 @@ function ChatContent() {
         {
           id: Date.now() + 1,
           role: "assistant",
-          text: describeResult(action, response.result),
+          text: describeResult(response.result, t),
           meta: response.status,
         },
       ]);
@@ -179,9 +201,9 @@ function ChatContent() {
           role: "assistant",
           text:
             value instanceof Error
-              ? value.message
-              : "Задачу не удалось выполнить.",
-          meta: "Ошибка",
+              ? t(value.message)
+              : t("Задачу не удалось выполнить."),
+          meta: t("Ошибка"),
         },
       ]);
     } finally {
@@ -192,13 +214,13 @@ function ChatContent() {
   return (
     <div className="workspace-page">
       <PageHeader
-        eyebrow="Командный интерфейс"
-        title="Чат"
-        description="Быстрый доступ к основным действиям Growly без дублирования бизнес-логики."
+        eyebrow={t("Командный интерфейс")}
+        title={t("Чат")}
+        description={t("Быстрый доступ к основным действиям Growly без дублирования бизнес-логики.")}
       />
       <div className="chat-layout">
         <aside className="chat-actions">
-          <h2>Действия</h2>
+          <h2>{t("Действия")}</h2>
           {actions.map((item) => (
             <button
               className={action === item.id ? "active" : ""}
@@ -207,7 +229,7 @@ function ChatContent() {
               type="button"
             >
               <Icon name={item.icon} />
-              {item.label}
+              {t(item.label)}
             </button>
           ))}
         </aside>
@@ -224,21 +246,21 @@ function ChatContent() {
             ))}
             {loading ? (
               <article className="message message-assistant">
-                <p>Задача выполняется на сервере.</p>
-                <small>Длительные операции могут занять несколько минут.</small>
+                <p>{t("Задача выполняется на сервере.")}</p>
+                <small>{t("Длительные операции могут занять несколько минут.")}</small>
               </article>
             ) : null}
           </div>
           <form className="chat-composer" onSubmit={submit}>
             <textarea
-              aria-label="Сообщение"
+              aria-label={t("Сообщение")}
               onChange={(event) => setText(event.target.value)}
-              placeholder={selected.placeholder}
+              placeholder={t(selected.placeholder)}
               value={text}
             />
             <button className="button button-primary" disabled={loading}>
               <Icon name="arrow" />
-              Отправить
+              {t("Отправить")}
             </button>
           </form>
         </section>
@@ -248,7 +270,6 @@ function ChatContent() {
 }
 
 function describeResult(
-  action: Action,
   result:
     | {
         report?: { id?: number; title?: string };
@@ -257,33 +278,34 @@ function describeResult(
         counts?: Record<string, number>;
       }
     | undefined,
+  t: (source: string, variables?: Record<string, string | number>) => string,
 ): string {
-  if (!result) return "Задача выполнена.";
+  if (!result) return t("Задача выполнена.");
   if (result.report) {
-    return `Отчёт готов: ${result.report.title || `ID ${result.report.id}`}. Откройте раздел «Отчёты» для просмотра.`;
+    return t(
+      "Отчёт готов: {name}. Откройте раздел «Отчёты» для просмотра.",
+      { name: result.report.title || `ID ${result.report.id}` },
+    );
   }
   if (result.draft) {
-    return `Черновик создан: ${result.draft.title || `ID ${result.draft.id}`}. Он доступен в разделе «Черновики».`;
+    return t(
+      "Черновик создан: {name}. Он доступен в разделе «Черновики».",
+      { name: result.draft.title || `ID ${result.draft.id}` },
+    );
   }
   if (Array.isArray(result.items)) {
-    const labels: Record<Action, string> = {
-      market_scan: "источников",
-      competitors: "элементов",
-      content_plan: "элементов плана",
-      create_post: "черновиков",
-      drafts: "черновиков",
-      reports: "отчётов",
-      sources: "источников",
-      notion_sync: "объектов",
-    };
-    return `Готово. Получено ${labels[action]}: ${result.items.length}.`;
+    return t("Готово. Получено элементов: {count}.", {
+      count: result.items.length,
+    });
   }
   if (result.counts) {
     const total = Object.values(result.counts).reduce(
       (sum, value) => sum + value,
       0,
     );
-    return `Синхронизация Notion завершена. Обработано объектов: ${total}.`;
+    return t("Синхронизация Notion завершена. Обработано объектов: {count}.", {
+      count: total,
+    });
   }
-  return "Задача выполнена.";
+  return t("Задача выполнена.");
 }

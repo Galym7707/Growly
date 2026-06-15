@@ -60,6 +60,7 @@ def test_submenus_match_mvp_structure() -> None:
     assert keyboard_labels(settings_menu_keyboard()) == [
         ["Показать настройки", "Новый бизнес"],
         ["Синхронизировать с Notion"],
+        ["Язык"],
         ["Назад"],
     ]
     assert keyboard_labels(more_menu_keyboard()) == [

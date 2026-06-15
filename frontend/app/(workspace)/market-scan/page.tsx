@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/ui";
 import { apiRequest } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n";
 import type { Report } from "@/lib/types";
 
 const steps = [
@@ -22,6 +23,17 @@ export default function MarketScanPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Report | null>(null);
+  const { locale, t } = useLanguage();
+
+  useEffect(() => {
+    setRegion(
+      locale === "en"
+        ? "Kazakhstan, English"
+        : locale === "kk"
+          ? "Қазақстан, қазақ тілі"
+          : "Казахстан, русский язык",
+    );
+  }, [locale]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,7 +54,7 @@ export default function MarketScanPage() {
       });
       setResult(response.report);
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
       setLoading(false);
     }
@@ -51,28 +63,27 @@ export default function MarketScanPage() {
   return (
     <div className="workspace-page">
       <PageHeader
-        eyebrow="Исследование"
-        title="Анализ рынка"
-        description="Growly сначала сохраняет публичные источники, затем формирует выводы и отчёт."
+        eyebrow={t("Исследование")}
+        title={t("Анализ рынка")}
+        description={t("Growly сначала сохраняет публичные источники, затем формирует выводы и отчёт.")}
       />
       <form className="form-panel" onSubmit={submit}>
-        <h2>Параметры анализа</h2>
+        <h2>{t("Параметры анализа")}</h2>
         <p>
-          Опишите рынок достаточно конкретно, чтобы поиск не смешивал разные
-          категории.
+          {t("Опишите рынок достаточно конкретно, чтобы поиск не смешивал разные категории.")}
         </p>
         <div className="form-grid">
           <label className="full">
-            <span>Ниша или продукт</span>
+            <span>{t("Ниша или продукт")}</span>
             <input
               onChange={(event) => setNiche(event.target.value)}
-              placeholder="Например: доставка здорового питания для офисов"
+              placeholder={t("Например: доставка здорового питания для офисов")}
               required
               value={niche}
             />
           </label>
           <label>
-            <span>Регион и язык</span>
+            <span>{t("Регион и язык")}</span>
             <input
               onChange={(event) => setRegion(event.target.value)}
               required
@@ -80,10 +91,10 @@ export default function MarketScanPage() {
             />
           </label>
           <label>
-            <span>Известные конкуренты</span>
+            <span>{t("Известные конкуренты")}</span>
             <input
               onChange={(event) => setCompetitors(event.target.value)}
-              placeholder="Можно оставить пустым"
+              placeholder={t("Можно оставить пустым")}
               value={competitors}
             />
           </label>
@@ -91,7 +102,7 @@ export default function MarketScanPage() {
         <div className="form-actions">
           <button className="button button-primary" disabled={loading}>
             <Icon name={loading ? "sync" : "search"} />
-            {loading ? "Анализ выполняется" : "Запустить анализ"}
+            {t(loading ? "Анализ выполняется" : "Запустить анализ")}
           </button>
         </div>
       </form>
@@ -100,7 +111,7 @@ export default function MarketScanPage() {
           {steps.map((step, index) => (
             <div className={index === 0 ? "active" : ""} key={step}>
               <Icon name={index === 0 ? "sync" : "chevron"} />
-              {step}
+              {t(step)}
             </div>
           ))}
         </div>
@@ -108,8 +119,10 @@ export default function MarketScanPage() {
       {error ? <div className="feedback feedback-error">{error}</div> : null}
       {result ? (
         <div className="feedback feedback-success">
-          Отчёт готов. Сохранено источников: {result.sources_count}.{" "}
-          <Link href={`/reports/${result.id}`}>Открыть отчёт</Link>
+          {t("Отчёт готов. Сохранено источников: {count}.", {
+            count: result.sources_count,
+          })}{" "}
+          <Link href={`/reports/${result.id}`}>{t("Открыть отчёт")}</Link>
         </div>
       ) : null}
     </div>

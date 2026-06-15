@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { Icon } from "@/components/icons";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { Logo } from "@/components/logo";
+import { useLanguage } from "@/lib/i18n";
 
 const capabilities = [
   ["Анализ рынка", "Собирает публичные источники и формирует проверяемый обзор."],
@@ -35,36 +39,40 @@ const workflow = [
 ];
 
 export default function LandingPage() {
+  const { t } = useLanguage();
+
   return (
     <div className="landing">
       <header className="landing-nav">
         <Logo />
         <nav aria-label="Навигация по странице">
-          <a href="#product">Возможности</a>
-          <a href="#workflow">Как работает</a>
-          <a href="#cases">Для кого</a>
+          <a href="#product">{t("Возможности")}</a>
+          <a href="#workflow">{t("Как работает")}</a>
+          <a href="#cases">{t("Для кого")}</a>
         </nav>
+        <LanguageSwitcher />
         <Link className="button button-dark button-small" href="/dashboard">
-          Открыть Growly
+          {t("Открыть Growly")}
         </Link>
       </header>
 
       <main>
         <section className="hero">
           <div className="hero-copy">
-            <p className="eyebrow">Маркетинговое рабочее пространство</p>
-            <h1>От рыночных данных до готового контента.</h1>
+            <p className="eyebrow">{t("Маркетинговое рабочее пространство")}</p>
+            <h1>{t("От рыночных данных до готового контента.")}</h1>
             <p className="hero-lead">
-              Growly собирает публичные источники, готовит отчёты и помогает
-              вести контент-процесс без разрыва между аналитикой и публикацией.
+              {t(
+                "Growly собирает публичные источники, готовит отчёты и помогает вести контент-процесс без разрыва между аналитикой и публикацией.",
+              )}
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href="/dashboard">
-                Начать работу
+                {t("Начать работу")}
                 <Icon name="arrow" />
               </Link>
               <a className="text-link" href="#product">
-                Посмотреть возможности
+                {t("Посмотреть возможности")}
                 <Icon name="chevron" />
               </a>
             </div>
@@ -81,47 +89,48 @@ export default function LandingPage() {
             <div className="canvas-main">
               <div className="canvas-header">
                 <div>
-                  <span>Рабочая область</span>
-                  <strong>Сегодня</strong>
+                  <span>{t("Рабочая область")}</span>
+                  <strong>{t("Сегодня")}</strong>
                 </div>
-                <span className="canvas-status">Система готова</span>
+                <span className="canvas-status">{t("Система готова")}</span>
               </div>
               <div className="canvas-focus">
-                <p>Следующее действие</p>
-                <h2>Запустить анализ рынка</h2>
+                <p>{t("Следующее действие")}</p>
+                <h2>{t("Запустить анализ рынка")}</h2>
                 <span>
-                  Укажите нишу и регион. Growly сохранит источники до начала
-                  анализа.
+                  {t(
+                    "Укажите нишу и регион. Growly сохранит источники до начала анализа.",
+                  )}
                 </span>
-                <div className="canvas-button">Новый анализ</div>
+                <div className="canvas-button">{t("Новый анализ")}</div>
               </div>
               <div className="canvas-grid">
                 <div>
-                  <span>Последний отчёт</span>
-                  <strong>Ожидает данных</strong>
-                  <small>Появится после первого анализа</small>
+                  <span>{t("Последний отчёт")}</span>
+                  <strong>{t("Ожидает данных")}</strong>
+                  <small>{t("Появится после первого анализа")}</small>
                 </div>
                 <div>
-                  <span>Контент-план</span>
-                  <strong>Не создан</strong>
-                  <small>Формируется на основе источников</small>
+                  <span>{t("Контент-план")}</span>
+                  <strong>{t("Не создан")}</strong>
+                  <small>{t("Формируется на основе источников")}</small>
                 </div>
               </div>
               <div className="canvas-table">
                 <div className="canvas-row canvas-row-head">
-                  <span>Задача</span>
-                  <span>Статус</span>
-                  <span>Данные</span>
+                  <span>{t("Задача")}</span>
+                  <span>{t("Статус")}</span>
+                  <span>{t("Данные")}</span>
                 </div>
                 <div className="canvas-row">
-                  <span>Анализ рынка</span>
-                  <span>Не запускался</span>
-                  <span>Нет</span>
+                  <span>{t("Анализ рынка")}</span>
+                  <span>{t("Не запускался")}</span>
+                  <span>{t("Нет")}</span>
                 </div>
                 <div className="canvas-row">
-                  <span>Синхронизация Notion</span>
-                  <span>По настройке</span>
-                  <span>Сервер</span>
+                  <span>{t("Синхронизация Notion")}</span>
+                  <span>{t("По настройке")}</span>
+                  <span>{t("Сервер")}</span>
                 </div>
               </div>
             </div>
@@ -130,15 +139,15 @@ export default function LandingPage() {
 
         <section className="landing-section capabilities" id="product">
           <div className="section-intro">
-            <p className="eyebrow">Что делает Growly</p>
-            <h2>Один процесс вместо набора разрозненных инструментов.</h2>
+            <p className="eyebrow">{t("Что делает Growly")}</p>
+            <h2>{t("Один процесс вместо набора разрозненных инструментов.")}</h2>
           </div>
           <div className="capability-list">
             {capabilities.map(([title, text], index) => (
               <article key={title}>
                 <span>{String(index + 1).padStart(2, "0")}</span>
-                <h3>{title}</h3>
-                <p>{text}</p>
+                <h3>{t(title)}</h3>
+                <p>{t(text)}</p>
               </article>
             ))}
           </div>
@@ -146,18 +155,19 @@ export default function LandingPage() {
 
         <section className="landing-section workflow" id="workflow">
           <div className="workflow-copy">
-            <p className="eyebrow">Рабочий процесс</p>
-            <h2>Каждый вывод остаётся связан с источником.</h2>
+            <p className="eyebrow">{t("Рабочий процесс")}</p>
+            <h2>{t("Каждый вывод остаётся связан с источником.")}</h2>
             <p>
-              Growly сначала сохраняет найденные материалы, затем анализирует их
-              и только после этого формирует план и черновики.
+              {t(
+                "Growly сначала сохраняет найденные материалы, затем анализирует их и только после этого формирует план и черновики.",
+              )}
             </p>
           </div>
           <ol>
             {workflow.map((item, index) => (
               <li key={item}>
                 <span>{index + 1}</span>
-                <p>{item}</p>
+                <p>{t(item)}</p>
               </li>
             ))}
           </ol>
@@ -165,25 +175,25 @@ export default function LandingPage() {
 
         <section className="landing-section use-cases" id="cases">
           <div className="section-intro">
-            <p className="eyebrow">Для кого</p>
-            <h2>Для команд, которым нужен управляемый контент-процесс.</h2>
+            <p className="eyebrow">{t("Для кого")}</p>
+            <h2>{t("Для команд, которым нужен управляемый контент-процесс.")}</h2>
           </div>
           <div className="use-case-grid">
             <article>
-              <h3>Малый бизнес</h3>
-              <p>Понять рынок и регулярно готовить материалы без отдельного отдела.</p>
+              <h3>{t("Малый бизнес")}</h3>
+              <p>{t("Понять рынок и регулярно готовить материалы без отдельного отдела.")}</p>
             </article>
             <article>
-              <h3>Маркетолог</h3>
-              <p>Собрать наблюдения, аргументы и план в одном рабочем пространстве.</p>
+              <h3>{t("Маркетолог")}</h3>
+              <p>{t("Собрать наблюдения, аргументы и план в одном рабочем пространстве.")}</p>
             </article>
             <article>
-              <h3>Агентство</h3>
-              <p>Вести исследование, согласование и отчётность по единой структуре.</p>
+              <h3>{t("Агентство")}</h3>
+              <p>{t("Вести исследование, согласование и отчётность по единой структуре.")}</p>
             </article>
             <article>
-              <h3>Telegram и Instagram</h3>
-              <p>Связать анализ предложений с практическими темами и черновиками.</p>
+              <h3>{t("Telegram и Instagram")}</h3>
+              <p>{t("Связать анализ предложений с практическими темами и черновиками.")}</p>
             </article>
           </div>
         </section>
@@ -191,10 +201,10 @@ export default function LandingPage() {
         <section className="landing-cta">
           <div>
             <p className="eyebrow">Growly</p>
-            <h2>Начните с первого анализа рынка.</h2>
+            <h2>{t("Начните с первого анализа рынка.")}</h2>
           </div>
           <Link className="button button-light" href="/market-scan">
-            Открыть рабочую область
+            {t("Открыть рабочую область")}
             <Icon name="arrow" />
           </Link>
         </section>
@@ -202,7 +212,7 @@ export default function LandingPage() {
 
       <footer className="landing-footer">
         <Logo />
-        <p>Аналитика, контент и согласование в одной системе.</p>
+        <p>{t("Аналитика, контент и согласование в одной системе.")}</p>
         <span>Growly</span>
       </footer>
     </div>

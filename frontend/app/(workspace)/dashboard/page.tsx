@@ -10,6 +10,7 @@ import {
   Status,
 } from "@/components/ui";
 import { apiRequest, formatDate, formatDateTime } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n";
 import type { DashboardData } from "@/lib/types";
 
 const quickActions = [
@@ -36,15 +37,16 @@ const quickActions = [
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState("");
+  const { locale, t } = useLanguage();
 
   const load = useCallback(async () => {
     setError("");
     try {
       setData(await apiRequest<DashboardData>("/dashboard"));
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -53,13 +55,13 @@ export default function DashboardPage() {
   return (
     <div className="workspace-page">
       <PageHeader
-        eyebrow="Рабочая область"
-        title="Обзор"
-        description="Последние результаты, состояние данных и быстрые действия."
+        eyebrow={t("Рабочая область")}
+        title={t("Обзор")}
+        description={t("Последние результаты, состояние данных и быстрые действия.")}
         action={
           <Link className="button button-primary" href="/market-scan">
             <Icon name="plus" />
-            Новый анализ
+            {t("Новый анализ")}
           </Link>
         }
       />
@@ -69,27 +71,27 @@ export default function DashboardPage() {
         <>
           <section className="overview-strip">
             <div>
-              <span>Черновики на согласовании</span>
+              <span>{t("Черновики на согласовании")}</span>
               <strong>{data.counts.pending_drafts}</strong>
-              <Link href="/drafts">Открыть список</Link>
+              <Link href="/drafts">{t("Открыть список")}</Link>
             </div>
             <div>
-              <span>Активные источники</span>
+              <span>{t("Активные источники")}</span>
               <strong>{data.counts.active_sources}</strong>
-              <Link href="/sources">Управлять источниками</Link>
+              <Link href="/sources">{t("Управлять источниками")}</Link>
             </div>
             <div>
-              <span>Опубликованные материалы</span>
+              <span>{t("Опубликованные материалы")}</span>
               <strong>{data.counts.published}</strong>
-              <span className="muted">По данным Growly</span>
+              <span className="muted">{t("По данным Growly")}</span>
             </div>
             <div>
-              <span>Последняя синхронизация Notion</span>
+              <span>{t("Последняя синхронизация Notion")}</span>
               <strong className="date-value">
-                {formatDateTime(data.notion.last_synced_at)}
+                {formatDateTime(data.notion.last_synced_at, locale)}
               </strong>
               <Status value={data.notion.configured ? "active" : "disabled"}>
-                {data.notion.configured ? "Настроен" : "Не настроен"}
+                {t(data.notion.configured ? "Настроен" : "Не настроен")}
               </Status>
             </div>
           </section>
@@ -97,11 +99,11 @@ export default function DashboardPage() {
           <section className="workspace-section">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Последние результаты</p>
-                <h2>Что уже готово</h2>
+                <p className="eyebrow">{t("Последние результаты")}</p>
+                <h2>{t("Что уже готово")}</h2>
               </div>
               <Link className="text-link" href="/reports">
-                Все отчёты
+                {t("Все отчёты")}
                 <Icon name="chevron" />
               </Link>
             </div>
@@ -113,11 +115,12 @@ export default function DashboardPage() {
                     ? `/reports/${data.latest_market_scan.id}`
                     : "/market-scan"
                 }
-                label="Анализ рынка"
+                label={t("Анализ рынка")}
+                locale={locale}
                 status={data.latest_market_scan?.status}
                 summary={
                   data.latest_market_scan?.summary ||
-                  "Анализ ещё не запускался. Укажите нишу и регион."
+                  t("Анализ ещё не запускался. Укажите нишу и регион.")
                 }
               />
               <ResultRow
@@ -127,21 +130,23 @@ export default function DashboardPage() {
                     ? `/reports/${data.latest_competitor_report.id}`
                     : "/market-scan"
                 }
-                label="Конкурентный отчёт"
+                label={t("Конкурентный отчёт")}
+                locale={locale}
                 status={data.latest_competitor_report?.status}
                 summary={
                   data.latest_competitor_report?.summary ||
-                  "Появится после сбора и анализа источников."
+                  t("Появится после сбора и анализа источников.")
                 }
               />
               <ResultRow
                 date={data.latest_content_plan?.created_at}
                 href="/content-plan"
-                label="Контент-план"
+                label={t("Контент-план")}
+                locale={locale}
                 status={data.latest_content_plan?.status}
                 summary={
                   data.latest_content_plan?.topic ||
-                  "План ещё не создан. Сначала подготовьте рыночные данные."
+                  t("План ещё не создан. Сначала подготовьте рыночные данные.")
                 }
               />
             </div>
@@ -150,8 +155,8 @@ export default function DashboardPage() {
           <section className="workspace-section">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Быстрые действия</p>
-                <h2>Продолжить работу</h2>
+                <p className="eyebrow">{t("Быстрые действия")}</p>
+                <h2>{t("Продолжить работу")}</h2>
               </div>
             </div>
             <div className="quick-action-list">
@@ -159,8 +164,8 @@ export default function DashboardPage() {
                 <Link href={item.href} key={item.href}>
                   <Icon name={item.icon} />
                   <div>
-                    <strong>{item.title}</strong>
-                    <span>{item.text}</span>
+                    <strong>{t(item.title)}</strong>
+                    <span>{t(item.text)}</span>
                   </div>
                   <Icon name="arrow" />
                 </Link>
@@ -171,11 +176,11 @@ export default function DashboardPage() {
           <section className="workspace-section">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Согласование</p>
-                <h2>Черновики в работе</h2>
+                <p className="eyebrow">{t("Согласование")}</p>
+                <h2>{t("Черновики в работе")}</h2>
               </div>
               <Link className="text-link" href="/drafts">
-                Все черновики
+                {t("Все черновики")}
                 <Icon name="chevron" />
               </Link>
             </div>
@@ -183,16 +188,16 @@ export default function DashboardPage() {
               <div className="compact-table">
                 {data.drafts_waiting.map((draft) => (
                   <Link href="/drafts" key={draft.id}>
-                    <span>{draft.title || `Черновик ${draft.id}`}</span>
-                    <span>{draft.channel || "Канал не указан"}</span>
+                    <span>{draft.title || `${t("Черновик")} ${draft.id}`}</span>
+                    <span>{draft.channel || t("Канал не указан")}</span>
                     <Status value={draft.status}>{draft.status}</Status>
-                    <span>{formatDate(draft.updated_at)}</span>
+                    <span>{formatDate(draft.updated_at, locale)}</span>
                   </Link>
                 ))}
               </div>
             ) : (
               <p className="inline-empty">
-                Нет черновиков, ожидающих согласования.
+                {t("Нет черновиков, ожидающих согласования.")}
               </p>
             )}
           </section>
@@ -208,12 +213,14 @@ function ResultRow({
   date,
   status,
   href,
+  locale,
 }: {
   label: string;
   summary: string;
   date?: string;
   status?: string;
   href: string;
+  locale: "ru" | "en" | "kk";
 }) {
   return (
     <Link href={href}>
@@ -223,7 +230,7 @@ function ResultRow({
       </div>
       <div className="result-meta">
         {status ? <Status value={status}>{status}</Status> : null}
-        <span>{formatDate(date)}</span>
+        <span>{formatDate(date, locale)}</span>
         <Icon name="arrow" />
       </div>
     </Link>

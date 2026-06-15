@@ -17,8 +17,10 @@ import {
   asStrings,
 } from "@/lib/report-data";
 import type { Report } from "@/lib/types";
+import { useLanguage } from "@/lib/i18n";
 
 export function ReportView({ report }: { report: Report }) {
+  const { t } = useLanguage();
   const structure = report.structure || {};
   const competitorRows = asCompetitors(structure.competitors);
   const chartRows = asMetricRows(
@@ -43,39 +45,39 @@ export function ReportView({ report }: { report: Report }) {
     <>
       {report.summary ? (
         <section className="report-summary">
-          <p className="eyebrow">Главный вывод</p>
+          <p className="eyebrow">{t("Главный вывод")}</p>
           <h2>{report.summary}</h2>
         </section>
       ) : null}
 
       {competitorRows.length ? (
         <section className="report-section">
-          <h2>Сравнение конкурентов</h2>
+          <h2>{t("Сравнение конкурентов")}</h2>
           <div className="data-table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Конкурент</th>
-                  <th>Канал</th>
-                  <th>Предложение</th>
-                  <th>Цена / ценность</th>
-                  <th>Призыв</th>
-                  <th>Сильная сторона</th>
-                  <th>Слабая сторона</th>
-                  <th>Возможность</th>
+                  <th>{t("Конкурент")}</th>
+                  <th>{t("Канал")}</th>
+                  <th>{t("Предложение")}</th>
+                  <th>{t("Цена / ценность")}</th>
+                  <th>{t("Призыв")}</th>
+                  <th>{t("Сильная сторона")}</th>
+                  <th>{t("Слабая сторона")}</th>
+                  <th>{t("Возможность")}</th>
                 </tr>
               </thead>
               <tbody>
                 {competitorRows.map((row, index) => (
                   <tr key={`${row.competitor || "competitor"}-${index}`}>
-                    <td>{row.competitor || "Не подтверждено"}</td>
-                    <td>{row.channel || "Не подтверждено"}</td>
-                    <td>{row.offer || "Не подтверждено"}</td>
-                    <td>{row.price_value || "Не подтверждено"}</td>
-                    <td>{row.cta || "Не подтверждено"}</td>
-                    <td>{row.strengths || "Не подтверждено"}</td>
-                    <td>{row.weaknesses || "Не подтверждено"}</td>
-                    <td>{row.opportunity || "Требуется больше данных"}</td>
+                    <td>{row.competitor || t("Не подтверждено")}</td>
+                    <td>{row.channel || t("Не подтверждено")}</td>
+                    <td>{row.offer || t("Не подтверждено")}</td>
+                    <td>{row.price_value || t("Не подтверждено")}</td>
+                    <td>{row.cta || t("Не подтверждено")}</td>
+                    <td>{row.strengths || t("Не подтверждено")}</td>
+                    <td>{row.weaknesses || t("Не подтверждено")}</td>
+                    <td>{row.opportunity || t("Требуется больше данных")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -86,7 +88,7 @@ export function ReportView({ report }: { report: Report }) {
 
       {chartRows.length ? (
         <section className="report-section">
-          <h2>Динамика публикаций</h2>
+          <h2>{t("Динамика публикаций")}</h2>
           <div className="metric-chart">
             <ResponsiveContainer height="100%" width="100%">
               <LineChart data={chartRows}>
@@ -118,7 +120,7 @@ export function ReportView({ report }: { report: Report }) {
         const values = asStrings(value);
         return values.length ? (
           <section className="report-section" key={title}>
-            <h2>{title}</h2>
+            <h2>{t(title)}</h2>
             <ul>
               {values.map((item, index) => (
                 <li key={`${item}-${index}`}>{item}</li>
@@ -130,7 +132,7 @@ export function ReportView({ report }: { report: Report }) {
 
       {report.evidence.length ? (
         <section className="report-section">
-          <h2>Источники</h2>
+          <h2>{t("Источники")}</h2>
           <ul>
             {report.evidence.map((value, index) => {
               const href =
@@ -159,7 +161,7 @@ export function ReportView({ report }: { report: Report }) {
 
       {report.body && !hasStructuredContent ? (
         <section className="report-section">
-          <h2>Полный текст</h2>
+          <h2>{t("Полный текст")}</h2>
           <div className="report-markdown">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {report.body}

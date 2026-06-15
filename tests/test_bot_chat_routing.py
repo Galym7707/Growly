@@ -124,6 +124,7 @@ def test_all_management_commands_are_private_only() -> None:
         "reports",
         "sync_notion",
         "new_business",
+        "language",
         "help",
         "cancel",
     )

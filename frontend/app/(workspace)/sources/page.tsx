@@ -10,6 +10,7 @@ import {
   Status,
 } from "@/components/ui";
 import { apiRequest, formatDate } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n";
 import type { Source } from "@/lib/types";
 
 export default function SourcesPage() {
@@ -24,6 +25,17 @@ export default function SourcesPage() {
   const [platforms, setPlatforms] = useState("website, telegram, instagram");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+  const { locale, t } = useLanguage();
+
+  useEffect(() => {
+    setRegion(
+      locale === "kk"
+        ? "Қазақстан"
+        : locale === "en"
+          ? "Kazakhstan"
+          : "Казахстан",
+    );
+  }, [locale]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,11 +44,11 @@ export default function SourcesPage() {
       const response = await apiRequest<{ items: Source[] }>("/sources");
       setItems(response.items);
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -63,7 +75,7 @@ export default function SourcesPage() {
             }),
           },
         );
-        setFeedback(`Найдено кандидатов: ${response.items.length}.`);
+        setFeedback(t("Найдено кандидатов: {count}.", { count: response.items.length }));
       } else {
         await apiRequest("/sources", {
           method: "POST",
@@ -76,13 +88,13 @@ export default function SourcesPage() {
             check_frequency: "weekly",
           }),
         });
-        setFeedback("Источник добавлен.");
+        setFeedback(t("Источник добавлен."));
         setName("");
         setUrl("");
       }
       await load();
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
       setBusy(false);
     }
@@ -97,10 +109,10 @@ export default function SourcesPage() {
         "/sources/monitor",
         { method: "POST", body: "{}" },
       );
-      setFeedback(`Сохранено новых материалов: ${response.items_saved}.`);
+      setFeedback(t("Сохранено новых материалов: {count}.", { count: response.items_saved }));
       await load();
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
       setBusy(false);
     }
@@ -109,9 +121,9 @@ export default function SourcesPage() {
   return (
     <div className="workspace-page">
       <PageHeader
-        eyebrow="Данные"
-        title="Источники"
-        description="Публичные сайты и каналы, которые Growly использует как рыночные свидетельства."
+        eyebrow={t("Данные")}
+        title={t("Источники")}
+        description={t("Публичные сайты и каналы, которые Growly использует как рыночные свидетельства.")}
         action={
           <button
             className="button button-secondary"
@@ -120,35 +132,35 @@ export default function SourcesPage() {
             type="button"
           >
             <Icon name="sync" />
-            Проверить активные
+            {t("Проверить активные")}
           </button>
         }
       />
       <form className="form-panel" onSubmit={submit}>
         <div className="list-toolbar">
           <div>
-            <h2>{mode === "discover" ? "Найти источники" : "Добавить вручную"}</h2>
+            <h2>{t(mode === "discover" ? "Найти источники" : "Добавить вручную")}</h2>
             <p>
               {mode === "discover"
-                ? "Tavily ищет только публично доступные страницы."
-                : "Добавьте известный вам официальный источник."}
+                ? t("Tavily ищет только публично доступные страницы.")
+                : t("Добавьте известный вам официальный источник.")}
             </p>
           </div>
           <select
-            aria-label="Способ добавления"
+            aria-label={t("Способ добавления")}
             onChange={(event) =>
               setMode(event.target.value as "discover" | "manual")
             }
             value={mode}
           >
-            <option value="discover">Поиск</option>
-            <option value="manual">Вручную</option>
+            <option value="discover">{t("Поиск")}</option>
+            <option value="manual">{t("Вручную")}</option>
           </select>
         </div>
         {mode === "discover" ? (
           <div className="form-grid">
             <label>
-              <span>Ниша</span>
+              <span>{t("Ниша")}</span>
               <input
                 onChange={(event) => setNiche(event.target.value)}
                 required
@@ -156,7 +168,7 @@ export default function SourcesPage() {
               />
             </label>
             <label>
-              <span>Регион</span>
+              <span>{t("Регион")}</span>
               <input
                 onChange={(event) => setRegion(event.target.value)}
                 required
@@ -164,7 +176,7 @@ export default function SourcesPage() {
               />
             </label>
             <label className="full">
-              <span>Платформы через запятую</span>
+              <span>{t("Платформы через запятую")}</span>
               <input
                 onChange={(event) => setPlatforms(event.target.value)}
                 value={platforms}
@@ -174,7 +186,7 @@ export default function SourcesPage() {
         ) : (
           <div className="form-grid">
             <label>
-              <span>Название</span>
+              <span>{t("Название")}</span>
               <input
                 onChange={(event) => setName(event.target.value)}
                 required
@@ -196,10 +208,10 @@ export default function SourcesPage() {
           <button className="button button-primary" disabled={busy}>
             <Icon name={busy ? "sync" : "plus"} />
             {busy
-              ? "Выполняется"
+              ? t("Выполняется")
               : mode === "discover"
-                ? "Найти кандидатов"
-                : "Добавить источник"}
+                ? t("Найти кандидатов")
+                : t("Добавить источник")}
           </button>
         </div>
       </form>
@@ -210,10 +222,10 @@ export default function SourcesPage() {
       <section className="workspace-section">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Реестр</p>
-            <h2>Сохранённые источники</h2>
+            <p className="eyebrow">{t("Реестр")}</p>
+            <h2>{t("Сохранённые источники")}</h2>
           </div>
-          <span className="muted">Всего: {items.length}</span>
+          <span className="muted">{t("Всего: {count}", { count: items.length })}</span>
         </div>
         {loading ? <LoadingState /> : null}
         {!loading && error && !items.length ? (
@@ -222,8 +234,8 @@ export default function SourcesPage() {
         {!loading && !items.length && !error ? (
           <EmptyState
             icon="source"
-            text="Добавьте известный источник или найдите публичные страницы по нише."
-            title="Источников пока нет"
+            text={t("Добавьте известный источник или найдите публичные страницы по нише.")}
+            title={t("Источников пока нет")}
           />
         ) : null}
         {items.length ? (
@@ -237,11 +249,11 @@ export default function SourcesPage() {
                       {source.url}
                     </a>
                   ) : (
-                    <p>URL не указан</p>
+                    <p>{t("URL не указан")}</p>
                   )}
                 </div>
-                <span>{source.type || "Не указан"}</span>
-                <span>{formatDate(source.last_checked_at)}</span>
+                <span>{source.type || t("Не указан")}</span>
+                <span>{formatDate(source.last_checked_at, locale)}</span>
                 <Status value={source.status}>{source.status}</Status>
               </article>
             ))}

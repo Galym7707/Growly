@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Icon, type IconName } from "@/components/icons";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { Logo } from "@/components/logo";
+import { useLanguage } from "@/lib/i18n";
 import {
   createClient,
   isSupabaseConfigured,
@@ -24,6 +26,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const { t } = useLanguage();
 
   async function signOut() {
     if (isSupabaseConfigured()) {
@@ -38,7 +41,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="mobile-header">
         <Logo compact />
         <button
-          aria-label={open ? "Закрыть меню" : "Открыть меню"}
+          aria-label={t(open ? "Закрыть меню" : "Открыть меню")}
           className="icon-button"
           onClick={() => setOpen((value) => !value)}
           type="button"
@@ -49,9 +52,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className={`sidebar ${open ? "sidebar-open" : ""}`}>
         <div className="sidebar-top">
           <Logo compact />
-          <span className="workspace-label">Рабочее пространство</span>
+          <span className="workspace-label">{t("Рабочее пространство")}</span>
         </div>
-        <nav className="sidebar-nav" aria-label="Основная навигация">
+        <nav className="sidebar-nav" aria-label={t("Основная навигация")}>
           {nav.map((item) => {
             const active =
               pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -63,29 +66,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 onClick={() => setOpen(false)}
               >
                 <Icon name={item.icon} />
-                <span>{item.label}</span>
+                <span>{t(item.label)}</span>
               </Link>
             );
           })}
         </nav>
         <div className="sidebar-bottom">
+          <LanguageSwitcher />
           <Link
             className={pathname === "/settings" ? "active" : ""}
             href="/settings"
             onClick={() => setOpen(false)}
           >
             <Icon name="settings" />
-            <span>Настройки</span>
+            <span>{t("Настройки")}</span>
           </Link>
           <button onClick={signOut} type="button">
             <Icon name="arrow" />
-            <span>Выйти</span>
+            <span>{t("Выйти")}</span>
           </button>
         </div>
       </aside>
       {open ? (
         <button
-          aria-label="Закрыть меню"
+          aria-label={t("Закрыть меню")}
           className="sidebar-backdrop"
           onClick={() => setOpen(false)}
           type="button"

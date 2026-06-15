@@ -1,3 +1,5 @@
+import { localeTag, type Locale } from "./i18n";
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -30,18 +32,30 @@ export async function apiRequest<T>(
   return body as T;
 }
 
-export function formatDate(value: string | null | undefined): string {
-  if (!value) return "Нет данных";
-  return new Intl.DateTimeFormat("ru-RU", {
+export function formatDate(
+  value: string | null | undefined,
+  locale: Locale = "ru",
+): string {
+  if (!value)
+    return locale === "en" ? "No data" : locale === "kk" ? "Дерек жоқ" : "Нет данных";
+  return new Intl.DateTimeFormat(localeTag(locale), {
     day: "numeric",
     month: "short",
     year: "numeric",
   }).format(new Date(value));
 }
 
-export function formatDateTime(value: string | null | undefined): string {
-  if (!value) return "Не синхронизировалось";
-  return new Intl.DateTimeFormat("ru-RU", {
+export function formatDateTime(
+  value: string | null | undefined,
+  locale: Locale = "ru",
+): string {
+  if (!value)
+    return locale === "en"
+      ? "Not synced"
+      : locale === "kk"
+        ? "Синхрондалмаған"
+        : "Не синхронизировалось";
+  return new Intl.DateTimeFormat(localeTag(locale), {
     day: "numeric",
     month: "short",
     hour: "2-digit",
@@ -49,7 +63,10 @@ export function formatDateTime(value: string | null | undefined): string {
   }).format(new Date(value));
 }
 
-export function formatReportType(value: string | null | undefined): string {
+export function formatReportType(
+  value: string | null | undefined,
+  locale: Locale = "ru",
+): string {
   const labels: Record<string, string> = {
     competitor: "Конкурентный отчёт",
     competitor_report: "Конкурентный отчёт",
@@ -58,24 +75,47 @@ export function formatReportType(value: string | null | undefined): string {
     performance: "Результаты публикаций",
     source_monitoring: "Мониторинг источников",
   };
-  return labels[value || ""] || "Отчёт";
+  const label = labels[value || ""] || "Отчёт";
+  const translated: Record<Locale, Record<string, string>> = {
+    ru: {},
+    en: {
+      "Конкурентный отчёт": "Competitor report",
+      "Сводка источников": "Source summary",
+      "Анализ рынка": "Market analysis",
+      "Результаты публикаций": "Publication performance",
+      "Мониторинг источников": "Source monitoring",
+      "Отчёт": "Report",
+    },
+    kk: {
+      "Конкурентный отчёт": "Бәсекелестер есебі",
+      "Сводка источников": "Дереккөздер жиынтығы",
+      "Анализ рынка": "Нарықты талдау",
+      "Результаты публикаций": "Жарияланым нәтижелері",
+      "Мониторинг источников": "Дереккөздерді бақылау",
+      "Отчёт": "Есеп",
+    },
+  };
+  return translated[locale][label] || label;
 }
 
 export function formatReportTitle(
   title: string | null | undefined,
   type: string | null | undefined,
+  locale: Locale = "ru",
 ): string {
   const value = (title || "").trim();
   const normalized = value.toLowerCase();
   if (normalized.startsWith("competitor report")) {
     const suffix = value.split(":").slice(1).join(":").trim();
     return suffix && suffix.toLowerCase() !== "latest evidence"
-      ? `Конкурентный отчёт: ${suffix}`
-      : "Конкурентный отчёт";
+      ? `${formatReportType("competitor", locale)}: ${suffix}`
+      : formatReportType("competitor", locale);
   }
   if (normalized.startsWith("market scan")) {
     const suffix = value.split(":").slice(1).join(":").trim();
-    return suffix ? `Анализ рынка: ${suffix}` : "Анализ рынка";
+    return suffix
+      ? `${formatReportType("market_scan", locale)}: ${suffix}`
+      : formatReportType("market_scan", locale);
   }
-  return value || formatReportType(type);
+  return value || formatReportType(type, locale);
 }

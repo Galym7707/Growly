@@ -8,6 +8,7 @@ import {
   PageHeader,
 } from "@/components/ui";
 import { apiRequest } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n";
 
 type WorkspaceSettings = {
   business_name: string | null;
@@ -35,6 +36,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const { t } = useLanguage();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,11 +47,11 @@ export default function SettingsPage() {
       );
       setValues({ ...emptySettings, ...response.settings });
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -75,7 +77,7 @@ export default function SettingsPage() {
       setValues(response.settings);
       setSaved(true);
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
       setSaving(false);
     }
@@ -84,22 +86,21 @@ export default function SettingsPage() {
   return (
     <div className="workspace-page">
       <PageHeader
-        eyebrow="Конфигурация"
-        title="Настройки"
-        description="Профиль бизнеса и ссылки на подключённые рабочие пространства."
+        eyebrow={t("Конфигурация")}
+        title={t("Настройки")}
+        description={t("Профиль бизнеса и ссылки на подключённые рабочие пространства.")}
       />
       {loading ? <LoadingState /> : null}
       {error && loading ? <ErrorState message={error} retry={load} /> : null}
       {!loading ? (
         <form className="form-panel" onSubmit={submit}>
-          <h2>Профиль бизнеса</h2>
+          <h2>{t("Профиль бизнеса")}</h2>
           <p>
-            Эти данные используются при подготовке планов и материалов. Секретные
-            ключи на этой странице не отображаются.
+            {t("Эти данные используются при подготовке планов и материалов. Секретные ключи на этой странице не отображаются.")}
           </p>
           <div className="form-grid">
             <label>
-              <span>Название</span>
+              <span>{t("Название")}</span>
               <input
                 onChange={(event) =>
                   update("business_name", event.target.value)
@@ -108,7 +109,7 @@ export default function SettingsPage() {
               />
             </label>
             <label>
-              <span>Ниша</span>
+              <span>{t("Ниша")}</span>
               <input
                 onChange={(event) =>
                   update("business_niche", event.target.value)
@@ -117,7 +118,7 @@ export default function SettingsPage() {
               />
             </label>
             <label>
-              <span>Регион</span>
+              <span>{t("Регион")}</span>
               <input
                 onChange={(event) =>
                   update("business_region", event.target.value)
@@ -126,7 +127,7 @@ export default function SettingsPage() {
               />
             </label>
             <label>
-              <span>Язык</span>
+              <span>{t("Язык")}</span>
               <input
                 onChange={(event) =>
                   update("business_language", event.target.value)
@@ -135,17 +136,17 @@ export default function SettingsPage() {
               />
             </label>
             <label className="full">
-              <span>Тон бренда</span>
+              <span>{t("Тон бренда")}</span>
               <textarea
                 onChange={(event) =>
                   update("business_brand_tone", event.target.value)
                 }
-                placeholder="Например: спокойно, предметно, без громких обещаний"
+                placeholder={t("Например: спокойно, предметно, без громких обещаний")}
                 value={values.business_brand_tone || ""}
               />
             </label>
             <label>
-              <span>Telegram-канал</span>
+              <span>{t("Telegram-канал")}</span>
               <input
                 onChange={(event) =>
                   update("business_telegram_channel", event.target.value)
@@ -155,7 +156,7 @@ export default function SettingsPage() {
               />
             </label>
             <label>
-              <span>Корневая страница Notion</span>
+              <span>{t("Корневая страница Notion")}</span>
               <input
                 onChange={(event) =>
                   update("business_notion_root", event.target.value)
@@ -168,24 +169,22 @@ export default function SettingsPage() {
           {error ? <div className="feedback feedback-error">{error}</div> : null}
           {saved ? (
             <div className="feedback feedback-success">
-              Настройки сохранены.
+              {t("Настройки сохранены.")}
             </div>
           ) : null}
           <div className="form-actions">
             <button className="button button-primary" disabled={saving}>
               <Icon name={saving ? "sync" : "check"} />
-              {saving ? "Сохраняем" : "Сохранить"}
+              {t(saving ? "Сохраняем" : "Сохранить")}
             </button>
           </div>
         </form>
       ) : null}
       <section className="workspace-section">
         <div className="form-panel">
-          <h2>Режим рабочего пространства</h2>
+          <h2>{t("Режим рабочего пространства")}</h2>
           <p>
-            Текущая база Growly использует единую бизнес-область. Supabase Auth
-            управляет входом в веб-интерфейс, но изоляция нескольких компаний
-            требует отдельной миграции данных с полем workspace_id.
+            {t("Текущая база Growly использует единую бизнес-область. Supabase Auth управляет входом в веб-интерфейс, но изоляция нескольких компаний требует отдельной миграции данных с полем workspace_id.")}
           </p>
         </div>
       </section>

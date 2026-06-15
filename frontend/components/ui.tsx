@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Icon, type IconName } from "@/components/icons";
+import { useLanguage } from "@/lib/i18n";
 
 export function PageHeader({
   eyebrow,
@@ -32,6 +35,7 @@ export function Status({
   value: string;
   children?: ReactNode;
 }) {
+  const { t } = useLanguage();
   const normalized = value.toLowerCase();
   const labels: Record<string, string> = {
     active: "Активен",
@@ -65,7 +69,7 @@ export function Status({
     typeof children === "string" && children !== value ? children : null;
   return (
     <span className={`status status-${tone}`}>
-      {customLabel || labels[normalized] || children || value}
+      {t(String(customLabel || labels[normalized] || children || value))}
     </span>
   );
 }
@@ -101,12 +105,13 @@ export function EmptyState({
 }
 
 export function LoadingState({ label = "Загрузка данных" }: { label?: string }) {
+  const { t } = useLanguage();
   return (
     <div className="loading-state" aria-live="polite">
       <span />
       <span />
       <span />
-      <p>{label}</p>
+      <p>{t(label)}</p>
     </div>
   );
 }
@@ -118,13 +123,14 @@ export function ErrorState({
   message: string;
   retry?: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="error-state" role="alert">
-      <strong>Не удалось загрузить данные</strong>
+      <strong>{t("Не удалось загрузить данные")}</strong>
       <p>{message}</p>
       {retry ? (
         <button className="button button-secondary" onClick={retry} type="button">
-          Повторить
+          {t("Повторить")}
         </button>
       ) : null}
     </div>

@@ -11,6 +11,7 @@ import {
   Status,
 } from "@/components/ui";
 import { apiRequest, formatDate, formatReportTitle } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n";
 import type { Report } from "@/lib/types";
 
 export default function ReportsPage() {
@@ -18,6 +19,7 @@ export default function ReportsPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { locale, t } = useLanguage();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -26,11 +28,11 @@ export default function ReportsPage() {
       const response = await apiRequest<{ items: Report[] }>("/reports");
       setItems(response.items);
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -50,13 +52,13 @@ export default function ReportsPage() {
   return (
     <div className="workspace-page">
       <PageHeader
-        eyebrow="База знаний"
-        title="Отчёты"
-        description="Рыночные, конкурентные и результативные отчёты с источниками и ограничениями."
+        eyebrow={t("База знаний")}
+        title={t("Отчёты")}
+        description={t("Рыночные, конкурентные и результативные отчёты с источниками и ограничениями.")}
         action={
           <Link className="button button-primary" href="/market-scan">
             <Icon name="plus" />
-            Новый анализ
+            {t("Новый анализ")}
           </Link>
         }
       />
@@ -66,25 +68,27 @@ export default function ReportsPage() {
         <>
           <div className="list-toolbar">
             <input
-              aria-label="Поиск по отчётам"
+              aria-label={t("Поиск по отчётам")}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Найти отчёт"
+              placeholder={t("Найти отчёт")}
               value={query}
             />
-            <span className="muted">Всего: {visible.length}</span>
+            <span className="muted">{t("Всего: {count}", { count: visible.length })}</span>
           </div>
           {visible.length ? (
             <div className="report-list">
               {visible.map((report) => (
                 <Link href={`/reports/${report.id}`} key={report.id}>
                   <div>
-                    <h3>{formatReportTitle(report.title, report.type)}</h3>
-                    <p>{report.summary || "Краткий вывод не указан."}</p>
+                    <h3>{formatReportTitle(report.title, report.type, locale)}</h3>
+                    <p>{report.summary || t("Краткий вывод не указан.")}</p>
                   </div>
-                  <span className="meta">{report.sources_count} источников</span>
+                  <span className="meta">
+                    {t("{count} источников", { count: report.sources_count })}
+                  </span>
                   <div>
                     <Status value={report.status}>{report.status}</Status>
-                    <span className="meta">{formatDate(report.created_at)}</span>
+                    <span className="meta">{formatDate(report.created_at, locale)}</span>
                   </div>
                   <Icon name="arrow" />
                 </Link>
@@ -92,11 +96,11 @@ export default function ReportsPage() {
             </div>
           ) : (
             <EmptyState
-              action="Запустить анализ"
+              action={t("Запустить анализ")}
               href="/market-scan"
               icon="report"
-              text="Отчёты появятся после анализа рынка, конкурентов или публикаций."
-              title="Пока нет отчётов"
+              text={t("Отчёты появятся после анализа рынка, конкурентов или публикаций.")}
+              title={t("Пока нет отчётов")}
             />
           )}
         </>

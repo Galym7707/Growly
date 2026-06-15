@@ -10,6 +10,7 @@ import {
   Status,
 } from "@/components/ui";
 import { apiRequest, formatDate } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n";
 import type { ContentPlanItem, Draft } from "@/lib/types";
 
 export default function ContentPlanPage() {
@@ -20,6 +21,7 @@ export default function ContentPlanPage() {
   const [draftingId, setDraftingId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
+  const { locale, t } = useLanguage();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -30,11 +32,11 @@ export default function ContentPlanPage() {
       );
       setItems(response.items);
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -54,10 +56,10 @@ export default function ContentPlanPage() {
         },
       );
       setItems(response.items);
-      setFeedback(`Создано элементов: ${response.items.length}.`);
+      setFeedback(t("Создано элементов: {count}.", { count: response.items.length }));
       setObjective("");
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
       setGenerating(false);
     }
@@ -72,12 +74,12 @@ export default function ContentPlanPage() {
         `/content-plan/${itemId}/draft`,
         { method: "POST", body: "{}" },
       );
-      setFeedback(
-        `Черновик «${response.draft.title || response.draft.id}» создан.`,
-      );
+      setFeedback(t("Черновик «{name}» создан.", {
+        name: response.draft.title || response.draft.id,
+      }));
       await load();
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
       setDraftingId(null);
     }
@@ -86,21 +88,20 @@ export default function ContentPlanPage() {
   return (
     <div className="workspace-page">
       <PageHeader
-        eyebrow="Планирование"
-        title="Контент-план"
-        description="Темы, форматы и задачи на неделю на основе сохранённых источников."
+        eyebrow={t("Планирование")}
+        title={t("Контент-план")}
+        description={t("Темы, форматы и задачи на неделю на основе сохранённых источников.")}
       />
       <form className="form-panel" onSubmit={generate}>
-        <h2>Новый план</h2>
+        <h2>{t("Новый план")}</h2>
         <p>
-          Укажите бизнес-цель на неделю. Growly использует последние отчёты и
-          материалы источников.
+          {t("Укажите бизнес-цель на неделю. Growly использует последние отчёты и материалы источников.")}
         </p>
         <label>
-          <span>Цель недели</span>
+          <span>{t("Цель недели")}</span>
           <textarea
             onChange={(event) => setObjective(event.target.value)}
-            placeholder="Например: объяснить ценность услуги и получить заявки на консультацию"
+            placeholder={t("Например: объяснить ценность услуги и получить заявки на консультацию")}
             required
             value={objective}
           />
@@ -108,7 +109,7 @@ export default function ContentPlanPage() {
         <div className="form-actions">
           <button className="button button-primary" disabled={generating}>
             <Icon name={generating ? "sync" : "book"} />
-            {generating ? "Формируем план" : "Создать план"}
+            {t(generating ? "Формируем план" : "Создать план")}
           </button>
         </div>
       </form>
@@ -120,10 +121,10 @@ export default function ContentPlanPage() {
       <section className="workspace-section">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Календарь</p>
-            <h2>Запланированные материалы</h2>
+            <p className="eyebrow">{t("Календарь")}</p>
+            <h2>{t("Запланированные материалы")}</h2>
           </div>
-          <span className="muted">Всего: {items.length}</span>
+          <span className="muted">{t("Всего: {count}", { count: items.length })}</span>
         </div>
         {loading ? <LoadingState /> : null}
         {!loading && error && !items.length ? (
@@ -132,8 +133,8 @@ export default function ContentPlanPage() {
         {!loading && !items.length && !error ? (
           <EmptyState
             icon="book"
-            text="Сначала выполните анализ рынка, затем сформируйте цель на неделю."
-            title="Контент-план ещё не создан"
+            text={t("Сначала выполните анализ рынка, затем сформируйте цель на неделю.")}
+            title={t("Контент-план ещё не создан")}
           />
         ) : null}
         {items.length ? (
@@ -141,27 +142,27 @@ export default function ContentPlanPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Дата</th>
-                  <th>Канал</th>
-                  <th>Тема</th>
-                  <th>Цель</th>
-                  <th>Формат</th>
-                  <th>Призыв</th>
-                  <th>Источник идеи</th>
-                  <th>Статус</th>
+                  <th>{t("Дата")}</th>
+                  <th>{t("Канал")}</th>
+                  <th>{t("Тема")}</th>
+                  <th>{t("Цель")}</th>
+                  <th>{t("Формат")}</th>
+                  <th>{t("Призыв")}</th>
+                  <th>{t("Источник идеи")}</th>
+                  <th>{t("Статус")}</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {items.map((item) => (
                   <tr key={item.id}>
-                    <td>{formatDate(item.publish_date)}</td>
-                    <td>{item.channel || "Не указан"}</td>
-                    <td>{item.topic || "Без темы"}</td>
-                    <td>{item.goal || "Не указана"}</td>
-                    <td>{item.content_type || "Не указан"}</td>
-                    <td>{item.cta || "Не указан"}</td>
-                    <td>{item.source_idea || "Не указан"}</td>
+                    <td>{formatDate(item.publish_date, locale)}</td>
+                    <td>{item.channel || t("Не указан")}</td>
+                    <td>{item.topic || t("Без темы")}</td>
+                    <td>{item.goal || t("Не указана")}</td>
+                    <td>{item.content_type || t("Не указан")}</td>
+                    <td>{item.cta || t("Не указан")}</td>
+                    <td>{item.source_idea || t("Не указан")}</td>
                     <td>
                       <Status value={item.status}>{item.status}</Status>
                     </td>
@@ -175,10 +176,10 @@ export default function ContentPlanPage() {
                         type="button"
                       >
                         {draftingId === item.id
-                          ? "Создаём"
+                          ? t("Создаём")
                           : item.status === "drafted"
-                            ? "Создан"
-                            : "Черновик"}
+                            ? t("Создан")
+                            : t("Черновик")}
                       </button>
                     </td>
                   </tr>

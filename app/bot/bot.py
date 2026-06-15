@@ -20,6 +20,12 @@ from app.config import Settings, get_settings
 from app.runtime_status import telegram_initialized
 from app.services.scheduler_service import SchedulerService
 from app.bot.keyboards import NAVIGATION_BUTTON_LABELS
+from app.bot.i18n import (
+    SUPPORTED_LANGUAGES,
+    load_language,
+    set_current_language,
+    tr,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +56,15 @@ NAVIGATION_COMMANDS = (
     "review_analysis",
     "new_business",
     "cancel",
+    "language",
 )
+
+
+def localized_pattern(*labels: str) -> str:
+    variants = set(labels)
+    for label in labels:
+        variants.update(tr(label, language) for language in SUPPORTED_LANGUAGES)
+    return "^(?:" + "|".join(re.escape(label) for label in sorted(variants)) + ")$"
 
 
 def clear_active_conversations(application: Application, update: Update) -> int:
@@ -93,6 +107,20 @@ def build_application(settings: Settings | None = None) -> Application:
 
     private_chat = filters.ChatType.PRIVATE
 
+    async def load_user_language(update: Update, context: object) -> None:
+        chat = update.effective_chat
+        user = update.effective_user
+        fallback = getattr(user, "language_code", None)
+        language = (
+            await load_language(chat.id, fallback)
+            if chat is not None
+            else set_current_language(fallback)
+        )
+        set_current_language(language)
+        user_data = getattr(context, "user_data", None)
+        if user_data is not None:
+            user_data["language"] = language
+
     async def interrupt_active_flow(update: Update, context: object) -> None:
         clear_active_conversations(application, update)
         user_data = getattr(context, "user_data", None)
@@ -103,6 +131,21 @@ def build_application(settings: Settings | None = None) -> Application:
         re.escape(label) for label in sorted(NAVIGATION_BUTTON_LABELS)
     ) + ")$"
     command_pattern = r"^/(?:" + "|".join(NAVIGATION_COMMANDS) + r")(?:@\w+)?(?:\s|$)"
+    application.add_handler(
+        MessageHandler(
+            private_chat
+            & (
+                (filters.TEXT & ~filters.COMMAND)
+                | filters.Regex(command_pattern)
+            ),
+            load_user_language,
+        ),
+        group=-2,
+    )
+    application.add_handler(
+        CallbackQueryHandler(load_user_language),
+        group=-2,
+    )
     application.add_handler(
         MessageHandler(
             private_chat
@@ -130,6 +173,9 @@ def build_application(settings: Settings | None = None) -> Application:
     )
     application.add_handler(
         CommandHandler("help", handlers.help_command, filters=private_chat)
+    )
+    application.add_handler(
+        CommandHandler("language", handlers.language_command, filters=private_chat)
     )
     application.add_handler(
         CommandHandler(
@@ -200,7 +246,7 @@ def build_application(settings: Settings | None = None) -> Application:
                 MessageHandler(
                     private_chat
                     & filters.Regex(
-                        r"^(Найти новые источники|Find new sources|Discover sources)$"
+                        localized_pattern("Найти новые источники", "Discover sources")
                     ),
                     handlers.discover_sources_start,
                 ),
@@ -236,7 +282,7 @@ def build_application(settings: Settings | None = None) -> Application:
                     "web_search", handlers.web_search_start, filters=private_chat
                 ),
                 MessageHandler(
-                    private_chat & filters.Regex(r"^(Веб-поиск|Web search)$"),
+                    private_chat & filters.Regex(localized_pattern("Веб-поиск")),
                     handlers.web_search_start,
                 ),
                 CallbackQueryHandler(
@@ -262,7 +308,7 @@ def build_application(settings: Settings | None = None) -> Application:
                     "market_scan", handlers.market_scan_start, filters=private_chat
                 ),
                 MessageHandler(
-                    private_chat & filters.Regex(r"^(Анализ рынка|Market scan)$"),
+                    private_chat & filters.Regex(localized_pattern("Анализ рынка", "Market scan")),
                     handlers.market_scan_start,
                 ),
             ],
@@ -300,8 +346,11 @@ def build_application(settings: Settings | None = None) -> Application:
                 MessageHandler(
                     private_chat
                     & filters.Regex(
-                        r"^(Конкуренты|"
-                        r"Competitor report|Generate competitor report)$"
+                        localized_pattern(
+                            "Конкуренты",
+                            "Competitor report",
+                            "Generate competitor report",
+                        )
                     ),
                     handlers.competitor_report,
                 ),
@@ -324,11 +373,23 @@ def build_application(settings: Settings | None = None) -> Application:
                 MessageHandler(
                     private_chat
                     & filters.Regex(
-                        r"^(Рекламный пост|Обучающий пост|Пост о результате клиента|"
-                        r"FAQ-пост|Новостной пост|Свой вариант|Promo post|"
-                        r"Educational post|Case post|FAQ post|Client result post|"
-                        r"News post|Instagram caption|Custom post|"
-                        r"Create one-off post)$"
+                        localized_pattern(
+                            "Рекламный пост",
+                            "Обучающий пост",
+                            "Пост о результате клиента",
+                            "FAQ-пост",
+                            "Новостной пост",
+                            "Свой вариант",
+                            "Promo post",
+                            "Educational post",
+                            "Case post",
+                            "FAQ post",
+                            "Client result post",
+                            "News post",
+                            "Instagram caption",
+                            "Custom post",
+                            "Create one-off post",
+                        )
                     ),
                     handlers.create_post_type_start,
                 ),
@@ -436,7 +497,11 @@ def build_application(settings: Settings | None = None) -> Application:
                 MessageHandler(
                     private_chat
                     & filters.Regex(
-                        r"^(Контент-план|Content plan|Generate content plan)$"
+                        localized_pattern(
+                            "Контент-план",
+                            "Content plan",
+                            "Generate content plan",
+                        )
                     ),
                     handlers.content_plan_start,
                 ),
@@ -624,6 +689,33 @@ def build_application(settings: Settings | None = None) -> Application:
         "Назад": handlers.main_menu,
         "Back": handlers.main_menu,
     }
+    localized_button_handlers = {
+        "Создать пост": handlers.create_post_menu,
+        "Источники": handlers.sources_menu,
+        "Просмотреть источники": handlers.sources,
+        "Найти новые источники": handlers.discover_sources_start,
+        "Проверить источники": handlers.monitor_sources,
+        "Черновики": handlers.drafts,
+        "Отчёты": handlers.reports_menu,
+        "Все отчёты": handlers.reports,
+        "Последний анализ рынка": handlers.latest_market_report,
+        "Последний конкурентный отчёт": handlers.latest_competitor_report,
+        "Конкуренты": handlers.competitor_report,
+        "Ещё": handlers.more_menu,
+        "Веб-поиск": handlers.web_search_start,
+        "Анализ отзывов": handlers.review_start,
+        "Отчёт по публикациям": handlers.performance_report,
+        "Синхронизировать с Notion": handlers.sync_notion,
+        "Настройки": handlers.settings_menu,
+        "Показать настройки": handlers.settings_status,
+        "Новый бизнес": handlers.new_business_start,
+        "Язык": handlers.language_command,
+        "Справка": handlers.help_command,
+        "Назад": handlers.main_menu,
+    }
+    for source, callback in localized_button_handlers.items():
+        for language in SUPPORTED_LANGUAGES:
+            button_handlers[tr(source, language)] = callback
     for label, callback in button_handlers.items():
         application.add_handler(
             MessageHandler(
@@ -632,6 +724,12 @@ def build_application(settings: Settings | None = None) -> Application:
             )
         )
 
+    application.add_handler(
+        CallbackQueryHandler(
+            handlers.language_callback,
+            pattern=r"^language:(ru|en|kk)$",
+        )
+    )
     application.add_handler(
         CallbackQueryHandler(
             handlers.source_action_callback,

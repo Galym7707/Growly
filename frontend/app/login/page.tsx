@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
 import { Icon } from "@/components/icons";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { Logo } from "@/components/logo";
+import { useLanguage } from "@/lib/i18n";
 import {
   createClient,
   isSupabaseConfigured,
@@ -26,6 +28,7 @@ function LoginContent() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const configured = isSupabaseConfigured();
+  const { t } = useLanguage();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -41,7 +44,7 @@ function LoginContent() {
     });
     setLoading(false);
     if (authError) {
-      setError("Не удалось войти. Проверьте почту и пароль.");
+      setError(t("Не удалось войти. Проверьте почту и пароль."));
       return;
     }
     router.push(searchParams.get("next") || "/dashboard");
@@ -52,31 +55,34 @@ function LoginContent() {
     <main className="auth-page">
       <div className="auth-brand">
         <Logo />
+        <LanguageSwitcher compact />
         <div>
-          <p className="eyebrow">Рабочее пространство Growly</p>
-          <h1>Рынок, отчёты и контент в одном процессе.</h1>
+          <p className="eyebrow">{t("Рабочее пространство Growly")}</p>
+          <h1>{t("Рынок, отчёты и контент в одном процессе.")}</h1>
           <p>
-            Войдите, чтобы продолжить работу с источниками, планами и
-            согласованием материалов.
+            {t(
+              "Войдите, чтобы продолжить работу с источниками, планами и согласованием материалов.",
+            )}
           </p>
         </div>
         <Link className="text-link" href="/">
-          Вернуться на главную
+          {t("Вернуться на главную")}
           <Icon name="arrow" />
         </Link>
       </div>
       <div className="auth-panel">
         <form onSubmit={submit}>
-          <p className="eyebrow">Вход</p>
-          <h2>Открыть рабочую область</h2>
+          <p className="eyebrow">{t("Вход")}</p>
+          <h2>{t("Открыть рабочую область")}</h2>
           {!configured ? (
             <div className="notice">
-              Supabase Auth не настроен. В локальном режиме можно открыть
-              интерфейс без авторизации.
+              {t(
+                "Supabase Auth не настроен. В локальном режиме можно открыть интерфейс без авторизации.",
+              )}
             </div>
           ) : null}
           <label>
-            <span>Рабочая почта</span>
+            <span>{t("Рабочая почта")}</span>
             <input
               autoComplete="email"
               disabled={!configured}
@@ -88,12 +94,12 @@ function LoginContent() {
             />
           </label>
           <label>
-            <span>Пароль</span>
+            <span>{t("Пароль")}</span>
             <input
               autoComplete="current-password"
               disabled={!configured}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="Пароль"
+              placeholder={t("Пароль")}
               required={configured}
               type="password"
               value={password}
@@ -102,10 +108,10 @@ function LoginContent() {
           {error ? <p className="form-error">{error}</p> : null}
           <button className="button button-primary button-wide" disabled={loading}>
             {loading
-              ? "Проверяем доступ"
+              ? t("Проверяем доступ")
               : configured
-                ? "Войти"
-                : "Открыть локальный режим"}
+                ? t("Войти")
+                : t("Открыть локальный режим")}
             <Icon name="arrow" />
           </button>
         </form>

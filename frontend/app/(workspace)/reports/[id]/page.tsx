@@ -18,12 +18,14 @@ import {
   formatReportType,
 } from "@/lib/api";
 import type { Report } from "@/lib/types";
+import { useLanguage } from "@/lib/i18n";
 
 export default function ReportPage() {
   const params = useParams<{ id: string }>();
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const { locale, t } = useLanguage();
 
   const load = useCallback(async () => {
     setError("");
@@ -33,9 +35,9 @@ export default function ReportPage() {
       );
       setReport(response.report);
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     }
-  }, [params.id]);
+  }, [params.id, t]);
 
   useEffect(() => {
     void load();
@@ -54,7 +56,7 @@ export default function ReportPage() {
       });
       await load();
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
       setSyncing(false);
     }
@@ -62,14 +64,14 @@ export default function ReportPage() {
 
   return (
     <div className="workspace-page">
-      {!report && !error ? <LoadingState label="Загружаем отчёт" /> : null}
+      {!report && !error ? <LoadingState label={t("Загружаем отчёт")} /> : null}
       {error ? <ErrorState message={error} retry={load} /> : null}
       {report ? (
         <>
           <PageHeader
-            eyebrow={formatReportType(report.type)}
-            title={formatReportTitle(report.title, report.type)}
-            description={report.query || "Сформировано Growly"}
+            eyebrow={formatReportType(report.type, locale)}
+            title={formatReportTitle(report.title, report.type, locale)}
+            description={report.query || t("Сформировано Growly")}
             action={
               <button
                 className="button button-secondary"
@@ -78,7 +80,7 @@ export default function ReportPage() {
                 type="button"
               >
                 <Icon name="notion" />
-                {syncing ? "Сохраняем" : "Сохранить в Notion"}
+                {t(syncing ? "Сохраняем" : "Сохранить в Notion")}
               </button>
             }
           />
@@ -89,22 +91,22 @@ export default function ReportPage() {
             <aside className="report-aside">
               <dl>
                 <div>
-                  <dt>Статус</dt>
+                  <dt>{t("Статус")}</dt>
                   <dd>
                     <Status value={report.status}>{report.status}</Status>
                   </dd>
                 </div>
                 <div>
-                  <dt>Дата</dt>
-                  <dd>{formatDate(report.created_at)}</dd>
+                  <dt>{t("Дата")}</dt>
+                  <dd>{formatDate(report.created_at, locale)}</dd>
                 </div>
                 <div>
-                  <dt>Источники</dt>
+                  <dt>{t("Источники")}</dt>
                   <dd>{report.sources_count}</dd>
                 </div>
                 <div>
                   <dt>Notion</dt>
-                  <dd>{report.notion_synced ? "Синхронизирован" : "Не сохранён"}</dd>
+                  <dd>{t(report.notion_synced ? "Синхронизирован" : "Не сохранён")}</dd>
                 </div>
               </dl>
               {report.notion_url ? (
@@ -114,12 +116,12 @@ export default function ReportPage() {
                   rel="noreferrer"
                   target="_blank"
                 >
-                  Открыть Notion
+                  {t("Открыть Notion")}
                   <Icon name="external" />
                 </a>
               ) : null}
               <Link className="text-link" href="/reports">
-                Вернуться к отчётам
+                {t("Вернуться к отчётам")}
               </Link>
             </aside>
           </div>

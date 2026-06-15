@@ -10,6 +10,7 @@ import {
   Status,
 } from "@/components/ui";
 import { apiRequest, formatDate } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n";
 import type { Draft } from "@/lib/types";
 
 type DraftAction = "approve" | "reject" | "regenerate" | "sync_notion";
@@ -20,6 +21,7 @@ export default function DraftsPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const { locale, t } = useLanguage();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -28,11 +30,11 @@ export default function DraftsPage() {
       const response = await apiRequest<{ items: Draft[] }>("/drafts");
       setItems(response.items);
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -58,7 +60,7 @@ export default function DraftsPage() {
         current.map((item) => (item.id === id ? response.draft : item)),
       );
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Неизвестная ошибка");
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
       setBusy(null);
     }
@@ -67,9 +69,9 @@ export default function DraftsPage() {
   return (
     <div className="workspace-page">
       <PageHeader
-        eyebrow="Согласование"
-        title="Черновики"
-        description="Версии материалов, статусы согласования и сохранение в Notion."
+        eyebrow={t("Согласование")}
+        title={t("Черновики")}
+        description={t("Версии материалов, статусы согласования и сохранение в Notion.")}
       />
       {loading ? <LoadingState /> : null}
       {error ? <ErrorState message={error} retry={load} /> : null}
@@ -77,34 +79,35 @@ export default function DraftsPage() {
         <>
           <div className="list-toolbar">
             <select
-              aria-label="Фильтр статуса"
+              aria-label={t("Фильтр статуса")}
               onChange={(event) => setFilter(event.target.value)}
               value={filter}
             >
-              <option value="all">Все статусы</option>
-              <option value="pending">На согласовании</option>
-              <option value="approved">Согласованные</option>
-              <option value="rejected">Отклонённые</option>
-              <option value="published">Опубликованные</option>
+              <option value="all">{t("Все статусы")}</option>
+              <option value="pending">{t("На согласовании")}</option>
+              <option value="approved">{t("Согласованные")}</option>
+              <option value="rejected">{t("Отклонённые")}</option>
+              <option value="published">{t("Опубликованные")}</option>
             </select>
-            <span className="muted">Показано: {visible.length}</span>
+            <span className="muted">{t("Показано: {count}", { count: visible.length })}</span>
           </div>
           {visible.length ? (
             <div className="draft-list">
               {visible.map((draft) => (
                 <article className="draft-item" key={draft.id}>
                   <div>
-                    <h3>{draft.title || `Черновик ${draft.id}`}</h3>
+                    <h3>{draft.title || `${t("Черновик")} ${draft.id}`}</h3>
                     <p>
-                      {draft.channel || "Канал не указан"} · версия {draft.version}
+                      {draft.channel || t("Канал не указан")} ·{" "}
+                      {t("версия {version}", { version: draft.version })}
                     </p>
                     <div className="item-meta">
                       <Status value={draft.status}>{draft.status}</Status>
-                      <span className="muted">{formatDate(draft.updated_at)}</span>
+                      <span className="muted">{formatDate(draft.updated_at, locale)}</span>
                       <span className="muted">
                         {draft.notion_synced
-                          ? "Сохранён в Notion"
-                          : "Не сохранён в Notion"}
+                          ? t("Сохранён в Notion")
+                          : t("Не сохранён в Notion")}
                       </span>
                     </div>
                     <div className="item-actions">
@@ -115,7 +118,7 @@ export default function DraftsPage() {
                         type="button"
                       >
                         <Icon name="check" />
-                        Согласовать
+                        {t("Согласовать")}
                       </button>
                       <button
                         className="button button-secondary"
@@ -124,7 +127,7 @@ export default function DraftsPage() {
                         type="button"
                       >
                         <Icon name="sync" />
-                        Новая версия
+                        {t("Новая версия")}
                       </button>
                       <button
                         className="button button-secondary"
@@ -133,7 +136,7 @@ export default function DraftsPage() {
                         type="button"
                       >
                         <Icon name="notion" />
-                        В Notion
+                        {t("В Notion")}
                       </button>
                       <button
                         className="button button-secondary"
@@ -141,7 +144,7 @@ export default function DraftsPage() {
                         onClick={() => act(draft.id, "reject")}
                         type="button"
                       >
-                        Отклонить
+                        {t("Отклонить")}
                       </button>
                     </div>
                   </div>
@@ -151,11 +154,11 @@ export default function DraftsPage() {
             </div>
           ) : (
             <EmptyState
-              action="Создать пост"
+              action={t("Создать пост")}
               href="/chat?action=create_post"
               icon="draft"
-              text="Черновики появятся после генерации поста или создания материала из контент-плана."
-              title="Черновиков пока нет"
+              text={t("Черновики появятся после генерации поста или создания материала из контент-плана.")}
+              title={t("Черновиков пока нет")}
             />
           )}
         </>

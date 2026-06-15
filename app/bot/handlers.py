@@ -14,6 +14,7 @@ from telegram import (
     BotCommandScopeAllChatAdministrators,
     BotCommandScopeAllGroupChats,
     BotCommandScopeAllPrivateChats,
+    BotCommandScopeChat,
     BotCommandScopeDefault,
     InputFile,
     Update,
@@ -28,6 +29,7 @@ from app.bot.keyboards import (
     competitor_report_actions_keyboard,
     create_post_menu_keyboard,
     empty_performance_actions_keyboard,
+    language_keyboard,
     main_menu_keyboard,
     market_scan_actions_keyboard,
     market_scan_pending_keyboard,
@@ -39,6 +41,7 @@ from app.bot.keyboards import (
     source_actions_keyboard,
     sources_menu_keyboard,
 )
+from app.bot.i18n import current_language, save_language, tr
 from app.bot.states import BotState
 from app.config import get_settings
 from app.database import session_scope
@@ -59,9 +62,7 @@ from app.utils.errors import GrowlyError
 from app.utils.text import truncate
 
 logger = logging.getLogger(__name__)
-STALE_CALLBACK_MESSAGE = (
-    "Эта кнопка устарела. Откройте /start и выберите действие заново."
-)
+STALE_CALLBACK_MESSAGE = "Эта кнопка устарела. Откройте /start и выберите действие заново."
 
 STATUS_LABELS = {
     "ready": "готов",
@@ -159,11 +160,115 @@ PRIVATE_BOT_COMMANDS = [
     BotCommand("reports", "Отчёты"),
     BotCommand("sync_notion", "Синхронизировать Notion"),
     BotCommand("new_business", "Начать контекст нового бизнеса"),
+    BotCommand("language", "Изменить язык интерфейса"),
     BotCommand("help", "Справка"),
     BotCommand("cancel", "Отменить ввод"),
 ]
 
+COMMAND_DESCRIPTIONS = {
+    "en": {
+        "start": "Registration and main menu",
+        "add_source": "Add a source",
+        "sources": "Sources by type and status",
+        "disable_source": "Disable a source",
+        "import_source_items": "Import competitor material",
+        "discover_sources": "Discover public sources",
+        "monitor_sources": "Check active sources",
+        "web_search": "Search public web sources",
+        "market_scan": "Market search and AI analysis",
+        "retry_analysis": "Retry saved analysis",
+        "status": "Latest long-running task status",
+        "create_post": "Create a post",
+        "create_case": "Create a client result post",
+        "content_plan": "Create a content plan",
+        "generate_from_plan": "Create a draft from the plan",
+        "competitor_report": "Create a competitor report",
+        "review_analysis": "Analyze reviews",
+        "update_publication_metrics": "Update publication metrics",
+        "performance_report": "Publication performance report",
+        "drafts": "Drafts",
+        "reports": "Reports",
+        "sync_notion": "Sync Notion",
+        "new_business": "Start a new business context",
+        "language": "Change interface language",
+        "help": "Help",
+        "cancel": "Cancel current input",
+    },
+    "kk": {
+        "start": "Тіркелу және негізгі мәзір",
+        "add_source": "Дереккөз қосу",
+        "sources": "Дереккөздерді көрсету",
+        "disable_source": "Дереккөзді өшіру",
+        "import_source_items": "Бәсекелес материалдарын импорттау",
+        "discover_sources": "Ашық дереккөздерді табу",
+        "monitor_sources": "Белсенді дереккөздерді тексеру",
+        "web_search": "Ашық веб-дереккөздерді іздеу",
+        "market_scan": "Нарықты іздеу және AI талдау",
+        "retry_analysis": "Сақталған талдауды қайталау",
+        "status": "Соңғы ұзақ тапсырманың күйі",
+        "create_post": "Жазба жасау",
+        "create_case": "Клиент нәтижесі туралы жазба",
+        "content_plan": "Контент-жоспар жасау",
+        "generate_from_plan": "Жоспардан нобай жасау",
+        "competitor_report": "Бәсекелестер есебін жасау",
+        "review_analysis": "Пікірлерді талдау",
+        "update_publication_metrics": "Жарияланым метрикаларын жаңарту",
+        "performance_report": "Жарияланым нәтижелері есебі",
+        "drafts": "Нобайлар",
+        "reports": "Есептер",
+        "sync_notion": "Notion-ды синхрондау",
+        "new_business": "Жаңа бизнес контекстін бастау",
+        "language": "Интерфейс тілін өзгерту",
+        "help": "Анықтама",
+        "cancel": "Ағымдағы енгізуді тоқтату",
+    },
+}
+
 GROUP_BOT_COMMANDS: list[BotCommand] = []
+
+
+def private_bot_commands(language: str) -> list[BotCommand]:
+    if language == "ru":
+        return PRIVATE_BOT_COMMANDS
+    descriptions = COMMAND_DESCRIPTIONS.get(language, {})
+    return [
+        BotCommand(command.command, descriptions.get(command.command, command.description))
+        for command in PRIVATE_BOT_COMMANDS
+    ]
+
+
+def localized_help_text(language: str) -> str:
+    if language == "en":
+        return (
+            "Available commands:\n"
+            "/start — registration and main menu\n"
+            "/language — interface language\n"
+            "/market_scan — market search and AI analysis\n"
+            "/content_plan — weekly content plan\n"
+            "/create_post — create a post\n"
+            "/drafts — drafts awaiting approval\n"
+            "/reports — latest reports\n"
+            "/sources — saved sources\n"
+            "/sync_notion — sync with Notion\n"
+            "/help — help\n"
+            "/cancel — cancel current input"
+        )
+    if language == "kk":
+        return (
+            "Қолжетімді командалар:\n"
+            "/start — тіркелу және негізгі мәзір\n"
+            "/language — интерфейс тілі\n"
+            "/market_scan — нарықты іздеу және AI талдау\n"
+            "/content_plan — апталық контент-жоспар\n"
+            "/create_post — жазба жасау\n"
+            "/drafts — бекітудегі нобайлар\n"
+            "/reports — соңғы есептер\n"
+            "/sources — сақталған дереккөздер\n"
+            "/sync_notion — Notion-мен синхрондау\n"
+            "/help — анықтама\n"
+            "/cancel — ағымдағы енгізуді тоқтату"
+        )
+    return HELP_TEXT
 
 POST_TYPE_PRESETS = {
     "Рекламный пост": (
@@ -222,6 +327,30 @@ POST_TYPE_PRESETS = {
         None,
         "Опишите тип контента, продукт или услугу, аудиторию, задачу, факты, канал и призыв к действию.",
     ),
+    "Жарнамалық жазба": (
+        "promo_post",
+        "Өнімді, аудиторияны, расталған артықшылықтарды, шарттарды және әрекетке шақыруды сипаттаңыз.",
+    ),
+    "Оқыту жазбасы": (
+        "educational_post",
+        "Тақырыпты, аудиторияны, практикалық сұрақты немесе үдерісті, фактілерді және әрекетке шақыруды сипаттаңыз.",
+    ),
+    "Клиент нәтижесі туралы жазба": (
+        "case_post",
+        "Бастапқы жағдайды, орындалған әрекеттерді, расталған нәтижені және әрекетке шақыруды сипаттаңыз.",
+    ),
+    "FAQ жазбасы": (
+        "faq_post",
+        "Клиенттердің нақты сұрақтарын, расталған жауаптарды, контексті және әрекетке шақыруды жіберіңіз.",
+    ),
+    "Жаңалық жазбасы": (
+        "news_post",
+        "Расталған жаңалықты сипаттаңыз: не өзгерді, кім үшін, күні және әрекетке шақыру.",
+    ),
+    "Өз нұсқаңыз": (
+        None,
+        "Контент түрін, өнімді немесе қызметті, аудиторияны, мақсатты, фактілерді, арнаны және әрекетке шақыруды сипаттаңыз.",
+    ),
     "Create one-off post": (
         None,
         "Опишите тип контента, продукт или услугу, аудиторию, задачу, факты, канал и призыв к действию.",
@@ -238,6 +367,12 @@ async def register_commands(application: Any) -> None:
         PRIVATE_BOT_COMMANDS,
         scope=BotCommandScopeAllPrivateChats(),
     )
+    for language in ("ru", "en", "kk"):
+        await application.bot.set_my_commands(
+            private_bot_commands(language),
+            scope=BotCommandScopeAllPrivateChats(),
+            language_code=language,
+        )
     await application.bot.set_my_commands(
         GROUP_BOT_COMMANDS,
         scope=BotCommandScopeAllGroupChats(),
@@ -262,7 +397,7 @@ async def answer_callback_safely(
         if chat_id is not None:
             await context.bot.send_message(
                 chat_id,
-                STALE_CALLBACK_MESSAGE,
+                tr(STALE_CALLBACK_MESSAGE),
                 reply_markup=main_menu_keyboard(),
             )
         return False
@@ -353,7 +488,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     await asyncio.to_thread(save_user)
     await update.effective_message.reply_text(
-        f"{MENU_TEXT}\n\nВыберите действие:", reply_markup=main_menu_keyboard()
+        f"{tr(MENU_TEXT)}\n\n{tr('Выберите действие:')}",
+        reply_markup=main_menu_keyboard(),
     )
 
 
@@ -378,8 +514,44 @@ async def ensure_telegram_user_id(update: Update) -> int | None:
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_message:
         await update.effective_message.reply_text(
-            HELP_TEXT, reply_markup=main_menu_keyboard()
+            localized_help_text(current_language()),
+            reply_markup=main_menu_keyboard(),
         )
+
+
+async def language_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    if update.effective_message:
+        await update.effective_message.reply_text(
+            tr("Язык интерфейса:"),
+            reply_markup=language_keyboard(),
+        )
+
+
+async def language_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    query = update.callback_query
+    chat = update.effective_chat
+    if not query or not query.data or not chat:
+        return
+    await query.answer()
+    _, language = query.data.split(":", 1)
+    saved = await save_language(chat.id, language)
+    context.user_data["language"] = saved
+    await context.bot.set_my_commands(
+        private_bot_commands(saved),
+        scope=BotCommandScopeChat(chat.id),
+    )
+    labels = {"ru": "Русский", "en": "English", "kk": "Қазақша"}
+    await context.bot.send_message(
+        chat.id,
+        tr(f"Язык изменён на {labels[saved]}.", saved),
+        reply_markup=main_menu_keyboard(),
+    )
 
 
 async def main_menu(
@@ -388,7 +560,7 @@ async def main_menu(
 ) -> int:
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Главное меню:",
+            tr("Главное меню:"),
             reply_markup=main_menu_keyboard(),
         )
     return ConversationHandler.END
@@ -400,7 +572,7 @@ async def sources_menu(
 ) -> None:
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Источники:",
+            tr("Источники:"),
             reply_markup=sources_menu_keyboard(),
         )
 
@@ -411,7 +583,7 @@ async def more_menu(
 ) -> None:
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Ещё:",
+            tr("Ещё:"),
             reply_markup=more_menu_keyboard(),
         )
 
@@ -422,7 +594,7 @@ async def reports_menu(
 ) -> None:
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Отчёты\n\nВыберите, что открыть:",
+            tr("Отчёты\n\nВыберите, что открыть:"),
             reply_markup=reports_menu_keyboard(),
         )
 
@@ -433,7 +605,7 @@ async def settings_menu(
 ) -> None:
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Настройки:",
+            tr("Настройки:"),
             reply_markup=settings_menu_keyboard(),
         )
 
@@ -445,7 +617,7 @@ async def create_post_menu(
     context.user_data.pop("post_type", None)
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Выберите тип поста:",
+            tr("Выберите тип поста:"),
             reply_markup=create_post_menu_keyboard(),
         )
     return ConversationHandler.END
@@ -486,6 +658,7 @@ async def settings_status(
         ),
         f"Планировщик: {'включён' if settings.scheduler_enabled else 'выключен'}",
         f"Часовой пояс: {settings.timezone}",
+        f"{tr('Язык')}: {current_language().upper()}",
         "",
         "Секретные ключи и токены не показываются.",
     ]

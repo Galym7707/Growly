@@ -17,6 +17,20 @@ The repository contains the Python backend, Telegram bot, and a Next.js web
 application. Both interfaces call the same Python services; AI, search, and
 Notion logic is not duplicated in React.
 
+## Interface languages
+
+The website and Telegram bot support Russian, English, and Kazakh.
+
+- The website switcher is available on the landing page, login page, and in the
+  workspace sidebar. The choice is stored in `localStorage` and a
+  `growly_locale` cookie.
+- In Telegram, use `/language` or open `Settings` and choose `Language`. The
+  choice is stored per chat in the `settings` table under
+  `telegram_language:<chat_id>`.
+- Existing reports, drafts, and other generated content remain in the language
+  in which they were created. The switcher localizes the product interface and
+  system controls.
+
 ## Architecture
 
 ```text
