@@ -494,6 +494,10 @@ def build_application(settings: Settings | None = None) -> Application:
                     handlers.quick_content_plan_start,
                     pattern=r"^quick:content_plan$",
                 ),
+                CallbackQueryHandler(
+                    handlers.contextual_content_plan_start,
+                    pattern=r"^(market|report):content_plan:\d+$",
+                ),
                 MessageHandler(
                     private_chat
                     & filters.Regex(
@@ -521,6 +525,18 @@ def build_application(settings: Settings | None = None) -> Application:
                 ],
                 BotState.PLAN_INTENSITY: [
                     MessageHandler(private_chat & filters.TEXT & ~filters.COMMAND, handlers.content_plan_finish)
+                ],
+                BotState.PLAN_CONTEXT_GUARD: [
+                    MessageHandler(
+                        private_chat & filters.TEXT & ~filters.COMMAND,
+                        handlers.content_plan_context_guard,
+                    )
+                ],
+                BotState.PLAN_CUSTOM_TOPIC: [
+                    MessageHandler(
+                        private_chat & filters.TEXT & ~filters.COMMAND,
+                        handlers.content_plan_custom_topic,
+                    )
                 ],
             },
             fallbacks=conversation_fallbacks(),
@@ -677,6 +693,7 @@ def build_application(settings: Settings | None = None) -> Application:
         "Отчёт по публикациям": handlers.performance_report,
         "Performance report": handlers.performance_report,
         "Синхронизировать с Notion": handlers.sync_notion,
+        "Сохранить в Notion": handlers.sync_notion,
         "Sync Notion": handlers.sync_notion,
         "Настройки": handlers.settings_menu,
         "Settings": handlers.settings_menu,
@@ -706,6 +723,7 @@ def build_application(settings: Settings | None = None) -> Application:
         "Анализ отзывов": handlers.review_start,
         "Отчёт по публикациям": handlers.performance_report,
         "Синхронизировать с Notion": handlers.sync_notion,
+        "Сохранить в Notion": handlers.sync_notion,
         "Настройки": handlers.settings_menu,
         "Показать настройки": handlers.settings_status,
         "Новый бизнес": handlers.new_business_start,
@@ -745,13 +763,13 @@ def build_application(settings: Settings | None = None) -> Application:
     application.add_handler(
         CallbackQueryHandler(
             handlers.market_scan_action_callback,
-            pattern=r"^market:(competitor|content_plan|limited_plan|notion|retry|view_sources):\d+$",
+            pattern=r"^market:(competitor|limited_plan|notion|retry|view_sources):\d+$",
         )
     )
     application.add_handler(
         CallbackQueryHandler(
             handlers.report_action_callback,
-            pattern=r"^report:(view|content_plan|create_post|notion):\d+$",
+            pattern=r"^report:(view|create_post|notion):\d+$",
         )
     )
     application.add_handler(

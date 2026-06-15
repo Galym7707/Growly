@@ -36,7 +36,7 @@ REPORTS_MENU_ROWS = [
 
 SETTINGS_MENU_ROWS = [
     ["Показать настройки", "Новый бизнес"],
-    ["Синхронизировать с Notion"],
+    ["Сохранить в Notion"],
     ["Язык"],
     ["Назад"],
 ]
@@ -198,13 +198,13 @@ def market_scan_actions_keyboard(report_id: int) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    tr("Создать контент-план"),
+                    tr("Контент-план"),
                     callback_data=f"market:content_plan:{report_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    tr("Синхронизировать с Notion"),
+                    tr("Сохранить в Notion"),
                     callback_data=f"market:notion:{report_id}",
                 ),
                 InlineKeyboardButton(
@@ -227,19 +227,19 @@ def competitor_report_actions_keyboard(report_id: int) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    tr("Создать контент-план"),
+                    tr("Контент-план"),
                     callback_data=f"report:content_plan:{report_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    tr("Создать пост по отчёту"),
+                    tr("Создать пост"),
                     callback_data=f"report:create_post:{report_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    tr("Синхронизировать с Notion"),
+                    tr("Сохранить в Notion"),
                     callback_data=f"report:notion:{report_id}",
                 )
             ],
@@ -295,7 +295,7 @@ def market_scan_pending_keyboard(report_id: int) -> InlineKeyboardMarkup:
                     callback_data=f"market:view_sources:{report_id}",
                 ),
                 InlineKeyboardButton(
-                    tr("Синхронизировать с Notion"),
+                    tr("Сохранить в Notion"),
                     callback_data=f"market:notion:{report_id}",
                 ),
             ],
@@ -383,7 +383,7 @@ def empty_performance_actions_keyboard() -> InlineKeyboardMarkup:
         [
             [
                 InlineKeyboardButton(
-                    tr("Создать контент-план"),
+                    tr("Контент-план"),
                     callback_data="quick:content_plan",
                 )
             ],
@@ -400,6 +400,14 @@ def empty_performance_actions_keyboard() -> InlineKeyboardMarkup:
                 )
             ],
         ]
+    )
+
+
+def market_context_guard_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [["Да", "Нет"], ["Указать другую нишу"]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
     )
 
 

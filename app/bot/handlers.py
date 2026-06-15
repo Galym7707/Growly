@@ -17,6 +17,7 @@ from telegram import (
     BotCommandScopeChat,
     BotCommandScopeDefault,
     InputFile,
+    ReplyKeyboardRemove,
     Update,
 )
 from telegram.constants import ChatType
@@ -31,6 +32,7 @@ from app.bot.keyboards import (
     empty_performance_actions_keyboard,
     language_keyboard,
     main_menu_keyboard,
+    market_context_guard_keyboard,
     market_scan_actions_keyboard,
     market_scan_pending_keyboard,
     more_menu_keyboard,
@@ -52,6 +54,11 @@ from app.services.content_types import content_type_label
 from app.services.business_context_service import BusinessContextService
 from app.services.draft_service import DraftService
 from app.services.market_intelligence import MarketIntelligenceService
+from app.services.market_context import (
+    build_market_context,
+    market_topics_match,
+    offer_prompt_example,
+)
 from app.services.notion_service import NotionService
 from app.services.report_service import ReportService
 from app.services.review_analysis_service import ReviewAnalysisService
@@ -1475,25 +1482,35 @@ async def send_competitor_report_summary(
     chat_id: int,
     report: Any,
 ) -> None:
-    payload = report.raw_json or {}
+    payload = MarketIntelligenceService._sanitize_report_payload(
+        report.raw_json or {}
+    )
 
-    def names() -> str:
+    def clean(value: Any, limit: int = 180) -> str:
+        if isinstance(value, list):
+            value = ", ".join(str(item) for item in value)
+        return truncate(str(value or "Не подтверждено").strip(), limit)
+
+    def competitor_rows(limit: int = 5) -> list[str]:
         rows = payload.get("competitors")
-        if not isinstance(rows, list):
-            return "Не идентифицированы по сохранённым данным"
-        values = [
-            str(row.get("competitor") or "").strip()
-            for row in rows[:5]
-            if isinstance(row, dict) and str(row.get("competitor") or "").strip()
-        ]
-        return ", ".join(values) or "Не идентифицированы по сохранённым данным"
-
-    def top(key: str, limit: int = 3) -> str:
-        rows = payload.get(key)
-        values = rows if isinstance(rows, list) else []
-        return "\n".join(f"- {truncate(str(value), 180)}" for value in values[:limit]) or (
-            "- Нет подтверждённых данных"
-        )
+        competitors = rows if isinstance(rows, list) else []
+        result: list[str] = []
+        for index, row in enumerate(competitors[:limit], start=1):
+            if not isinstance(row, dict):
+                continue
+            result.append(
+                "\n".join(
+                    [
+                        f"{index}. {clean(row.get('competitor'))}",
+                        f"Канал: {clean(row.get('channel'))}",
+                        f"Оффер: {clean(row.get('offer'))}",
+                        f"Сильная сторона: {clean(row.get('strengths'))}",
+                        f"Слабая сторона: {clean(row.get('weaknesses'))}",
+                        f"Возможность: {clean(row.get('opportunity'))}",
+                    ]
+                )
+            )
+        return result
 
     def numbered(key: str, limit: int = 5) -> str:
         rows = payload.get(key)
@@ -1503,29 +1520,51 @@ async def send_competitor_report_summary(
             for index, value in enumerate(values[:limit], start=1)
         ) or "Нет подтверждённых рекомендаций."
 
-    message = "\n\n".join(
+    conclusion = clean(
+        payload.get("executive_summary")
+        or MarketIntelligenceService._sanitize_report_payload(
+            report.summary or "Нет подтверждённого вывода.",
+            field="executive_summary",
+        ),
+        700,
+    )
+    competitors = competitor_rows()
+    full_message = "\n\n".join(
         [
             "Конкурентный отчёт сохранён.",
-            "Главный вывод:\n"
-            + truncate(
-                str(
-                    payload.get("executive_summary")
-                    or report.summary
-                    or "Нет подтверждённого вывода."
-                ),
-                700,
+            "Главный вывод:\n" + conclusion,
+            "Конкуренты:\n"
+            + (
+                "\n\n".join(competitors)
+                or "Не идентифицированы по сохранённым данным."
             ),
-            f"Найденные конкуренты:\n- {names()}",
-            "Что они предлагают:\n" + top("repeating_offers"),
-            "Где у них слабые места:\n"
-            + top("content_gaps"),
-            "Возможность:\n"
-            + top("recommended_positioning", limit=2),
-            "Что сделать на этой неделе:\n"
-            + numbered("actions_this_week"),
+            "5 действий на эту неделю:\n" + numbered("actions_this_week"),
             f"Проверено источников: {report.sources_count}",
         ]
     )
+    if len(full_message) <= 3600:
+        message = full_message
+    else:
+        raw_competitors = payload.get("competitors")
+        compact_competitors = (
+            raw_competitors if isinstance(raw_competitors, list) else []
+        )
+        names = [
+            clean(row.get("competitor"), 80)
+            for row in compact_competitors[:5]
+            if isinstance(row, dict)
+        ]
+        message = "\n\n".join(
+            [
+                "Конкурентный отчёт сохранён. Полная версия доступна по кнопке.",
+                "Главный вывод:\n" + conclusion,
+                "Конкуренты: "
+                + (", ".join(names) or "не идентифицированы"),
+                "5 действий на эту неделю:\n"
+                + numbered("actions_this_week"),
+                f"Проверено источников: {report.sources_count}",
+            ]
+        )
     await bot.send_message(
         chat_id,
         message,
@@ -1650,19 +1689,10 @@ async def market_scan_action_callback(
     report_id = int(report_id_value)
     if action == "competitor":
         await context.bot.send_message(chat.id, "Формирую конкурентный отчёт…")
-        report = await MarketIntelligenceService().generate_competitor_report()
+        report = await MarketIntelligenceService().generate_competitor_report(
+            market_report_id=report_id
+        )
         await send_competitor_report_summary(context.bot, chat.id, report)
-    elif action == "content_plan":
-        items = await generate_content_plan_with_progress(
-            context,
-            chat.id,
-            {"goal": "Использовать последний анализ рынка и конкурентный отчёт."}
-        )
-        await context.bot.send_message(
-            chat.id,
-            f"Контент-план сохранён: {len(items)} элементов.",
-            reply_markup=main_menu_keyboard(),
-        )
     elif action == "limited_plan":
         items = await generate_content_plan_with_progress(
             context,
@@ -1760,28 +1790,6 @@ async def report_action_callback(
             ),
             caption=f"Полный отчёт #{report.id}.",
         )
-    elif action == "content_plan":
-        payload = report.raw_json or {}
-        items = await generate_content_plan_with_progress(
-            context,
-            chat.id,
-            {
-                "goal": f"Создать контент-план по конкурентному отчёту #{report.id}.",
-                "latest_competitor_report": {
-                    "summary": report.summary,
-                    "content_gaps": payload.get("content_gaps", []),
-                    "recommended_positioning": payload.get(
-                        "recommended_positioning", []
-                    ),
-                    "actions_this_week": payload.get("actions_this_week", []),
-                },
-            },
-        )
-        await context.bot.send_message(
-            chat.id,
-            f"Контент-план сохранён: {len(items)} элементов.",
-            reply_markup=main_menu_keyboard(),
-        )
     elif action == "create_post":
         await context.bot.send_message(
             chat.id,
@@ -1860,6 +1868,71 @@ async def quick_content_plan_start(
     return await content_plan_start(update, context)
 
 
+async def contextual_content_plan_start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> BotState | int:
+    query = update.callback_query
+    chat = update.effective_chat
+    if not query or not query.data or not chat:
+        return ConversationHandler.END
+    if not await answer_callback_safely(query, context, chat.id):
+        return ConversationHandler.END
+
+    source, _, report_id_value = query.data.split(":", 2)
+    report_id = int(report_id_value)
+    service = ContentPlanService()
+    market_context = None
+    brief: dict[str, Any] = {}
+    if source == "market":
+        market_context = await service.market_context_for_report(report_id)
+    else:
+        report = await ReportService().get_report(report_id)
+        if report is None:
+            await update.effective_message.reply_text("Отчёт не найден.")
+            return ConversationHandler.END
+        payload = report.raw_json or {}
+        market_report_id = payload.get("market_report_id")
+        if str(market_report_id).isdigit():
+            market_context = await service.market_context_for_report(
+                int(market_report_id)
+            )
+        brief["latest_competitor_report"] = {
+            "summary": report.summary,
+            "content_gaps": payload.get("content_gaps", []),
+            "recommended_positioning": payload.get(
+                "recommended_positioning", []
+            ),
+            "actions_this_week": payload.get("actions_this_week", []),
+        }
+
+    brief["market_context"] = market_context
+    brief["use_market_context"] = market_context is not None
+    context.user_data["plan_brief"] = brief
+
+    user_id = await ensure_telegram_user_id(update)
+    latest_market_context = await service.latest_market_context(user_id)
+    selected_topic = str((market_context or {}).get("topic") or "")
+    latest_topic = str((latest_market_context or {}).get("topic") or "")
+    if latest_market_context and not market_topics_match(
+        selected_topic,
+        latest_topic,
+    ):
+        context.user_data["pending_market_context"] = latest_market_context
+        context.user_data["context_guard_resume"] = "goal"
+        await update.effective_message.reply_text(
+            f"Использовать последний анализ рынка: {latest_topic}? "
+            "Да / Нет / Указать другую нишу",
+            reply_markup=market_context_guard_keyboard(),
+        )
+        return BotState.PLAN_CONTEXT_GUARD
+    if latest_market_context:
+        brief["market_context"] = latest_market_context
+        brief["use_market_context"] = True
+    await _send_content_plan_goal_question(update)
+    return BotState.PLAN_GOAL
+
+
 async def quick_action_callback(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -1880,13 +1953,24 @@ async def quick_action_callback(
 async def content_plan_start(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> BotState:
-    context.user_data["plan_brief"] = {}
-    intelligence = await ContentPlanService().intelligence_status()
+    service = ContentPlanService()
+    user_id = await ensure_telegram_user_id(update)
+    latest_market_context = await service.latest_market_context(user_id)
+    context.user_data["plan_brief"] = {
+        "market_context": latest_market_context,
+        "use_market_context": latest_market_context is not None,
+    }
+    intelligence = await service.intelligence_status()
     if not any(intelligence.values()):
         await update.effective_message.reply_text(
             "Предупреждение: анализ рынка, конкурентный отчёт и материалы "
             "источников не найдены. План будет основан на ограниченных данных."
         )
+    await _send_content_plan_goal_question(update)
+    return BotState.PLAN_GOAL
+
+
+async def _send_content_plan_goal_question(update: Update) -> None:
     await update.effective_message.reply_text(
         "Какая главная цель контента на эту неделю?\n\n"
         "Выберите или напишите свой вариант:\n\n"
@@ -1897,7 +1981,6 @@ async def content_plan_start(
         "5. Увеличить активность аудитории\n"
         "6. Повысить узнаваемость продукта"
     )
-    return BotState.PLAN_GOAL
 
 
 async def content_plan_goal(
@@ -1936,10 +2019,10 @@ async def content_plan_audience(
         "4": "B2B-клиенты",
     }
     context.user_data["plan_brief"]["audience"] = audiences.get(value, value)
+    market_context = context.user_data["plan_brief"].get("market_context")
     await update.effective_message.reply_text(
         "Какой продукт, услугу или оффер продвигаем на этой неделе?\n\n"
-        "Пример:\n"
-        "«Наборы женских прокладок на месяц с доставкой по Казахстану»"
+        + offer_prompt_example(market_context)
     )
     return BotState.PLAN_OFFER
 
@@ -1967,7 +2050,7 @@ async def content_plan_channels(
 
 async def content_plan_finish(
     update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> int:
+) -> BotState | int:
     value = update.effective_message.text.strip()
     intensity = {
         "лёгкая": "лёгкая",
@@ -1982,12 +2065,106 @@ async def content_plan_finish(
         value.lower(),
         value,
     )
+    user_id = await ensure_telegram_user_id(update)
+    latest_market_context = await ContentPlanService().latest_market_context(
+        user_id
+    )
+    selected_market_context = context.user_data["plan_brief"].get(
+        "market_context"
+    )
+    selected_topic = (
+        str(selected_market_context.get("topic") or "")
+        if isinstance(selected_market_context, dict)
+        else ""
+    )
+    latest_topic = (
+        str(latest_market_context.get("topic") or "")
+        if latest_market_context
+        else ""
+    )
+    if latest_market_context and not market_topics_match(
+        selected_topic,
+        latest_topic,
+    ):
+        context.user_data["pending_market_context"] = latest_market_context
+        context.user_data["context_guard_resume"] = "generate"
+        await update.effective_message.reply_text(
+            f"Использовать последний анализ рынка: {latest_topic}? "
+            "Да / Нет / Указать другую нишу",
+            reply_markup=market_context_guard_keyboard(),
+        )
+        return BotState.PLAN_CONTEXT_GUARD
+    if latest_market_context:
+        context.user_data["plan_brief"]["market_context"] = (
+            latest_market_context
+        )
+        context.user_data["plan_brief"]["use_market_context"] = True
+    return await _generate_content_plan_from_brief(update, context)
+
+
+async def content_plan_context_guard(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> BotState | int:
+    value = update.effective_message.text.strip().casefold()
+    brief = context.user_data["plan_brief"]
+    latest_market_context = context.user_data.get("pending_market_context")
+    if value == "да":
+        brief["market_context"] = latest_market_context
+        brief["use_market_context"] = True
+    elif value == "нет":
+        if not brief.get("market_context"):
+            brief["use_market_context"] = False
+    elif value == "указать другую нишу":
+        await update.effective_message.reply_text(
+            "Укажите рынок, нишу или тему для контент-плана:",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return BotState.PLAN_CUSTOM_TOPIC
+    else:
+        await update.effective_message.reply_text(
+            "Выберите: Да / Нет / Указать другую нишу",
+            reply_markup=market_context_guard_keyboard(),
+        )
+        return BotState.PLAN_CONTEXT_GUARD
+
+    resume = context.user_data.pop("context_guard_resume", "generate")
+    context.user_data.pop("pending_market_context", None)
+    if resume == "goal":
+        await _send_content_plan_goal_question(update)
+        return BotState.PLAN_GOAL
+    return await _generate_content_plan_from_brief(update, context)
+
+
+async def content_plan_custom_topic(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> int:
+    topic = update.effective_message.text.strip()
+    context.user_data["plan_brief"]["market_context"] = build_market_context(
+        topic,
+    )
+    context.user_data["plan_brief"]["use_market_context"] = False
+    resume = context.user_data.pop("context_guard_resume", "generate")
+    context.user_data.pop("pending_market_context", None)
+    if resume == "goal":
+        await _send_content_plan_goal_question(update)
+        return BotState.PLAN_GOAL
+    return await _generate_content_plan_from_brief(update, context)
+
+
+async def _generate_content_plan_from_brief(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> int:
     items = await generate_content_plan_with_progress(
         context,
         update.effective_chat.id,
         dict(context.user_data["plan_brief"]),
     )
     context.user_data.pop("plan_brief", None)
+    context.user_data.pop("pending_market_context", None)
+    context.user_data.pop("context_guard_resume", None)
     lines = [f"Контент-план сохранён: {len(items)} идей."]
     lines.extend(
         f"{index}. #{item.id} · {item.publish_date:%Y-%m-%d %H:%M} · "
@@ -2151,14 +2328,29 @@ async def competitor_report(
     if not update.effective_message:
         return ConversationHandler.END
     service = MarketIntelligenceService()
-    if not await service.has_source_items():
+    user_id = await ensure_telegram_user_id(update)
+    latest_job = (
+        await service.latest_market_scan_job(user_id)
+        if user_id is not None
+        else None
+    )
+    market_report_id = (
+        int(latest_job["report_id"])
+        if latest_job and latest_job.get("report_id")
+        else None
+    )
+    if market_report_id is None and (
+        user_id is not None or not await service.has_source_items()
+    ):
         await update.effective_message.reply_text(
             "Сохранённых материалов источников пока нет. Введите нишу или тему, "
             "чтобы сначала выполнить поиск, либо откройте «Анализ рынка»."
         )
         return BotState.COMPETITOR_REPORT_TOPIC
     await update.effective_message.reply_text("Формирую конкурентный отчёт…")
-    report = await service.generate_competitor_report()
+    report = await service.generate_competitor_report(
+        market_report_id=market_report_id
+    )
     await send_competitor_report_summary(
         context.bot,
         update.effective_chat.id,
@@ -2177,12 +2369,17 @@ async def competitor_report_topic(
         "Сначала собираю публичные источники, затем формирую конкурентный отчёт…"
     )
     service = MarketIntelligenceService()
-    await service.run_market_scan(
+    user_id = await ensure_telegram_user_id(update)
+    market_report, _ = await service.run_market_scan(
         niche=topic,
         region_language="регион и язык не указаны",
         competitor_keywords="нет",
+        user_id=user_id,
     )
-    report = await service.generate_competitor_report(query=topic)
+    report = await service.generate_competitor_report(
+        query=topic,
+        market_report_id=market_report.id,
+    )
     await send_competitor_report_summary(
         context.bot,
         update.effective_chat.id,

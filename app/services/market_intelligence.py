@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any, Awaitable, Callable
@@ -17,6 +18,7 @@ from app.repositories.sources_repo import SourcesRepository
 from app.search.base import BaseSearchProvider, SearchResult
 from app.search.factory import get_search_provider
 from app.services.ai_service import AIService
+from app.services.market_context import build_market_context
 from app.services.notion_service import NotionService
 from app.utils.errors import (
     AIServiceError,
@@ -231,6 +233,7 @@ class MarketIntelligenceService:
         try:
             report, saved = await self._complete_market_scan_analysis(
                 niche=niche,
+                region_language=region_language,
                 queries=queries,
                 saved=saved,
                 job_id=job_id,
@@ -257,6 +260,7 @@ class MarketIntelligenceService:
                 queries,
                 saved,
                 groq_status,
+                region_language,
             )
         await self._update_job(
             job_id,
@@ -326,6 +330,11 @@ class MarketIntelligenceService:
             )
 
         metadata = report.raw_json or {}
+        stored_context = (
+            metadata.get("market_context")
+            if isinstance(metadata.get("market_context"), dict)
+            else {}
+        )
         queries = [
             str(query)
             for query in metadata.get("queries", [])
@@ -348,6 +357,9 @@ class MarketIntelligenceService:
         try:
             completed, saved = await self._complete_market_scan_analysis(
                 niche=report.query or "latest market scan",
+                region_language=str(
+                    stored_context.get("region_language") or ""
+                ),
                 queries=queries,
                 saved=saved,
                 existing_report_id=report.id,
@@ -424,6 +436,7 @@ class MarketIntelligenceService:
         self,
         *,
         niche: str,
+        region_language: str = "",
         queries: list[str],
         saved: list[SourceItem],
         existing_report_id: int | None = None,
@@ -454,6 +467,7 @@ class MarketIntelligenceService:
                 report_payload,
                 saved,
                 queries,
+                region_language,
             )
         else:
             report = await asyncio.to_thread(
@@ -462,6 +476,7 @@ class MarketIntelligenceService:
                 report_payload,
                 saved,
                 queries,
+                region_language,
             )
         return report, saved
 
@@ -571,6 +586,7 @@ class MarketIntelligenceService:
             timeout=GROQ_GENERATION_TIMEOUT_SECONDS,
         )
         payload = self._parse_dict(response, "Market scan")
+        payload = self._sanitize_report_payload(payload)
         payload["sources_checked"] = len(saved_source_items)
         return payload
 
@@ -578,8 +594,13 @@ class MarketIntelligenceService:
         self,
         *,
         query: str | None = None,
+        market_report_id: int | None = None,
     ) -> Report:
-        context = await asyncio.to_thread(self._competitor_context, query)
+        context = await asyncio.to_thread(
+            self._competitor_context,
+            query,
+            market_report_id,
+        )
         if not context["source_items"]:
             raise ValueError(
                 "Нет сохранённых материалов источников. Сначала выполните "
@@ -590,6 +611,7 @@ class MarketIntelligenceService:
             timeout=GROQ_GENERATION_TIMEOUT_SECONDS,
         )
         payload = self._parse_dict(response, "Competitor report")
+        payload = self._sanitize_report_payload(payload)
         allowed_urls = [
             str(row["url"])
             for row in context["source_items"]
@@ -922,6 +944,42 @@ class MarketIntelligenceService:
             "limitations": strings(payload.get("limitations"), 10),
         }
 
+    @classmethod
+    def _sanitize_report_payload(
+        cls,
+        value: Any,
+        *,
+        field: str | None = None,
+    ) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: cls._sanitize_report_payload(item, field=key)
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [
+                cls._sanitize_report_payload(item, field=field)
+                for item in value
+            ]
+        if not isinstance(value, str) or field in {
+            "competitor",
+            "source_urls",
+            "evidence_urls",
+        }:
+            return value
+        sanitized = re.sub(
+            r"\bGrowly['’]s\b",
+            "бренд клиента",
+            value,
+            flags=re.IGNORECASE,
+        )
+        return re.sub(
+            r"\bGrowly\b",
+            "ваш бизнес",
+            sanitized,
+            flags=re.IGNORECASE,
+        )
+
     @staticmethod
     def _parse_dict(response: str, label: str) -> dict[str, Any]:
         payload = parse_json_response(response)
@@ -1149,6 +1207,7 @@ class MarketIntelligenceService:
         payload: dict[str, Any],
         source_items: list[SourceItem],
         queries: list[str],
+        region_language: str = "",
     ) -> Report:
         body = cls.render_market_scan_report(payload)
         with session_scope() as session:
@@ -1165,6 +1224,10 @@ class MarketIntelligenceService:
                     **payload,
                     "source_item_ids": [item.id for item in source_items],
                     "queries": queries,
+                    "market_context": build_market_context(
+                        query,
+                        region_language,
+                    ),
                     "groq_status": "ready",
                 },
                 status="ready",
@@ -1177,6 +1240,7 @@ class MarketIntelligenceService:
         queries: list[str],
         source_items: list[SourceItem],
         groq_status: str,
+        region_language: str = "",
     ) -> Report:
         if groq_status == "rate_limited":
             message = (
@@ -1200,6 +1264,10 @@ class MarketIntelligenceService:
                 raw_json={
                     "source_item_ids": [item.id for item in source_items],
                     "queries": queries,
+                    "market_context": build_market_context(
+                        query,
+                        region_language,
+                    ),
                     "groq_status": groq_status,
                     "analysis_pending_since": datetime.now(UTC).isoformat(),
                 },
@@ -1213,12 +1281,21 @@ class MarketIntelligenceService:
         payload: dict[str, Any],
         source_items: list[SourceItem],
         queries: list[str],
+        region_language: str = "",
     ) -> Report:
         body = cls.render_market_scan_report(payload)
         with session_scope() as session:
             report = session.get(Report, report_id)
             if report is None:
                 raise ValueError(f"Market scan report {report_id} was not found.")
+            existing_payload = (
+                report.raw_json if isinstance(report.raw_json, dict) else {}
+            )
+            existing_context = (
+                existing_payload.get("market_context")
+                if isinstance(existing_payload.get("market_context"), dict)
+                else {}
+            )
             return ReportsRepository(session).update_report(
                 report,
                 report_text=body,
@@ -1230,6 +1307,11 @@ class MarketIntelligenceService:
                     **payload,
                     "source_item_ids": [item.id for item in source_items],
                     "queries": queries,
+                    "market_context": build_market_context(
+                        report.query or "",
+                        region_language
+                        or str(existing_context.get("region_language") or ""),
+                    ),
                     "groq_status": "ready",
                     "analysis_completed_at": datetime.now(UTC).isoformat(),
                 },
@@ -1344,22 +1426,46 @@ class MarketIntelligenceService:
                     "latest_market_scan_used": bool(
                         context.get("latest_market_scan")
                     ),
+                    "market_report_id": context.get("market_report_id"),
                     "data_limited": context.get("data_limited", True),
                 },
             )
 
     @staticmethod
-    def _competitor_context(query: str | None) -> dict[str, Any]:
+    def _competitor_context(
+        query: str | None,
+        market_report_id: int | None = None,
+    ) -> dict[str, Any]:
         with session_scope() as session:
-            items = list(
-                session.scalars(
-                    select(SourceItem)
-                    .order_by(desc(SourceItem.created_at))
-                    .limit(200)
-                )
-            )
             reports = ReportsRepository(session)
-            market_scan = reports.latest_report("market_scan")
+            market_scan = (
+                reports.get_report(market_report_id)
+                if market_report_id is not None
+                else reports.latest_report("market_scan")
+            )
+            if market_scan and market_scan.report_type != "market_scan":
+                market_scan = None
+            market_payload = (
+                market_scan.raw_json
+                if market_scan and isinstance(market_scan.raw_json, dict)
+                else {}
+            )
+            source_item_ids = [
+                int(item_id)
+                for item_id in market_payload.get("source_item_ids", [])
+                if str(item_id).isdigit()
+            ]
+            items = (
+                list(
+                    session.scalars(
+                        select(SourceItem)
+                        .where(SourceItem.id.in_(source_item_ids))
+                        .order_by(desc(SourceItem.created_at))
+                    )
+                )
+                if source_item_ids
+                else []
+            )
             settings = list(
                 session.scalars(
                     select(Setting)
@@ -1369,6 +1475,7 @@ class MarketIntelligenceService:
             )
             return {
                 "query": query,
+                "market_report_id": market_scan.id if market_scan else None,
                 "generated_at": datetime.now(UTC).isoformat(),
                 "data_limited": len(items) < 5,
                 "limitations": (
@@ -1397,6 +1504,7 @@ class MarketIntelligenceService:
                             market_scan.body or market_scan.report_text or ""
                         )[:2500],
                         "evidence": market_scan.evidence_json,
+                        "market_context": market_payload.get("market_context"),
                     }
                     if market_scan
                     else None

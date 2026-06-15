@@ -22,7 +22,7 @@ const quickActions = [
   },
   {
     href: "/content-plan",
-    title: "Создать контент-план",
+    title: "Контент-план",
     text: "Сформировать недельный план на основе данных.",
     icon: "book" as const,
   },
@@ -130,7 +130,7 @@ export default function DashboardPage() {
                     ? `/reports/${data.latest_competitor_report.id}`
                     : "/market-scan"
                 }
-                label={t("Конкурентный отчёт")}
+                label={t("Конкуренты")}
                 locale={locale}
                 status={data.latest_competitor_report?.status}
                 summary={

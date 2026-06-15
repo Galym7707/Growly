@@ -154,6 +154,29 @@ def test_competitor_report_rejects_rows_without_verified_urls() -> None:
     assert payload["source_urls"] == ["https://example.com/verified"]
 
 
+def test_competitor_report_never_treats_growly_as_the_client_business() -> None:
+    payload = MarketIntelligenceService._sanitize_report_payload(
+        {
+            "executive_summary": "Growly can strengthen its position this week.",
+            "actions_this_week": [
+                "Growly should publish a concrete client result."
+            ],
+            "competitors": [
+                {
+                    "competitor": "Growly",
+                    "opportunity": "Growly может усилить позиционирование.",
+                }
+            ],
+        }
+    )
+
+    assert "Growly" not in payload["executive_summary"]
+    assert "ваш бизнес" in payload["executive_summary"]
+    assert "Growly" not in payload["actions_this_week"][0]
+    assert "Growly" not in payload["competitors"][0]["opportunity"]
+    assert payload["competitors"][0]["competitor"] == "Growly"
+
+
 def test_partial_market_scan_report_status_is_persisted() -> None:
     session = FakeSession()
 
@@ -447,6 +470,7 @@ async def test_market_scan_saves_before_groq_and_syncs_after_failure(
         queries: list[str],
         source_items: list[SourceItem],
         groq_status: str,
+        region_language: str,
     ) -> Report:
         events.append("partial_report")
         return Report(
@@ -461,6 +485,10 @@ async def test_market_scan_saves_before_groq_and_syncs_after_failure(
             raw_json={
                 "source_item_ids": [item.id for item in source_items],
                 "queries": queries,
+                "market_context": {
+                    "topic": query,
+                    "region_language": region_language,
+                },
                 "groq_status": groq_status,
             },
             notion_page_id="report-page",
@@ -493,6 +521,10 @@ async def test_market_scan_saves_before_groq_and_syncs_after_failure(
     assert min(notion_indexes) > groq_index
     assert report.status == MARKET_SCAN_PENDING_STATUS
     assert report.raw_json["groq_status"] == "rate_limited"
+    assert (
+        report.raw_json["market_context"]["region_language"]
+        == "Kazakhstan Russian"
+    )
     assert "tavily_results_count=4" in caplog.text
     assert "source_items_saved_count=4" in caplog.text
     assert "market_scan_started" in caplog.text

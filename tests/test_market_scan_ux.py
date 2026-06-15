@@ -42,7 +42,7 @@ def test_pending_keyboard_has_recovery_actions() -> None:
     assert buttons == {
         "Повторить ИИ-анализ": "market:retry:17",
         "Открыть источники": "market:view_sources:17",
-        "Синхронизировать с Notion": "market:notion:17",
+        "Сохранить в Notion": "market:notion:17",
         "Создать план по доступным данным": "market:limited_plan:17",
     }
 

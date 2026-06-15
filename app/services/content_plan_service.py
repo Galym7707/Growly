@@ -11,11 +11,14 @@ from sqlalchemy import desc, select
 from app.database import session_scope
 from app.models import (
     ContentPlan,
+    Report,
     Setting,
     SourceItem,
 )
+from app.repositories.market_scan_jobs_repo import MarketScanJobsRepository
 from app.repositories.reports_repo import ReportsRepository
 from app.services.ai_service import AIService
+from app.services.market_context import build_market_context
 from app.services.notion_service import NotionService
 from app.utils.errors import AIServiceError, ConfigurationError, NotionServiceError
 from app.utils.text import parse_json_response
@@ -283,19 +286,66 @@ class ContentPlanService:
         self, business_context: dict[str, Any] | str | None
     ) -> dict[str, Any]:
         with session_scope() as session:
-            source_items = list(
-                session.scalars(
-                    select(SourceItem)
-                    .order_by(desc(SourceItem.collected_at))
-                    .limit(80)
-                )
-            )
             reports_repo = ReportsRepository(session)
+            brief = business_context if isinstance(business_context, dict) else {}
+            use_market_context = brief.get("use_market_context", True) is not False
+            selected_context = (
+                brief.get("market_context")
+                if isinstance(brief.get("market_context"), dict)
+                else None
+            )
+            selected_report_id = (
+                selected_context.get("report_id")
+                if selected_context
+                else None
+            )
+            latest_market_scan = None
+            if selected_report_id:
+                candidate = reports_repo.get_report(int(selected_report_id))
+                if candidate and candidate.report_type == "market_scan":
+                    latest_market_scan = candidate
+            elif use_market_context and selected_context is None:
+                latest_market_scan = reports_repo.latest_report("market_scan")
+
+            active_market_context = (
+                self._market_context_from_report(latest_market_scan)
+                if latest_market_scan
+                else selected_context
+            )
+            source_item_ids = [
+                int(item_id)
+                for item_id in (
+                    (active_market_context or {}).get("source_item_ids") or []
+                )
+                if str(item_id).isdigit()
+            ]
+            source_items = (
+                list(
+                    session.scalars(
+                        select(SourceItem)
+                        .where(SourceItem.id.in_(source_item_ids))
+                        .order_by(desc(SourceItem.collected_at))
+                    )
+                )
+                if source_item_ids
+                else []
+            )
             latest_competitor_report = (
                 reports_repo.latest_report("competitor_report")
                 or reports_repo.latest_report("competitor")
             )
-            latest_market_scan = reports_repo.latest_report("market_scan")
+            competitor_payload = (
+                latest_competitor_report.raw_json
+                if latest_competitor_report
+                and isinstance(latest_competitor_report.raw_json, dict)
+                else {}
+            )
+            active_report_id = (active_market_context or {}).get("report_id")
+            if (
+                not active_report_id
+                or competitor_payload.get("market_report_id") != active_report_id
+            ):
+                latest_competitor_report = None
             settings = list(
                 session.scalars(
                     select(Setting)
@@ -316,6 +366,7 @@ class ContentPlanService:
                         if latest_market_scan
                         else []
                     ),
+                    *((active_market_context or {}).get("source_urls") or []),
                     *[
                         item.url or item.external_url
                         for item in source_items
@@ -327,9 +378,19 @@ class ContentPlanService:
                 "weekly_objective": business_context
                 or {"note": "No additional brief supplied."},
                 "business": {
-                    "niche": profile.get("business_niche"),
-                    "region": profile.get("business_region"),
-                    "language": profile.get("business_language"),
+                    "niche": (
+                        (active_market_context or {}).get("category")
+                        or (active_market_context or {}).get("topic")
+                        or profile.get("business_niche")
+                    ),
+                    "region": (
+                        (active_market_context or {}).get("region")
+                        or profile.get("business_region")
+                    ),
+                    "language": (
+                        (active_market_context or {}).get("language")
+                        or profile.get("business_language")
+                    ),
                     "offer": profile.get("business_offer"),
                     "audience": profile.get("business_audience"),
                 },
@@ -345,7 +406,7 @@ class ContentPlanService:
                 "latest_market_scan": (
                     {
                         "summary": str(
-                            latest_market_scan.summary or ""
+                            latest_market_scan.summary if latest_market_scan else ""
                         )[:CONTENT_PLAN_MAX_REPORT_SUMMARY_CHARS],
                         "top_topics": self._list(
                             market_payload.get("dominant_topics")
@@ -356,12 +417,13 @@ class ContentPlanService:
                         "top_content_gaps": self._list(
                             market_payload.get("content_gaps")
                         )[:8],
+                        "market_context": active_market_context,
                     }
-                    if latest_market_scan
+                    if active_market_context
                     else None
                 ),
                 "evidence_limited": not bool(
-                    source_items or latest_competitor_report or latest_market_scan
+                    source_items or latest_competitor_report or active_market_context
                 ),
                 "evidence_urls": evidence_urls,
                 "source_items": source_items,
@@ -372,6 +434,79 @@ class ContentPlanService:
                     "weekly_digest": 1,
                 },
             }
+
+    async def latest_market_context(
+        self,
+        user_id: int | None = None,
+    ) -> dict[str, Any] | None:
+        return await asyncio.to_thread(
+            self._load_market_context,
+            None,
+            user_id,
+        )
+
+    async def market_context_for_report(
+        self,
+        report_id: int,
+    ) -> dict[str, Any] | None:
+        return await asyncio.to_thread(
+            self._load_market_context,
+            report_id,
+            None,
+        )
+
+    @classmethod
+    def _load_market_context(
+        cls,
+        report_id: int | None,
+        user_id: int | None,
+    ) -> dict[str, Any] | None:
+        with session_scope() as session:
+            reports = ReportsRepository(session)
+            if report_id is not None:
+                report = reports.get_report(report_id)
+            elif user_id is not None:
+                job = MarketScanJobsRepository(session).latest_for_user(user_id)
+                report = (
+                    reports.get_report(job.report_id)
+                    if job and job.report_id
+                    else None
+                )
+            else:
+                report = reports.latest_report("market_scan")
+            if report is None or report.report_type != "market_scan":
+                return None
+            return cls._market_context_from_report(report)
+
+    @staticmethod
+    def _market_context_from_report(report: Report) -> dict[str, Any]:
+        payload = report.raw_json if isinstance(report.raw_json, dict) else {}
+        stored = (
+            payload.get("market_context")
+            if isinstance(payload.get("market_context"), dict)
+            else {}
+        )
+        source_item_ids = [
+            int(item_id)
+            for item_id in payload.get("source_item_ids", [])
+            if str(item_id).isdigit()
+        ]
+        context = build_market_context(
+            str(stored.get("topic") or report.query or report.title or ""),
+            str(stored.get("region_language") or ""),
+            report_id=report.id,
+            source_item_ids=source_item_ids,
+            source_urls=[
+                str(url)
+                for url in (report.evidence_json or [])
+                if str(url).strip()
+            ],
+            sources_count=report.sources_count,
+        )
+        for key in ("region", "language", "category", "category_code"):
+            if stored.get(key):
+                context[key] = stored[key]
+        return context
 
     @staticmethod
     def _save_batch_summaries(

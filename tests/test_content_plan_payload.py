@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from app.models import ContentPlan, SourceItem
+from app.models import ContentPlan, Report, SourceItem
 from app.services.content_plan_service import (
     CONTENT_PLAN_MAX_SNIPPET_CHARS,
     ContentPlanService,
@@ -69,6 +69,49 @@ class FakeNotion:
         item: ContentPlan,
     ) -> dict[str, str]:
         return {"id": f"page-{item.id}"}
+
+
+def test_market_context_keeps_report_metadata_and_saved_source_set() -> None:
+    report = Report(
+        id=77,
+        report_type="market_scan",
+        title="Анализ рынка",
+        query="ПП-рационы в Алматы",
+        sources_count=2,
+        evidence_json=[
+            "https://example.com/one",
+            "https://example.com/two",
+        ],
+        raw_json={
+            "source_item_ids": [11, 12],
+            "market_context": {
+                "topic": "ПП-рационы в Алматы",
+                "region": "Алматы",
+                "language": "ru",
+                "category": "доставка здорового и правильного питания",
+                "category_code": "healthy_food_delivery",
+                "region_language": "Алматы, русский",
+            },
+        },
+    )
+
+    context = ContentPlanService._market_context_from_report(report)
+
+    assert context == {
+        "topic": "ПП-рационы в Алматы",
+        "region": "Алматы",
+        "language": "ru",
+        "category": "доставка здорового и правильного питания",
+        "category_code": "healthy_food_delivery",
+        "region_language": "Алматы, русский",
+        "report_id": 77,
+        "source_item_ids": [11, 12],
+        "source_urls": [
+            "https://example.com/one",
+            "https://example.com/two",
+        ],
+        "sources_count": 2,
+    }
 
 
 @pytest.mark.asyncio
