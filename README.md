@@ -1,60 +1,83 @@
 ---
-title: Growly Telegram Bot
+title: Growly
 sdk: docker
 app_port: 7860
 ---
 
 # Growly
 
-Growly is an AI-powered content factory, marketing intelligence, and approval
-automation backend for businesses. It collects manually approved market evidence,
-builds content plans, generates drafts through GitHub Models with Groq fallback,
-handles approvals in Telegram,
-stores technical state in Supabase PostgreSQL, and presents client-facing data in
-Notion.
+Growly is a marketing intelligence and content workflow for businesses. It
+collects public market evidence, builds content plans, generates drafts through
+GitHub Models with Groq fallback, handles approvals in Telegram and on the web,
+stores technical state in Supabase PostgreSQL, and synchronizes client-facing
+data to Notion.
 
-This version intentionally has no custom website, n8n workflow, or Google Sheets
-dependency.
+The repository contains the Python backend, Telegram bot, and a Next.js web
+application. Both interfaces call the same Python services; AI, search, and
+Notion logic is not duplicated in React.
 
 ## Architecture
 
 ```text
-AI generation: GitHub Models openai/gpt-5-mini primary, Groq fallback
-Telegram bot ── commands, generation, approvals, report delivery
-      │
-      ├── Tavily ── public web search and source discovery
-      ├── GitHub Models ── primary content and analysis generation
-      ├── Groq ── fallback content and analysis generation
-      ├── Notion ── dashboard and client-facing databases
-      └── Supabase PostgreSQL ── source of truth and status history
+Next.js web app ----\
+                     > FastAPI web adapter -> shared Python services
+Telegram bot -------/                         |
+                                               +-- Tavily public search
+                                               +-- GitHub Models primary AI
+                                               +-- Groq fallback AI
+                                               +-- Notion workspace
+                                               +-- Supabase PostgreSQL
 
-FastAPI ── health and database readiness endpoints
-APScheduler ── optional weekly report and planning jobs
+APScheduler -> optional weekly report and planning jobs
 ```
 
 Main modules:
 
-- `app/bot`: Telegram commands, conversations, menus, and approval callbacks.
-- `app/services`: AI routing, GitHub Models, Groq fallback, Notion, content
-  planning, reports, reviews, and scheduling.
-- `app/repositories`: transactional database access.
+- `app/bot`: Telegram commands, conversations, menus, and callbacks.
+- `app/web_api.py`: authenticated JSON adapter used by the website.
+- `app/services`: shared AI, search, reporting, draft, and Notion logic.
+- `app/repositories`: transactional SQLAlchemy data access.
 - `app/source_collectors`: manual-first source collection architecture.
-- `app/integrations`: disabled future adapters for Instagram, Bitrix24, ERPNext, and CRM.
+- `app/integrations`: reserved Instagram, Bitrix24, ERPNext, and CRM adapters.
+- `frontend`: Next.js 16, React 19, Supabase Auth, responsive dashboard, and
+  server-side proxy to FastAPI.
 - `migrations/init.sql`: idempotent PostgreSQL schema initialization.
+
+## Frontend Audit
+
+The repository did not contain the static files named in the original frontend
+brief: `index.html`, `style.css`, `script.js`, `api/waitlist.js`, `package.json`,
+or `vercel.json`. There was no mock dashboard to retain or remove.
+
+The implemented frontend is therefore a new Next.js application connected to the
+existing backend. It retains the Growly name, Russian-first product language,
+Python services, Supabase database, Telegram bot, and Notion synchronization.
+
+The visual system uses:
+
+- warm neutral background and white working surfaces;
+- black text and muted gray secondary text;
+- restrained borders and one deep green accent;
+- system typography and inline SVG icons;
+- real API data or explicit empty states.
+
+It contains no emoji UI, purple/pink gradients, fake business metrics, countdown
+blocks, or decorative AI effects.
 
 ## Requirements
 
 - Python 3.12+
-- A Supabase PostgreSQL project and database connection string
-- A Telegram bot token
-- A GitHub token with `models:read` permission
-- A Groq API key for fallback generation
-- A Tavily API key
-- A Notion integration with access to the configured root page
+- Node.js 22+
+- Supabase PostgreSQL and a database connection string
+- Telegram bot token
+- GitHub token with `models:read`
+- Groq API key for fallback generation
+- Tavily API key
+- Notion integration with access to the configured root page
 
 ## Setup
 
-1. Create and activate a virtual environment:
+1. Create and activate a Python environment:
 
    ```powershell
    python -m venv .venv
@@ -62,93 +85,158 @@ Main modules:
    python -m pip install -r requirements.txt
    ```
 
-2. Keep the existing root `.env` file. Do not commit it. Use `.env.example` only
-   as a reference for variable names.
+2. Install web dependencies:
 
-3. Share the Notion root page with the Notion integration configured by
-   `NOTION_API_KEY`.
+   ```powershell
+   npm install
+   ```
 
-4. Initialize PostgreSQL:
+3. Keep backend secrets in the root `.env`. Use `.env.example` only as a list
+   of variable names.
+
+4. Create `frontend/.env.local` from `frontend/.env.example`.
+
+5. Use the same random value for backend `GROWLY_WEB_API_KEY` and frontend
+   server-only `GROWLY_API_KEY`.
+
+6. Share `NOTION_ROOT_PAGE_ID` with the configured Notion integration.
+
+7. Initialize PostgreSQL:
 
    ```powershell
    python scripts/init_db.py
    ```
 
-   The initializer is idempotent. It creates missing tables, repairs missing columns
-   on existing legacy tables without deleting rows, and prints a schema `PASS` or
-   `FAIL` result for every SQLAlchemy table.
-
-5. Verify all connections:
+8. Verify external connections:
 
    ```powershell
    python scripts/test_connections.py
    ```
 
-6. Create or reuse the Notion workspace:
+9. Create or reuse the Notion workspace:
 
    ```powershell
    python scripts/init_notion.py
    ```
 
-7. Optionally add clearly marked synthetic source data:
-
-   ```powershell
-   python scripts/seed_demo_data.py
-   ```
-
 ## Environment Variables
+
+Backend variables are documented in `.env.example`.
 
 Required for the complete workflow:
 
 | Variable | Purpose |
 | --- | --- |
-| `APP_NAME` | Application name; use `Growly` |
-| `ENVIRONMENT` | Runtime environment |
 | `TELEGRAM_BOT_API_KEY` | Telegram bot token |
-| `GITHUB_MODELS_TOKEN` | GitHub token with `models:read` permission |
-| `GITHUB_MODELS_BASE_URL` | GitHub Models OpenAI-compatible endpoint |
-| `GITHUB_MODELS_MODEL` | Primary GitHub Models model ID |
-| `AI_PRIMARY_PROVIDER` | Primary provider; use `github_models` |
-| `AI_FALLBACK_PROVIDER` | Fallback provider; use `groq` |
-| `GROQ_API_KEY` | Groq fallback API key |
-| `GROQ_MODEL` | Fallback model available to the Groq account |
-| `SEARCH_PROVIDER` | Web search provider; use `tavily` |
-| `TAVILY_API_KEY` | Tavily API key |
+| `GITHUB_MODELS_TOKEN` | GitHub Models token |
+| `GITHUB_MODELS_MODEL` | Primary model ID |
+| `GROQ_API_KEY` | Fallback AI key |
+| `GROQ_MODEL` | Fallback model |
+| `TAVILY_API_KEY` | Public web search |
+| `DATABASE_URL` | PostgreSQL connection string |
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_PUBLISHABLE_API_KEY` | Supabase publishable key |
-| `SUPABASE_SECRET_API_KEY` | Supabase secret key |
-| `SUPABASE_DB_PASSWORD` | Supabase database password |
-| `DATABASE_URL` | PostgreSQL connection string |
+| `SUPABASE_SECRET_API_KEY` | Backend Supabase secret key |
 | `NOTION_API_KEY` | Notion integration token |
-| `NOTION_ROOT_PAGE_ID` | Parent page shared with the integration |
+| `NOTION_ROOT_PAGE_ID` | Shared parent page |
+| `GROWLY_WEB_API_KEY` | Server-to-server web API key |
 
-Optional:
+Important optional backend variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `TELEGRAM_PUBLISH_CHAT_ID` | empty | Preferred target group/supergroup/channel chat ID |
-| `TELEGRAM_CHANNEL_ID` | empty | Legacy publishing target used as fallback |
-| `INSTAGRAM_ENABLED` | `false` | Reserved official API adapter |
-| `BITRIX_ENABLED` | `false` | Reserved Bitrix24 adapter |
-| `ERPNEXT_ENABLED` | `false` | Reserved ERPNext adapter |
-| `CRM_PROVIDER` | `none` | Reserved CRM selection |
+| `WEB_ALLOWED_ORIGINS` | `http://localhost:3000` | Comma-separated browser origins |
+| `TELEGRAM_PUBLISH_CHAT_ID` | empty | Preferred Telegram publication target |
 | `SCHEDULER_ENABLED` | `false` | Enables weekly jobs |
-| `WEEKLY_REPORT_DAY` | `monday` | Weekly scheduler day |
-| `WEEKLY_REPORT_HOUR` | `9` | Scheduler hour |
-| `WEEKLY_REPORT_MINUTE` | `0` | Scheduler minute |
 | `TIMEZONE` | `Asia/Almaty` | Scheduler timezone |
 | `SEARCH_MAX_RESULTS` | `10` | Tavily results per query |
-| `SEARCH_DEPTH` | `basic` | Tavily search depth |
-| `SEARCH_SAVE_RAW` | `true` | Store provider result JSON without secrets |
 
-Missing required variables produce a clear variable-name error. Secret values are
-represented by `SecretStr`, are redacted from structured logs, and are never printed
-by the operational scripts.
+Frontend variables are documented in `frontend/.env.example`:
 
-## Notion Workspace
+| Variable | Visibility | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_GROWLY_API_URL` | public | FastAPI origin |
+| `NEXT_PUBLIC_SUPABASE_URL` | public | Supabase project URL for Auth |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | public | Publishable/anon key for Auth |
+| `NEXT_PUBLIC_AUTH_REQUIRED` | public | Protect workspace routes when `true` |
+| `GROWLY_API_KEY` | server only | Sent to FastAPI as `X-Growly-API-Key` |
 
-`python scripts/init_notion.py` checks access to `NOTION_ROOT_PAGE_ID`, then creates
-or reuses:
+Never expose service-role, Notion, Telegram, GitHub Models, Groq, Tavily, or
+`GROWLY_API_KEY` values with a `NEXT_PUBLIC_` prefix.
+
+## Run Locally
+
+Start FastAPI:
+
+```powershell
+python run_api.py
+```
+
+It listens on `http://localhost:8000`.
+
+Start Next.js in another terminal:
+
+```powershell
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+Start the Telegram bot separately:
+
+```powershell
+python run_bot.py
+```
+
+## Web Routes
+
+- `/`: public landing page
+- `/login`: Supabase password login or explicit local mode
+- `/dashboard`: workspace overview
+- `/chat`: command-style interface over backend actions
+- `/market-scan`: market scan workflow
+- `/reports`: report list
+- `/reports/[id]`: structured report view
+- `/content-plan`: weekly plan and draft generation
+- `/drafts`: approval, regeneration, and Notion sync
+- `/sources`: manual sources, discovery, and monitoring
+- `/settings`: business profile
+- `/tg`: mobile entry prepared for a future Telegram Mini App
+
+## Web API
+
+Operational endpoints:
+
+- `GET /health`
+- `GET /ready`
+
+Website endpoints:
+
+- `GET /api/health`
+- `GET /api/dashboard`
+- `POST /api/market-scan`
+- `POST /api/competitor-report`
+- `GET|POST /api/content-plan`
+- `POST /api/content-plan/{id}/draft`
+- `POST /api/create-post`
+- `GET /api/drafts`
+- `PATCH /api/drafts/{id}`
+- `GET /api/reports`
+- `GET /api/reports/{id}`
+- `GET|POST /api/sources`
+- `POST /api/sources/discover`
+- `POST /api/sources/monitor`
+- `POST /api/notion/sync`
+- `GET|PATCH /api/settings`
+- `POST /api/chat`
+
+When `GROWLY_WEB_API_KEY` is set, all `/api/*` routes require the matching
+`X-Growly-API-Key` header. The browser never receives this secret. The Next.js
+route handler reads server-only `GROWLY_API_KEY` and adds the header.
+
+## Notion
+
+`python scripts/init_notion.py` creates or reuses:
 
 - Growly Dashboard
 - Sources
@@ -160,192 +248,126 @@ or reuses:
 - Publications
 - Integration Status
 
-The initializer is idempotent. It detects child pages/databases and stores Notion
-database and data source IDs in the Supabase `settings` table.
+Web actions call the backend:
 
-## Run
+- reports use `POST /api/notion/sync` with target `report`;
+- drafts use the same endpoint with target `draft`;
+- the dashboard/chat can sync recent data with target `recent`.
 
-Telegram bot:
+The Notion token never enters the frontend. Supabase remains the source of truth;
+Notion is the presentation and workflow layer.
 
-```powershell
-python run_bot.py
-```
+## Telegram Bot
 
-FastAPI:
+Management commands remain private-chat only. Existing commands include:
 
-```powershell
-python run_api.py
-```
+- `/create_post`, `/create_case`
+- `/add_source`, `/sources`, `/disable_source`
+- `/import_source_items`, `/discover_sources`, `/monitor_sources`
+- `/web_search`, `/market_scan`, `/retry_analysis`, `/status`
+- `/content_plan`, `/generate_from_plan`
+- `/competitor_report`, `/review_analysis`, `/performance_report`
+- `/drafts`, `/reports`, `/sync_notion`
+- `/update_publication_metrics`, `/new_business`
 
-API endpoints:
+Web implementation does not change Telegram handlers. Both interfaces reuse the
+same services.
 
-- `GET /health`: process health and environment name.
-- `GET /ready`: verifies PostgreSQL with `SELECT 1`.
+## Data Policy
 
-No frontend is served.
+Growly supports Tavily public search and manually supplied evidence. It does not
+bypass captchas, access private accounts, automate unauthorized logins, or claim
+complete Instagram, TikTok, YouTube, or Telegram collection.
 
-## Telegram Commands
+Market scan saves public result URLs and snippets before AI analysis. Reports
+retain evidence URLs and explicitly show missing data or limitations.
 
-Growly's management workflow is private-chat only. Subscribers in publishing groups
-cannot invoke content generation, approvals, reports, or synchronization commands.
+## Testing
 
-Private-chat commands:
-
-- `/start`: register the Telegram user and show the menu.
-- `/create_post`: collect a brief and generate an asset/product post.
-- `/create_case`: create a client-result post from the starting situation,
-  completed actions, and verified outcome; client/company names stay private
-  unless explicitly approved for publication.
-- `/add_source`: register a manual intelligence source and sync it to Notion.
-- `/sources`: list active sources grouped by type and priority.
-- `/disable_source`: disable a source by ID or exact name.
-- `/import_source_items`: paste public/manual competitor materials for structured AI analysis.
-- `/discover_sources`: find public candidate websites and platform profiles with Tavily and save them as `requires_review`.
-- `/sources`: show sources grouped by platform type and review status, with approve/disable controls.
-- `/monitor_sources`: search public information about active sources, save findings, and generate an AI summary.
-- `/web_search`: search public web sources with Tavily and save them to Supabase and Notion.
-- `/market_scan`: save Tavily evidence first, then analyze it through the AI router and save a report.
-- `/retry_analysis`: retry AI analysis for the latest saved pending market scan.
-- `/status`: show the latest Market Scan job step, saved-source count, report status, and last error.
-- `/content_plan`: collect a weekly objective and create posts, videos, WhatsApp, and digest items.
-- `/generate_from_plan`: generate a channel-specific draft from a draft plan item.
-- `/competitor_report`: build an evidence-backed report from saved source items and market scans.
-- `/review_analysis`: extract pains, objections, triggers, customer language, FAQ ideas, and risks.
-- `/update_publication_metrics`: store views, reactions, comments, clicks, leads, and notes.
-- `/performance_report`: generate the weekly performance report.
-- `/drafts`: show pending drafts with approval controls.
-- `/reports`: show recent reports.
-- `/sync_notion`: force a recent-data sync.
-- `/debug_notion_status`: hidden developer status for configured Notion IDs, recent database counts, and last sync counts.
-- `/new_business`: confirm and clear the current business context before onboarding another business.
-- `/help`: list commands.
-- `/cancel`: stop the active input flow.
-
-Management commands are ignored outside private chat. Group command menus are empty.
-
-`/new_business` requires explicit inline confirmation. It hard-deletes business
-sources, source items, reports, reviews, plans, drafts, approvals, publication rows,
-and `business_*` settings from PostgreSQL, then archives linked Notion pages.
-Telegram posts already sent to a publishing group, Telegram users, API keys, and
-integration configuration are preserved.
-
-Draft actions are `Approve`, `Regenerate`, `Reject`, and `Save to Notion`.
-Approval happens only in private chat and does not publish automatically. After
-approval, `Publish to Telegram Group` sends the complete approved text to
-`TELEGRAM_PUBLISH_CHAT_ID`. If that variable is empty, Growly falls back to the
-legacy `TELEGRAM_CHANNEL_ID`. Long text is split at safe Telegram message
-boundaries. Publication rows are reused by draft and channel, so repeated callbacks
-do not publish duplicates. Successful publishing changes the draft and publication
-status to `published`, synchronizes the Notion status as `Published`, and confirms
-success in the private chat.
-
-When neither publishing variable is configured, approval only marks the draft as
-approved and no publishing button is shown. Every approval action is recorded in
-PostgreSQL.
-
-## Data and Source Policy
-
-Growly supports Tavily public web search and manual user-supplied evidence.
-`/import_source_items` accepts pasted public posts, captions, links, observations,
-metrics, comments, CSV/text exports, and other user-supplied evidence.
-`/web_search` and `/market_scan` save public result URLs and snippets before AI
-analysis so reports and content plans can cite their evidence.
-
-Content Plan prompts use a bounded evidence context: at most eight direct source
-items with 300-character snippets, eight evidence URLs, report summaries instead
-of full report bodies, and no `raw_json`. Larger evidence sets are summarized in
-batches of eight and persisted as `content_plan_source_summary` reports. If an AI provider
-still rejects the payload with HTTP 413, generation retries with report summaries
-only and Telegram states that detailed evidence was reduced.
-
-Market Scan runs as a tracked background job. Progress is stored in
-`market_scan_jobs` and exposed through `/status`; `/cancel` cancels the active
-async task when possible. Tavily queries have a 30-second timeout, AI
-generations have a 60-second timeout, and each Market Scan Notion operation has
-a 30-second timeout.
-
-Source discovery and monitoring do not claim full Instagram, TikTok, YouTube, or
-Telegram collection. Tavily supplies public search evidence only. Full Telegram
-post collection requires a separate public Telegram collector, and complete
-YouTube Shorts metrics require the YouTube Data API. Growly does not access private
-accounts, bypass captchas, or bypass platform limits.
-The project does not bypass captchas, access private accounts, automate logins, or
-perform unauthorized Instagram/TikTok scraping.
-
-The competitor report distinguishes source metadata from collected source items.
-When no source items exist, it states that recent competitor activity cannot be
-confirmed.
-
-## Scheduling
-
-Weekly jobs are configured through APScheduler for:
-
-- competitor report
-- content plan
-- content performance report
-
-They remain disabled unless `SCHEDULER_ENABLED=true`. This prevents development
-runs from triggering external API calls unexpectedly.
-
-## Tests and Verification
-
-Run local tests and syntax checks:
+Backend:
 
 ```powershell
-pytest
-pytest tests/test_ai_router.py
+python -m pytest
 python -m compileall app scripts tests run_api.py run_bot.py
 ```
 
-Run the rollback-safe MVP workflow checks:
+Frontend:
 
 ```powershell
-python scripts/qa_mvp.py
+npm run lint
+npm run build
+npm run test:web
+npm audit --omit=dev
 ```
 
-The QA script checks all 12 workflow stages without retaining temporary rows or
-publishing a test post. An intentional real publication can be tested only with
-`--live-publish-draft-id ID`.
+The frontend tests check:
 
-Run live integration verification:
+- structured competitor report normalization from mock JSON;
+- no emoji glyphs in UI source;
+- no purple/pink decorative gradients;
+- no public environment names for server credentials.
+
+Live backend verification:
 
 ```powershell
 python scripts/test_connections.py
 ```
 
-The live script checks environment loading, PostgreSQL, minimal GitHub Models and
-Groq completions, Telegram `getMe`, and access to the configured Notion root page.
-It does not print credentials.
+The script checks environment loading, PostgreSQL, GitHub Models, Groq, Telegram,
+and Notion without printing credentials.
+
+## Vercel
+
+1. Import `galym7707/growly` into Vercel.
+2. Keep the repository root as the project root.
+3. `vercel.json` runs the npm workspace build and outputs `frontend/.next`.
+4. Add all variables from `frontend/.env.example`.
+5. Set `NEXT_PUBLIC_GROWLY_API_URL` to the deployed FastAPI origin.
+6. Set server-only `GROWLY_API_KEY` to the backend `GROWLY_WEB_API_KEY`.
+7. Add the Vercel origin to backend `WEB_ALLOWED_ORIGINS`.
+
+The backend remains a separate Python deployment. Vercel hosts the Next.js app.
+
+## Telegram Mini App Later
+
+The `/tg` route is mobile-first and uses normal web authentication today. A future
+Mini App integration must:
+
+1. receive Telegram `initData`;
+2. send it to the backend;
+3. validate the signature and freshness on the server;
+4. map the verified Telegram user to a Growly workspace;
+5. never trust `initDataUnsafe` directly.
 
 ## Current Limitations
 
-- Source ingestion is manual; automated collectors are intentionally disabled.
-- Instagram publishing is not implemented. A future version must use an official API.
-- Bitrix24 and ERPNext adapters are disabled placeholders.
-- CRM support is a disabled provider interface.
-- Telegram group publishing records message IDs but does not collect performance
-  metrics automatically.
-- Notion is a presentation and workflow layer; Supabase remains the source of truth.
-- The API exposes operational health only and has no public business-data endpoints.
+- The database schema is single-workspace. Supabase Auth protects the web session,
+  but true multi-company isolation requires `workspace_id` on all business tables
+  and enforcement in repositories or PostgreSQL RLS.
+- Long web operations are synchronous HTTP requests. The UI shows a pending state,
+  but streaming progress and resumable web jobs are not implemented.
+- Instagram publishing is not implemented and must use an official API.
+- Bitrix24, ERPNext, and CRM adapters are disabled placeholders.
+- Telegram publication metrics are not collected automatically.
+- Telegram Mini App server validation is not enabled yet.
 
-## GitHub
+## Repository
 
-The local repository is configured for:
+Remote:
 
 ```text
 https://github.com/Galym7707/Growly
 ```
 
-Review before publishing:
+Before publishing:
 
 ```powershell
 git status
 git check-ignore .env
-git add .
-git status
-git commit -m "Build Growly backend, bot, Notion sync, and database"
-git push -u origin main
+python -m pytest
+npm run lint
+npm run build
+npm run test:web
 ```
 
-Never use `git add -f .env`, never paste credentials into issues or logs, and rotate
-any secret that is accidentally exposed. This project does not push automatically.
+Never force-add `.env` or paste credentials into logs, issues, or commits.

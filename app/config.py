@@ -75,6 +75,14 @@ class Settings(BaseSettings):
     notion_api_key: SecretStr | None = Field(default=None, alias="NOTION_API_KEY")
     notion_root_page_id: str | None = Field(default=None, alias="NOTION_ROOT_PAGE_ID")
 
+    growly_web_api_key: SecretStr | None = Field(
+        default=None, alias="GROWLY_WEB_API_KEY"
+    )
+    web_allowed_origins: str = Field(
+        default="http://localhost:3000",
+        alias="WEB_ALLOWED_ORIGINS",
+    )
+
     instagram_enabled: bool = Field(default=False, alias="INSTAGRAM_ENABLED")
     bitrix_enabled: bool = Field(default=False, alias="BITRIX_ENABLED")
     erpnext_enabled: bool = Field(default=False, alias="ERPNEXT_ENABLED")
@@ -139,6 +147,13 @@ class Settings(BaseSettings):
 
     def notion_token(self) -> str:
         return self.require_secret("notion_api_key", "NOTION_API_KEY")
+
+    def allowed_web_origins(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.web_allowed_origins.split(",")
+            if origin.strip()
+        ]
 
     def user_language_instruction(self) -> str:
         if self.default_language.strip().lower() == "ru":
