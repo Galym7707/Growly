@@ -24,8 +24,10 @@ class DraftsRepository:
         original_context: dict[str, Any],
         generation_metadata: dict[str, Any] | None = None,
         content_plan_id: int | None = None,
+        workspace_id: str | None = None,
     ) -> Draft:
         draft = Draft(
+            workspace_id=workspace_id,
             content_plan_id=content_plan_id,
             draft_type=draft_type,
             channel=channel,
@@ -40,22 +42,34 @@ class DraftsRepository:
         self.session.flush()
         return draft
 
-    def get(self, draft_id: int) -> Draft | None:
-        return self.session.get(Draft, draft_id)
+    def get(self, draft_id: int, workspace_id: str | None = None) -> Draft | None:
+        statement = select(Draft).where(Draft.id == draft_id)
+        if workspace_id is not None:
+            statement = statement.where(Draft.workspace_id == workspace_id)
+        return self.session.scalar(statement)
 
-    def list_pending(self, limit: int = 20) -> list[Draft]:
+    def list_pending(
+        self, limit: int = 20, workspace_id: str | None = None
+    ) -> list[Draft]:
         statement = (
             select(Draft)
             .where(Draft.status == "pending")
             .order_by(desc(Draft.created_at))
             .limit(limit)
         )
+        if workspace_id is not None:
+            statement = statement.where(Draft.workspace_id == workspace_id)
         return list(self.session.scalars(statement))
 
-    def list_recent(self, limit: int = 50) -> list[Draft]:
+    def list_recent(
+        self, limit: int = 50, workspace_id: str | None = None
+    ) -> list[Draft]:
+        statement = select(Draft).order_by(desc(Draft.created_at)).limit(limit)
+        if workspace_id is not None:
+            statement = statement.where(Draft.workspace_id == workspace_id)
         return list(
             self.session.scalars(
-                select(Draft).order_by(desc(Draft.created_at)).limit(limit)
+                statement
             )
         )
 

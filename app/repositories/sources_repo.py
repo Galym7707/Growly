@@ -14,25 +14,37 @@ class SourcesRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def list_sources(self, *, active_only: bool = True) -> list[Source]:
+    def list_sources(
+        self, *, active_only: bool = True, workspace_id: str | None = None
+    ) -> list[Source]:
         statement = select(Source).order_by(Source.priority, Source.name)
+        if workspace_id is not None:
+            statement = statement.where(Source.workspace_id == workspace_id)
         if active_only:
             statement = statement.where(Source.status == "active")
         return list(self.session.scalars(statement))
 
-    def get(self, source_id: int) -> Source | None:
-        return self.session.get(Source, source_id)
+    def get(self, source_id: int, workspace_id: str | None = None) -> Source | None:
+        statement = select(Source).where(Source.id == source_id)
+        if workspace_id is not None:
+            statement = statement.where(Source.workspace_id == workspace_id)
+        return self.session.scalar(statement)
 
-    def find(self, value: str) -> Source | None:
+    def find(self, value: str, workspace_id: str | None = None) -> Source | None:
         clean = value.strip()
         if clean.isdigit():
-            source = self.get(int(clean))
+            source = self.get(int(clean), workspace_id=workspace_id)
             if source:
                 return source
-        return self.session.scalar(
+        statement = (
             select(Source)
             .where(func.lower(Source.name) == clean.lower())
             .order_by(desc(Source.updated_at))
+        )
+        if workspace_id is not None:
+            statement = statement.where(Source.workspace_id == workspace_id)
+        return self.session.scalar(
+            statement
         )
 
     def create_source(
@@ -46,8 +58,10 @@ class SourcesRepository:
         check_frequency: str = "weekly",
         notes: str | None = None,
         status: str = "active",
+        workspace_id: str | None = None,
     ) -> Source:
         source = Source(
+            workspace_id=workspace_id,
             name=name,
             source_type=source_type,
             url=url,
@@ -61,14 +75,21 @@ class SourcesRepository:
         self.session.flush()
         return source
 
-    def find_by_url(self, url: str) -> Source | None:
+    def find_by_url(
+        self, url: str, workspace_id: str | None = None
+    ) -> Source | None:
         clean = url.strip().rstrip("/")
         if not clean:
             return None
-        return self.session.scalar(
+        statement = (
             select(Source)
             .where(func.lower(func.rtrim(Source.url, "/")) == clean.lower())
             .order_by(desc(Source.updated_at))
+        )
+        if workspace_id is not None:
+            statement = statement.where(Source.workspace_id == workspace_id)
+        return self.session.scalar(
+            statement
         )
 
     def create_discovered_source(
@@ -79,8 +100,9 @@ class SourcesRepository:
         url: str,
         category: str,
         notes: str,
+        workspace_id: str | None = None,
     ) -> tuple[Source, bool]:
-        existing = self.find_by_url(url)
+        existing = self.find_by_url(url, workspace_id=workspace_id)
         if existing:
             return existing, False
         return (
@@ -93,6 +115,7 @@ class SourcesRepository:
                 check_frequency="weekly",
                 notes=notes,
                 status="requires_review",
+                workspace_id=workspace_id,
             ),
             True,
         )
@@ -115,12 +138,17 @@ class SourcesRepository:
         metrics: dict | None = None,
         tags: list | None = None,
         analysis: dict[str, Any] | None = None,
+        workspace_id: str | None = None,
     ) -> SourceItem:
         insight = analysis or {}
-        source = self.get(source_id)
+        source = self.get(source_id, workspace_id=workspace_id)
         clean_title = (title or "Untitled source item").strip()
         clean_url = (external_url or "").strip()
+        owner_workspace_id = workspace_id if workspace_id is not None else (
+            source.workspace_id if source else None
+        )
         item = SourceItem(
+            workspace_id=owner_workspace_id,
             source_id=source_id,
             source_name=source.name if source else None,
             source_type=source.source_type or "manual" if source else "manual",
@@ -150,8 +178,11 @@ class SourcesRepository:
         self.session.flush()
         return item
 
-    def create_search_item(self, result: SearchResult) -> SourceItem:
+    def create_search_item(
+        self, result: SearchResult, workspace_id: str | None = None
+    ) -> SourceItem:
         item = SourceItem(
+            workspace_id=workspace_id,
             source_name=result.title,
             source_type="web_search",
             source_provider=result.source_provider,
@@ -174,8 +205,10 @@ class SourcesRepository:
         self,
         source: Source,
         result: SearchResult,
+        workspace_id: str | None = None,
     ) -> SourceItem:
         item = SourceItem(
+            workspace_id=workspace_id if workspace_id is not None else source.workspace_id,
             source_id=source.id,
             source_name=source.name,
             source_type="source_monitoring",
@@ -196,24 +229,30 @@ class SourcesRepository:
         self.session.flush()
         return item
 
-    def list_search_items(self, limit: int = 200) -> list[SourceItem]:
+    def list_search_items(
+        self, limit: int = 200, workspace_id: str | None = None
+    ) -> list[SourceItem]:
+        statement = (
+            select(SourceItem)
+            .where(SourceItem.source_type == "web_search")
+            .order_by(desc(SourceItem.created_at))
+            .limit(limit)
+        )
+        if workspace_id is not None:
+            statement = statement.where(SourceItem.workspace_id == workspace_id)
         return list(
             self.session.scalars(
-                select(SourceItem)
-                .where(SourceItem.source_type == "web_search")
-                .order_by(desc(SourceItem.created_at))
-                .limit(limit)
+                statement
             )
         )
 
-    def has_search_items(self) -> bool:
-        return bool(
-            self.session.scalar(
-                select(func.count(SourceItem.id)).where(
-                    SourceItem.source_type == "web_search"
-                )
-            )
+    def has_search_items(self, workspace_id: str | None = None) -> bool:
+        statement = select(func.count(SourceItem.id)).where(
+            SourceItem.source_type == "web_search"
         )
+        if workspace_id is not None:
+            statement = statement.where(SourceItem.workspace_id == workspace_id)
+        return bool(self.session.scalar(statement))
 
     def update_search_item_analysis(
         self,
@@ -244,37 +283,58 @@ class SourcesRepository:
         except ValueError:
             return None
 
-    def list_recent_items(self, limit: int = 100) -> list[SourceItem]:
+    def list_recent_items(
+        self, limit: int = 100, workspace_id: str | None = None
+    ) -> list[SourceItem]:
         statement = (
             select(SourceItem)
             .options(joinedload(SourceItem.source))
             .order_by(desc(SourceItem.collected_at))
             .limit(limit)
         )
+        if workspace_id is not None:
+            statement = statement.where(SourceItem.workspace_id == workspace_id)
         return list(self.session.scalars(statement))
 
-    def list_items_for_source(self, source_id: int, limit: int = 100) -> list[SourceItem]:
+    def list_items_for_source(
+        self,
+        source_id: int,
+        limit: int = 100,
+        workspace_id: str | None = None,
+    ) -> list[SourceItem]:
+        statement = (
+            select(SourceItem)
+            .where(SourceItem.source_id == source_id)
+            .order_by(desc(SourceItem.collected_at))
+            .limit(limit)
+        )
+        if workspace_id is not None:
+            statement = statement.where(SourceItem.workspace_id == workspace_id)
         return list(
             self.session.scalars(
-                select(SourceItem)
-                .where(SourceItem.source_id == source_id)
-                .order_by(desc(SourceItem.collected_at))
-                .limit(limit)
+                statement
             )
         )
 
-    def search_sources(self, value: str, limit: int = 20) -> list[Source]:
+    def search_sources(
+        self, value: str, limit: int = 20, workspace_id: str | None = None
+    ) -> list[Source]:
         pattern = f"%{value.strip()}%"
+        statement = (
+            select(Source)
+            .where(
+                or_(
+                    Source.name.ilike(pattern),
+                    Source.url.ilike(pattern),
+                )
+            )
+            .order_by(Source.name)
+            .limit(limit)
+        )
+        if workspace_id is not None:
+            statement = statement.where(Source.workspace_id == workspace_id)
         return list(
             self.session.scalars(
-                select(Source)
-                .where(
-                    or_(
-                        Source.name.ilike(pattern),
-                        Source.url.ilike(pattern),
-                    )
-                )
-                .order_by(Source.name)
-                .limit(limit)
+                statement
             )
         )

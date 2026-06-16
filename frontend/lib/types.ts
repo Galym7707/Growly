@@ -68,7 +68,7 @@ export type ContentPlanItem = {
 };
 
 export type DashboardData = {
-  workspace_mode: "single";
+  workspace_mode: "single" | "isolated";
   latest_market_scan: Report | null;
   latest_competitor_report: Report | null;
   latest_content_plan: ContentPlanItem | null;

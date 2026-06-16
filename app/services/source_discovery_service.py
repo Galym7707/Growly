@@ -84,6 +84,7 @@ class SourceDiscoveryService:
         niche: str,
         region: str,
         platforms: list[str],
+        workspace_id: str | None = None,
     ) -> list[Source]:
         normalized_platforms = self.normalize_platforms(platforms)
         queries = self.build_discovery_queries(
@@ -115,12 +116,15 @@ class SourceDiscoveryService:
             self._save_candidates,
             niche,
             candidates,
+            workspace_id,
         )
         await self._sync_sources(saved)
         return saved
 
-    async def monitor_active_sources(self) -> tuple[Report, list[SourceItem]]:
-        sources = await asyncio.to_thread(self._load_active_sources)
+    async def monitor_active_sources(
+        self, workspace_id: str | None = None
+    ) -> tuple[Report, list[SourceItem]]:
+        sources = await asyncio.to_thread(self._load_active_sources, workspace_id)
         if not sources:
             raise ValueError(
                 "Нет активных источников. Сначала используйте /discover_sources "
@@ -143,7 +147,9 @@ class SourceDiscoveryService:
                 continue
             findings.extend((source.id, result) for result in results)
 
-        saved_items = await asyncio.to_thread(self._save_monitoring_findings, findings)
+        saved_items = await asyncio.to_thread(
+            self._save_monitoring_findings, findings, workspace_id
+        )
         summary = await self._summarize_monitoring(
             sources=sources,
             saved_items=saved_items,
@@ -159,9 +165,10 @@ class SourceDiscoveryService:
             summary,
             len(sources),
             len(saved_items),
+            workspace_id,
         )
         await self._sync_report(report)
-        sources = await asyncio.to_thread(self._load_active_sources)
+        sources = await asyncio.to_thread(self._load_active_sources, workspace_id)
         await self._sync_sources(sources)
         return report, saved_items
 
@@ -358,6 +365,7 @@ class SourceDiscoveryService:
     def _save_candidates(
         niche: str,
         candidates: list[dict[str, str]],
+        workspace_id: str | None = None,
     ) -> list[Source]:
         with session_scope() as session:
             repo = SourcesRepository(session)
@@ -376,18 +384,22 @@ class SourceDiscoveryService:
                     url=candidate["url"],
                     category=niche.strip(),
                     notes=notes,
+                    workspace_id=workspace_id,
                 )
                 saved.append(source)
             return saved
 
     @staticmethod
-    def _load_active_sources() -> list[Source]:
+    def _load_active_sources(workspace_id: str | None = None) -> list[Source]:
         with session_scope() as session:
-            return SourcesRepository(session).list_sources(active_only=True)
+            return SourcesRepository(session).list_sources(
+                active_only=True, workspace_id=workspace_id
+            )
 
     @staticmethod
     def _save_monitoring_findings(
         findings: list[tuple[int, SearchResult]],
+        workspace_id: str | None = None,
     ) -> list[SourceItem]:
         with session_scope() as session:
             repo = SourcesRepository(session)
@@ -397,10 +409,14 @@ class SourceDiscoveryService:
                 key = (source_id, SourceDiscoveryService._normalize_url(result.url))
                 if key in seen:
                     continue
-                source = repo.get(source_id)
+                source = repo.get(source_id, workspace_id=workspace_id)
                 if source is None or source.status != "active":
                     continue
-                saved.append(repo.create_monitoring_item(source, result))
+                saved.append(
+                    repo.create_monitoring_item(
+                        source, result, workspace_id=workspace_id
+                    )
+                )
                 seen.add(key)
             return saved
 
@@ -479,6 +495,7 @@ class SourceDiscoveryService:
         summary: dict[str, Any],
         sources_count: int,
         findings_count: int,
+        workspace_id: str | None = None,
     ) -> Report:
         body = cls.render_monitoring_summary(summary)
         with session_scope() as session:
@@ -503,6 +520,7 @@ class SourceDiscoveryService:
                     **summary,
                     "findings_count": findings_count,
                 },
+                workspace_id=workspace_id,
             )
 
     @staticmethod

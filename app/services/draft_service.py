@@ -91,10 +91,14 @@ class DraftService:
             CONTENT_TYPE_BY_KEY["instagram_caption"],
         )
 
-    async def create_post(self, context: dict[str, Any]) -> Draft:
+    async def create_post(
+        self, context: dict[str, Any], workspace_id: str | None = None
+    ) -> Draft:
         brief = str(context.get("brief") or "")
         spec = detect_content_type(brief)
-        return await self._create_typed_draft(context, spec)
+        return await self._create_typed_draft(
+            context, spec, workspace_id=workspace_id
+        )
 
     async def _create_typed_draft(
         self,
@@ -102,6 +106,7 @@ class DraftService:
         spec: ContentTypeSpec,
         *,
         content_plan_id: int | None = None,
+        workspace_id: str | None = None,
     ) -> Draft:
         channel = self._requested_channel(context)
         enriched_context = {
@@ -127,12 +132,17 @@ class DraftService:
             original_context=enriched_context,
             generation_metadata=self._metadata(payload),
             content_plan_id=content_plan_id,
+            workspace_id=workspace_id,
         )
 
-    async def create_from_plan(self, item_id: int) -> Draft:
+    async def create_from_plan(
+        self, item_id: int, workspace_id: str | None = None
+    ) -> Draft:
         def load() -> ContentPlan | None:
             with session_scope() as session:
-                return session.get(ContentPlan, item_id)
+                return ReportsRepository(session).get_content_plan_item(
+                    item_id, workspace_id=workspace_id
+                )
 
         item = await asyncio.to_thread(load)
         if item is None:
@@ -162,11 +172,14 @@ class DraftService:
             },
             spec,
             content_plan_id=item.id,
+            workspace_id=workspace_id,
         )
 
         def mark_drafted() -> None:
             with session_scope() as session:
-                current = session.get(ContentPlan, item.id)
+                current = ReportsRepository(session).get_content_plan_item(
+                    item.id, workspace_id=workspace_id
+                )
                 if current:
                     current.status = "drafted"
 
@@ -184,6 +197,7 @@ class DraftService:
         original_context: dict[str, Any],
         generation_metadata: dict[str, Any] | None = None,
         content_plan_id: int | None = None,
+        workspace_id: str | None = None,
     ) -> Draft:
         def save() -> Draft:
             with session_scope() as session:
@@ -200,6 +214,7 @@ class DraftService:
                     original_context=original_context,
                     generation_metadata=generation_metadata,
                     content_plan_id=content_plan_id,
+                    workspace_id=workspace_id,
                 )
 
         draft = await asyncio.to_thread(save)
@@ -244,22 +259,32 @@ class DraftService:
             self._schedule_in_session, draft_id, when, channel
         )
 
-    async def get(self, draft_id: int) -> Draft | None:
+    async def get(
+        self, draft_id: int, workspace_id: str | None = None
+    ) -> Draft | None:
         def load() -> Draft | None:
             with session_scope() as session:
-                return DraftsRepository(session).get(draft_id)
+                return DraftsRepository(session).get(
+                    draft_id, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 
-    async def list_pending(self, limit: int = 20) -> list[Draft]:
+    async def list_pending(
+        self, limit: int = 20, workspace_id: str | None = None
+    ) -> list[Draft]:
         def load() -> list[Draft]:
             with session_scope() as session:
-                return DraftsRepository(session).list_pending(limit)
+                return DraftsRepository(session).list_pending(
+                    limit, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 
-    async def regenerate(self, draft_id: int) -> Draft:
-        draft = await self.get(draft_id)
+    async def regenerate(
+        self, draft_id: int, workspace_id: str | None = None
+    ) -> Draft:
+        draft = await self.get(draft_id, workspace_id=workspace_id)
         if draft is None:
             raise ValueError("Draft was not found.")
         context = dict(draft.original_context_json or {})
@@ -279,7 +304,7 @@ class DraftService:
         def update() -> Draft:
             with session_scope() as session:
                 repo = DraftsRepository(session)
-                current = repo.get(draft_id)
+                current = repo.get(draft_id, workspace_id=workspace_id)
                 if current is None:
                     raise ValueError("Draft was not found.")
                 return repo.replace_generated_content(
@@ -300,6 +325,7 @@ class DraftService:
         action: str,
         approved_by: str | None = None,
         comment: str | None = None,
+        workspace_id: str | None = None,
     ) -> Draft:
         status_map = {"approve": "approved", "reject": "rejected"}
         if action not in status_map:
@@ -309,7 +335,7 @@ class DraftService:
             with session_scope() as session:
                 drafts = DraftsRepository(session)
                 users = UsersRepository(session)
-                draft = drafts.get(draft_id)
+                draft = drafts.get(draft_id, workspace_id=workspace_id)
                 if draft is None:
                     raise ValueError("Draft was not found.")
                 if action == "approve" and draft.status in {"approved", "published"}:
@@ -449,8 +475,10 @@ class DraftService:
 
         await asyncio.to_thread(fail)
 
-    async def ensure_notion(self, draft_id: int) -> str:
-        draft = await self.get(draft_id)
+    async def ensure_notion(
+        self, draft_id: int, workspace_id: str | None = None
+    ) -> str:
+        draft = await self.get(draft_id, workspace_id=workspace_id)
         if draft is None:
             raise ValueError("Draft was not found.")
         page = await self.notion.sync_draft(draft)

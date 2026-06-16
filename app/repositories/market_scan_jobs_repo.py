@@ -10,8 +10,15 @@ class MarketScanJobsRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def create(self, *, user_id: int | None, query: str) -> MarketScanJob:
+    def create(
+        self,
+        *,
+        user_id: int | None,
+        query: str,
+        workspace_id: str | None = None,
+    ) -> MarketScanJob:
         job = MarketScanJob(
+            workspace_id=workspace_id,
             user_id=user_id,
             status="running",
             current_step="Шаг 1/5: ищу источники через Tavily...",
@@ -25,16 +32,23 @@ class MarketScanJobsRepository:
     def get(self, job_id: int) -> MarketScanJob | None:
         return self.session.get(MarketScanJob, job_id)
 
-    def latest_for_user(self, user_id: int) -> MarketScanJob | None:
-        return self.session.scalar(
+    def latest_for_user(
+        self, user_id: int, workspace_id: str | None = None
+    ) -> MarketScanJob | None:
+        statement = (
             select(MarketScanJob)
             .where(MarketScanJob.user_id == user_id)
             .order_by(desc(MarketScanJob.created_at), desc(MarketScanJob.id))
             .limit(1)
         )
+        if workspace_id is not None:
+            statement = statement.where(MarketScanJob.workspace_id == workspace_id)
+        return self.session.scalar(statement)
 
-    def latest_running_for_user(self, user_id: int) -> MarketScanJob | None:
-        return self.session.scalar(
+    def latest_running_for_user(
+        self, user_id: int, workspace_id: str | None = None
+    ) -> MarketScanJob | None:
+        statement = (
             select(MarketScanJob)
             .where(
                 MarketScanJob.user_id == user_id,
@@ -43,14 +57,22 @@ class MarketScanJobsRepository:
             .order_by(desc(MarketScanJob.created_at), desc(MarketScanJob.id))
             .limit(1)
         )
+        if workspace_id is not None:
+            statement = statement.where(MarketScanJob.workspace_id == workspace_id)
+        return self.session.scalar(statement)
 
-    def latest_for_report(self, report_id: int) -> MarketScanJob | None:
-        return self.session.scalar(
+    def latest_for_report(
+        self, report_id: int, workspace_id: str | None = None
+    ) -> MarketScanJob | None:
+        statement = (
             select(MarketScanJob)
             .where(MarketScanJob.report_id == report_id)
             .order_by(desc(MarketScanJob.created_at), desc(MarketScanJob.id))
             .limit(1)
         )
+        if workspace_id is not None:
+            statement = statement.where(MarketScanJob.workspace_id == workspace_id)
+        return self.session.scalar(statement)
 
     def update(
         self,

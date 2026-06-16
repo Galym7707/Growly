@@ -28,8 +28,10 @@ class ReportsRepository:
         evidence: list[Any] | None = None,
         raw_json: dict[str, Any] | None = None,
         status: str = "ready",
+        workspace_id: str | None = None,
     ) -> Report:
         report = Report(
+            workspace_id=workspace_id,
             report_type=report_type,
             title=title,
             report_text=report_text,
@@ -48,35 +50,49 @@ class ReportsRepository:
         self.session.flush()
         return report
 
-    def get_report(self, report_id: int) -> Report | None:
-        return self.session.get(Report, report_id)
+    def get_report(
+        self, report_id: int, workspace_id: str | None = None
+    ) -> Report | None:
+        statement = select(Report).where(Report.id == report_id)
+        if workspace_id is not None:
+            statement = statement.where(Report.workspace_id == workspace_id)
+        return self.session.scalar(statement)
 
     def set_report_notion_page(self, report: Report, notion_page_id: str) -> Report:
         report.notion_page_id = notion_page_id
         self.session.flush()
         return report
 
-    def list_latest(self, limit: int = 10) -> list[Report]:
+    def list_latest(
+        self, limit: int = 10, workspace_id: str | None = None
+    ) -> list[Report]:
+        statement = select(Report).order_by(desc(Report.created_at)).limit(limit)
+        if workspace_id is not None:
+            statement = statement.where(Report.workspace_id == workspace_id)
         return list(
-            self.session.scalars(
-                select(Report).order_by(desc(Report.created_at)).limit(limit)
-            )
+            self.session.scalars(statement)
         )
 
-    def latest_report(self, report_type: str) -> Report | None:
-        return self.session.scalar(
+    def latest_report(
+        self, report_type: str, workspace_id: str | None = None
+    ) -> Report | None:
+        statement = (
             select(Report)
             .where(Report.report_type == report_type)
             .order_by(desc(Report.created_at))
             .limit(1)
         )
+        if workspace_id is not None:
+            statement = statement.where(Report.workspace_id == workspace_id)
+        return self.session.scalar(statement)
 
     def latest_report_with_status(
         self,
         report_type: str,
         status: str,
+        workspace_id: str | None = None,
     ) -> Report | None:
-        return self.session.scalar(
+        statement = (
             select(Report)
             .where(
                 Report.report_type == report_type,
@@ -85,6 +101,9 @@ class ReportsRepository:
             .order_by(desc(Report.created_at))
             .limit(1)
         )
+        if workspace_id is not None:
+            statement = statement.where(Report.workspace_id == workspace_id)
+        return self.session.scalar(statement)
 
     def update_report(
         self,
@@ -140,8 +159,10 @@ class ReportsRepository:
         faq_ideas: list[Any] | None = None,
         risk_notes: list[Any] | None = None,
         recommended_posts: list[Any] | None = None,
+        workspace_id: str | None = None,
     ) -> ReviewImport:
         review = ReviewImport(
+            workspace_id=workspace_id,
             title=title,
             source_name=source_name,
             raw_text=raw_text,
@@ -170,46 +191,50 @@ class ReportsRepository:
         return review
 
     def performance_counts(
-        self, start: datetime, end: datetime
+        self, start: datetime, end: datetime, workspace_id: str | None = None
     ) -> dict[str, int]:
         def count_drafts(status: str | None = None) -> int:
             statement = select(func.count(Draft.id)).where(
                 Draft.created_at >= start, Draft.created_at < end
             )
+            if workspace_id is not None:
+                statement = statement.where(Draft.workspace_id == workspace_id)
             if status:
                 statement = statement.where(Draft.status == status)
             return int(self.session.scalar(statement) or 0)
 
+        publication_statement = select(func.count(Publication.id)).where(
+            Publication.published_at >= start,
+            Publication.published_at < end,
+            Publication.status == "published",
+        )
+        if workspace_id is not None:
+            publication_statement = publication_statement.where(
+                Publication.workspace_id == workspace_id
+            )
         published = int(
-            self.session.scalar(
-                select(func.count(Publication.id)).where(
-                    Publication.published_at >= start,
-                    Publication.published_at < end,
-                    Publication.status == "published",
-                )
-            )
+            self.session.scalar(publication_statement)
             or 0
         )
-        approved = int(
-            self.session.scalar(
-                select(func.count(Approval.id)).where(
-                    Approval.created_at >= start,
-                    Approval.created_at < end,
-                    Approval.action == "approve",
-                )
-            )
-            or 0
+        approved_statement = select(func.count(Approval.id)).where(
+            Approval.created_at >= start,
+            Approval.created_at < end,
+            Approval.action == "approve",
         )
-        rejected = int(
-            self.session.scalar(
-                select(func.count(Approval.id)).where(
-                    Approval.created_at >= start,
-                    Approval.created_at < end,
-                    Approval.action == "reject",
-                )
-            )
-            or 0
+        rejected_statement = select(func.count(Approval.id)).where(
+            Approval.created_at >= start,
+            Approval.created_at < end,
+            Approval.action == "reject",
         )
+        if workspace_id is not None:
+            approved_statement = approved_statement.join(
+                Draft, Approval.draft_id == Draft.id
+            ).where(Draft.workspace_id == workspace_id)
+            rejected_statement = rejected_statement.join(
+                Draft, Approval.draft_id == Draft.id
+            ).where(Draft.workspace_id == workspace_id)
+        approved = int(self.session.scalar(approved_statement) or 0)
+        rejected = int(self.session.scalar(rejected_statement) or 0)
         return {
             "drafts": count_drafts(),
             "approved": approved,
@@ -218,38 +243,61 @@ class ReportsRepository:
         }
 
     def list_publications_for_period(
-        self, start: datetime, end: datetime
+        self, start: datetime, end: datetime, workspace_id: str | None = None
     ) -> list[Publication]:
+        statement = (
+            select(Publication)
+            .where(Publication.created_at >= start, Publication.created_at < end)
+            .order_by(desc(Publication.views))
+        )
+        if workspace_id is not None:
+            statement = statement.where(Publication.workspace_id == workspace_id)
         return list(
             self.session.scalars(
-                select(Publication)
-                .where(Publication.created_at >= start, Publication.created_at < end)
-                .order_by(desc(Publication.views))
+                statement
             )
         )
 
-    def list_recent_publications(self, limit: int = 20) -> list[Publication]:
+    def list_recent_publications(
+        self, limit: int = 20, workspace_id: str | None = None
+    ) -> list[Publication]:
+        statement = (
+            select(Publication)
+            .options(joinedload(Publication.draft))
+            .where(Publication.status == "published")
+            .order_by(desc(Publication.published_at), desc(Publication.created_at))
+            .limit(limit)
+        )
+        if workspace_id is not None:
+            statement = statement.where(Publication.workspace_id == workspace_id)
         return list(
             self.session.scalars(
-                select(Publication)
-                .options(joinedload(Publication.draft))
-                .where(Publication.status == "published")
-                .order_by(desc(Publication.published_at), desc(Publication.created_at))
-                .limit(limit)
+                statement
             )
         )
 
-    def get_publication(self, publication_id: int) -> Publication | None:
-        return self.session.scalar(
+    def get_publication(
+        self, publication_id: int, workspace_id: str | None = None
+    ) -> Publication | None:
+        statement = (
             select(Publication)
             .options(joinedload(Publication.draft))
             .where(Publication.id == publication_id)
         )
+        if workspace_id is not None:
+            statement = statement.where(Publication.workspace_id == workspace_id)
+        return self.session.scalar(statement)
 
     def schedule_publication(
-        self, *, draft_id: int, when: datetime, channel: str = "Telegram"
+        self,
+        *,
+        draft_id: int,
+        when: datetime,
+        channel: str = "Telegram",
+        workspace_id: str | None = None,
     ) -> Publication:
         publication = Publication(
+            workspace_id=workspace_id,
             draft_id=draft_id,
             channel=channel,
             status="scheduled",
@@ -260,7 +308,9 @@ class ReportsRepository:
         self.session.flush()
         return publication
 
-    def list_due_scheduled(self, now: datetime, limit: int = 20) -> list[Publication]:
+    def list_due_scheduled(
+        self, now: datetime, limit: int = 20, workspace_id: str | None = None
+    ) -> list[Publication]:
         statement = (
             select(Publication)
             .where(Publication.status == "scheduled")
@@ -268,6 +318,8 @@ class ReportsRepository:
             .order_by(Publication.scheduled_for)
             .limit(limit)
         )
+        if workspace_id is not None:
+            statement = statement.where(Publication.workspace_id == workspace_id)
         return list(self.session.scalars(statement))
 
     def update_publication_metrics(
@@ -299,15 +351,27 @@ class ReportsRepository:
         self.session.flush()
         return publication
 
-    def list_draft_plan_items(self, limit: int = 20) -> list[ContentPlan]:
+    def list_draft_plan_items(
+        self, limit: int = 20, workspace_id: str | None = None
+    ) -> list[ContentPlan]:
+        statement = (
+            select(ContentPlan)
+            .where(ContentPlan.status == "draft")
+            .order_by(ContentPlan.publish_date, ContentPlan.id)
+            .limit(limit)
+        )
+        if workspace_id is not None:
+            statement = statement.where(ContentPlan.workspace_id == workspace_id)
         return list(
             self.session.scalars(
-                select(ContentPlan)
-                .where(ContentPlan.status == "draft")
-                .order_by(ContentPlan.publish_date, ContentPlan.id)
-                .limit(limit)
+                statement
             )
         )
 
-    def get_content_plan_item(self, item_id: int) -> ContentPlan | None:
-        return self.session.get(ContentPlan, item_id)
+    def get_content_plan_item(
+        self, item_id: int, workspace_id: str | None = None
+    ) -> ContentPlan | None:
+        statement = select(ContentPlan).where(ContentPlan.id == item_id)
+        if workspace_id is not None:
+            statement = statement.where(ContentPlan.workspace_id == workspace_id)
+        return self.session.scalar(statement)

@@ -11,9 +11,10 @@ from sqlalchemy import desc, select
 
 from app.config import Settings, get_settings
 from app.database import session_scope
-from app.models import MarketScanJob, Report, Setting, SourceItem
+from app.models import MarketScanJob, Report, SourceItem
 from app.repositories.market_scan_jobs_repo import MarketScanJobsRepository
 from app.repositories.reports_repo import ReportsRepository
+from app.repositories.settings_repo import SettingsRepository
 from app.repositories.sources_repo import SourcesRepository
 from app.search.base import BaseSearchProvider, SearchResult
 from app.search.factory import get_search_provider
@@ -63,11 +64,17 @@ class MarketIntelligenceService:
         self,
         user_id: int | None,
         query: str,
+        workspace_id: str | None = None,
     ) -> MarketScanJob:
-        return await asyncio.to_thread(
-            self._create_market_scan_job,
-            user_id,
-            query,
+        return await (
+            asyncio.to_thread(self._create_market_scan_job, user_id, query)
+            if workspace_id is None
+            else asyncio.to_thread(
+                self._create_market_scan_job,
+                user_id,
+                query,
+                workspace_id,
+            )
         )
 
     async def latest_market_scan_job(
@@ -115,6 +122,7 @@ class MarketIntelligenceService:
         *,
         max_results: int | None = None,
         include_raw_content: bool = False,
+        workspace_id: str | None = None,
     ) -> list[SourceItem]:
         results = await asyncio.to_thread(
             self._provider().search,
@@ -122,7 +130,11 @@ class MarketIntelligenceService:
             max_results,
             include_raw_content=include_raw_content,
         )
-        saved = await asyncio.to_thread(self._save_results, results)
+        saved = await (
+            asyncio.to_thread(self._save_results, results)
+            if workspace_id is None
+            else asyncio.to_thread(self._save_results, results, workspace_id)
+        )
         await self._sync_source_items(saved)
         return saved
 
@@ -135,10 +147,13 @@ class MarketIntelligenceService:
         user_id: int | None = None,
         job_id: int | None = None,
         progress: ProgressCallback | None = None,
+        workspace_id: str | None = None,
     ) -> tuple[Report, list[SourceItem]]:
         logger.info("market_scan_started")
         if job_id is None and user_id is not None:
-            job = await self.create_market_scan_job(user_id, niche)
+            job = await self.create_market_scan_job(
+                user_id, niche, workspace_id=workspace_id
+            )
             job_id = job.id
         await self._set_job_step(
             job_id,
@@ -206,7 +221,13 @@ class MarketIntelligenceService:
             progress,
             "Шаг 3/5: сохраняю источники в Supabase...",
         )
-        saved = await asyncio.to_thread(self._save_results, unique_results)
+        saved = await (
+            asyncio.to_thread(self._save_results, unique_results)
+            if workspace_id is None
+            else asyncio.to_thread(
+                self._save_results, unique_results, workspace_id
+            )
+        )
         logger.info("source_items_saved_count=%d", len(saved))
         await self._update_job(
             job_id,
@@ -238,6 +259,7 @@ class MarketIntelligenceService:
                 saved=saved,
                 job_id=job_id,
                 progress=progress,
+                workspace_id=workspace_id,
             )
             logger.info("groq_status=ready")
             logger.info("groq_analysis_finished")
@@ -254,13 +276,25 @@ class MarketIntelligenceService:
                 groq_status,
                 type(exc).__name__,
             )
-            report = await asyncio.to_thread(
-                self._save_partial_market_scan_report,
-                niche,
-                queries,
-                saved,
-                groq_status,
-                region_language,
+            report = await (
+                asyncio.to_thread(
+                    self._save_partial_market_scan_report,
+                    niche,
+                    queries,
+                    saved,
+                    groq_status,
+                    region_language,
+                )
+                if workspace_id is None
+                else asyncio.to_thread(
+                    self._save_partial_market_scan_report,
+                    niche,
+                    queries,
+                    saved,
+                    groq_status,
+                    region_language,
+                    workspace_id,
+                )
             )
         await self._update_job(
             job_id,
@@ -429,8 +463,12 @@ class MarketIntelligenceService:
             logger.info("report_status=%s", pending.status)
             return pending, saved
 
-    async def source_items_for_report(self, report_id: int) -> list[SourceItem]:
-        return await asyncio.to_thread(self._load_report_source_items, report_id)
+    async def source_items_for_report(
+        self, report_id: int, workspace_id: str | None = None
+    ) -> list[SourceItem]:
+        return await asyncio.to_thread(
+            self._load_report_source_items, report_id, workspace_id
+        )
 
     async def _complete_market_scan_analysis(
         self,
@@ -442,6 +480,7 @@ class MarketIntelligenceService:
         existing_report_id: int | None = None,
         job_id: int | None = None,
         progress: ProgressCallback | None = None,
+        workspace_id: str | None = None,
     ) -> tuple[Report, list[SourceItem]]:
         analysis, batch_summaries = await self._analyze_source_item_batches(
             " | ".join(queries),
@@ -449,10 +488,19 @@ class MarketIntelligenceService:
             job_id=job_id,
             progress=progress,
         )
-        saved = await asyncio.to_thread(
-            self._apply_source_analysis,
-            [item.id for item in saved],
-            analysis,
+        saved = await (
+            asyncio.to_thread(
+                self._apply_source_analysis,
+                [item.id for item in saved],
+                analysis,
+            )
+            if workspace_id is None
+            else asyncio.to_thread(
+                self._apply_source_analysis,
+                [item.id for item in saved],
+                analysis,
+                workspace_id,
+            )
         )
 
         report_payload = await self.generate_market_scan_report(
@@ -461,22 +509,46 @@ class MarketIntelligenceService:
             batch_summaries=batch_summaries,
         )
         if existing_report_id is None:
-            report = await asyncio.to_thread(
-                self._save_market_scan_report,
-                niche,
-                report_payload,
-                saved,
-                queries,
-                region_language,
+            report = await (
+                asyncio.to_thread(
+                    self._save_market_scan_report,
+                    niche,
+                    report_payload,
+                    saved,
+                    queries,
+                    region_language,
+                )
+                if workspace_id is None
+                else asyncio.to_thread(
+                    self._save_market_scan_report,
+                    niche,
+                    report_payload,
+                    saved,
+                    queries,
+                    region_language,
+                    workspace_id,
+                )
             )
         else:
-            report = await asyncio.to_thread(
-                self._update_market_scan_report,
-                existing_report_id,
-                report_payload,
-                saved,
-                queries,
-                region_language,
+            report = await (
+                asyncio.to_thread(
+                    self._update_market_scan_report,
+                    existing_report_id,
+                    report_payload,
+                    saved,
+                    queries,
+                    region_language,
+                )
+                if workspace_id is None
+                else asyncio.to_thread(
+                    self._update_market_scan_report,
+                    existing_report_id,
+                    report_payload,
+                    saved,
+                    queries,
+                    region_language,
+                    workspace_id,
+                )
             )
         return report, saved
 
@@ -595,11 +667,17 @@ class MarketIntelligenceService:
         *,
         query: str | None = None,
         market_report_id: int | None = None,
+        workspace_id: str | None = None,
     ) -> Report:
-        context = await asyncio.to_thread(
-            self._competitor_context,
-            query,
-            market_report_id,
+        context = await (
+            asyncio.to_thread(self._competitor_context, query, market_report_id)
+            if workspace_id is None
+            else asyncio.to_thread(
+                self._competitor_context,
+                query,
+                market_report_id,
+                workspace_id,
+            )
         )
         if not context["source_items"]:
             raise ValueError(
@@ -623,23 +701,39 @@ class MarketIntelligenceService:
         summary = str(payload.get("executive_summary") or "Нет подтверждённого вывода.")[
             :1800
         ]
-        report = await asyncio.to_thread(
-            self._save_competitor_report,
-            query,
-            text,
-            summary,
-            evidence,
-            context,
-            payload,
+        report = await (
+            asyncio.to_thread(
+                self._save_competitor_report,
+                query,
+                text,
+                summary,
+                evidence,
+                context,
+                payload,
+            )
+            if workspace_id is None
+            else asyncio.to_thread(
+                self._save_competitor_report,
+                query,
+                text,
+                summary,
+                evidence,
+                context,
+                payload,
+                workspace_id,
+            )
         )
         await self._sync_report(report)
         return report
 
-    async def has_source_items(self) -> bool:
+    async def has_source_items(self, workspace_id: str | None = None) -> bool:
         def check() -> bool:
             with session_scope() as session:
+                statement = select(SourceItem.id).limit(1)
+                if workspace_id is not None:
+                    statement = statement.where(SourceItem.workspace_id == workspace_id)
                 return bool(
-                    session.scalar(select(SourceItem.id).limit(1))
+                    session.scalar(statement)
                 )
 
         return await asyncio.to_thread(check)
@@ -995,15 +1089,21 @@ class MarketIntelligenceService:
         return list(unique.values())
 
     @staticmethod
-    def _save_results(results: list[SearchResult]) -> list[SourceItem]:
+    def _save_results(
+        results: list[SearchResult], workspace_id: str | None = None
+    ) -> list[SourceItem]:
         with session_scope() as session:
             repo = SourcesRepository(session)
-            return [repo.create_search_item(result) for result in results]
+            return [
+                repo.create_search_item(result, workspace_id=workspace_id)
+                for result in results
+            ]
 
     @staticmethod
     def _apply_source_analysis(
         item_ids: list[int],
         analysis: dict[str, Any],
+        workspace_id: str | None = None,
     ) -> list[SourceItem]:
         per_url = {
             str(row.get("url") or ""): row
@@ -1016,6 +1116,11 @@ class MarketIntelligenceService:
                 session.scalars(
                     select(SourceItem)
                     .where(SourceItem.id.in_(item_ids))
+                    .where(
+                        SourceItem.workspace_id == workspace_id
+                        if workspace_id is not None
+                        else True
+                    )
                     .order_by(SourceItem.id)
                 )
             )
@@ -1166,11 +1271,13 @@ class MarketIntelligenceService:
     def _create_market_scan_job(
         user_id: int | None,
         query: str,
+        workspace_id: str | None = None,
     ) -> MarketScanJob:
         with session_scope() as session:
             return MarketScanJobsRepository(session).create(
                 user_id=user_id,
                 query=query,
+                workspace_id=workspace_id,
             )
 
     @staticmethod
@@ -1208,6 +1315,7 @@ class MarketIntelligenceService:
         source_items: list[SourceItem],
         queries: list[str],
         region_language: str = "",
+        workspace_id: str | None = None,
     ) -> Report:
         body = cls.render_market_scan_report(payload)
         with session_scope() as session:
@@ -1231,6 +1339,7 @@ class MarketIntelligenceService:
                     "groq_status": "ready",
                 },
                 status="ready",
+                workspace_id=workspace_id,
             )
 
     @classmethod
@@ -1241,6 +1350,7 @@ class MarketIntelligenceService:
         source_items: list[SourceItem],
         groq_status: str,
         region_language: str = "",
+        workspace_id: str | None = None,
     ) -> Report:
         if groq_status == "rate_limited":
             message = (
@@ -1272,6 +1382,7 @@ class MarketIntelligenceService:
                     "analysis_pending_since": datetime.now(UTC).isoformat(),
                 },
                 status=MARKET_SCAN_PENDING_STATUS,
+                workspace_id=workspace_id,
             )
 
     @classmethod
@@ -1282,10 +1393,13 @@ class MarketIntelligenceService:
         source_items: list[SourceItem],
         queries: list[str],
         region_language: str = "",
+        workspace_id: str | None = None,
     ) -> Report:
         body = cls.render_market_scan_report(payload)
         with session_scope() as session:
-            report = session.get(Report, report_id)
+            report = ReportsRepository(session).get_report(
+                report_id, workspace_id=workspace_id
+            )
             if report is None:
                 raise ValueError(f"Market scan report {report_id} was not found.")
             existing_payload = (
@@ -1357,9 +1471,13 @@ class MarketIntelligenceService:
             return report, items
 
     @staticmethod
-    def _load_report_source_items(report_id: int) -> list[SourceItem]:
+    def _load_report_source_items(
+        report_id: int, workspace_id: str | None = None
+    ) -> list[SourceItem]:
         with session_scope() as session:
-            report = session.get(Report, report_id)
+            report = ReportsRepository(session).get_report(
+                report_id, workspace_id=workspace_id
+            )
             if report is None:
                 return []
             source_ids = [
@@ -1373,6 +1491,11 @@ class MarketIntelligenceService:
                 session.scalars(
                     select(SourceItem)
                     .where(SourceItem.id.in_(source_ids))
+                    .where(
+                        SourceItem.workspace_id == workspace_id
+                        if workspace_id is not None
+                        else True
+                    )
                     .order_by(SourceItem.id)
                 )
             )
@@ -1406,6 +1529,7 @@ class MarketIntelligenceService:
         evidence: list[str],
         context: dict[str, Any],
         payload: dict[str, Any],
+        workspace_id: str | None = None,
     ) -> Report:
         with session_scope() as session:
             return ReportsRepository(session).create_report(
@@ -1429,19 +1553,21 @@ class MarketIntelligenceService:
                     "market_report_id": context.get("market_report_id"),
                     "data_limited": context.get("data_limited", True),
                 },
+                workspace_id=workspace_id,
             )
 
     @staticmethod
     def _competitor_context(
         query: str | None,
         market_report_id: int | None = None,
+        workspace_id: str | None = None,
     ) -> dict[str, Any]:
         with session_scope() as session:
             reports = ReportsRepository(session)
             market_scan = (
-                reports.get_report(market_report_id)
+                reports.get_report(market_report_id, workspace_id=workspace_id)
                 if market_report_id is not None
-                else reports.latest_report("market_scan")
+                else reports.latest_report("market_scan", workspace_id=workspace_id)
             )
             if market_scan and market_scan.report_type != "market_scan":
                 market_scan = None
@@ -1460,18 +1586,27 @@ class MarketIntelligenceService:
                     session.scalars(
                         select(SourceItem)
                         .where(SourceItem.id.in_(source_item_ids))
+                        .where(
+                            SourceItem.workspace_id == workspace_id
+                            if workspace_id is not None
+                            else True
+                        )
                         .order_by(desc(SourceItem.created_at))
                     )
                 )
                 if source_item_ids
                 else []
             )
-            settings = list(
-                session.scalars(
-                    select(Setting)
-                    .where(Setting.key.like("business_%"))
-                    .order_by(Setting.key)
-                )
+            business_profile = SettingsRepository(session).get_many(
+                [
+                    "business_name",
+                    "business_niche",
+                    "business_region",
+                    "business_language",
+                    "business_brand_tone",
+                    "business_telegram_channel",
+                ],
+                workspace_id=workspace_id,
             )
             return {
                 "query": query,
@@ -1509,7 +1644,7 @@ class MarketIntelligenceService:
                     if market_scan
                     else None
                 ),
-                "business_profile": {row.key: row.value for row in settings},
+                "business_profile": business_profile,
             }
 
     @staticmethod

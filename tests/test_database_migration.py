@@ -49,6 +49,7 @@ def test_every_sqlalchemy_column_has_idempotent_repair_statement() -> None:
 def test_drafts_repair_contains_full_model_schema() -> None:
     assert EXPECTED_SCHEMA["drafts"] == {
         "id",
+        "workspace_id",
         "content_plan_id",
         "draft_type",
         "channel",
@@ -71,6 +72,7 @@ def test_drafts_repair_contains_full_model_schema() -> None:
 def test_market_scan_jobs_schema_tracks_long_tasks() -> None:
     assert EXPECTED_SCHEMA["market_scan_jobs"] == {
         "id",
+        "workspace_id",
         "user_id",
         "status",
         "current_step",
@@ -81,6 +83,21 @@ def test_market_scan_jobs_schema_tracks_long_tasks() -> None:
         "created_at",
         "updated_at",
     }
+
+
+def test_web_workspace_tables_have_workspace_id() -> None:
+    for table_name in (
+        "sources",
+        "source_items",
+        "reviews_imports",
+        "content_plan",
+        "drafts",
+        "reports",
+        "market_scan_jobs",
+        "publications",
+        "settings",
+    ):
+        assert "workspace_id" in EXPECTED_SCHEMA[table_name]
 
 
 def test_publications_have_duplicate_prevention_index() -> None:

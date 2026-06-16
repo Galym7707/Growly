@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Literal
 
@@ -49,6 +50,28 @@ def require_web_api_key(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Growly web API key.",
         )
+
+
+@dataclass(frozen=True)
+class WorkspaceContext:
+    id: str
+    user_email: str | None = None
+
+
+def require_workspace_context(
+    x_growly_workspace_id: str | None = Header(default=None),
+    x_growly_user_email: str | None = Header(default=None),
+) -> WorkspaceContext:
+    workspace_id = (x_growly_workspace_id or "local").strip() or "local"
+    if len(workspace_id) > 200:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Workspace id is too long.",
+        )
+    return WorkspaceContext(
+        id=workspace_id,
+        user_email=(x_growly_user_email or "").strip() or None,
+    )
 
 
 secured_router = APIRouter(dependencies=[Depends(require_web_api_key)])
@@ -216,32 +239,40 @@ def _content_plan_payload(item: ContentPlan) -> dict[str, Any]:
     }
 
 
-def _dashboard_data() -> dict[str, Any]:
+def _dashboard_data(workspace_id: str) -> dict[str, Any]:
     with session_scope() as session:
         reports = ReportsRepository(session)
         drafts = DraftsRepository(session)
         sources = SourcesRepository(session)
-        latest_market = reports.latest_report("market_scan")
+        latest_market = reports.latest_report("market_scan", workspace_id=workspace_id)
         latest_competitor = (
-            reports.latest_report("competitor_report")
-            or reports.latest_report("competitor")
+            reports.latest_report("competitor_report", workspace_id=workspace_id)
+            or reports.latest_report("competitor", workspace_id=workspace_id)
         )
         latest_plan = session.scalar(
-            select(ContentPlan).order_by(desc(ContentPlan.created_at)).limit(1)
+            select(ContentPlan)
+            .where(ContentPlan.workspace_id == workspace_id)
+            .order_by(desc(ContentPlan.created_at))
+            .limit(1)
         )
-        pending_drafts = drafts.list_pending(limit=5)
-        active_sources = sources.list_sources(active_only=True)
-        notion_last_sync = SettingsRepository(session).get("notion_last_sync_at")
+        pending_drafts = drafts.list_pending(limit=5, workspace_id=workspace_id)
+        active_sources = sources.list_sources(
+            active_only=True, workspace_id=workspace_id
+        )
+        notion_last_sync = SettingsRepository(session).get(
+            "notion_last_sync_at", workspace_id=workspace_id
+        )
         published_count = int(
             session.scalar(
                 select(func.count(Publication.id)).where(
-                    Publication.status == "published"
+                    Publication.status == "published",
+                    Publication.workspace_id == workspace_id,
                 )
             )
             or 0
         )
         return {
-            "workspace_mode": "single",
+            "workspace_mode": "isolated",
             "latest_market_scan": (
                 _report_payload(latest_market) if latest_market else None
             ),
@@ -267,11 +298,12 @@ def _dashboard_data() -> dict[str, Any]:
         }
 
 
-def _list_content_plan(limit: int) -> list[dict[str, Any]]:
+def _list_content_plan(limit: int, workspace_id: str) -> list[dict[str, Any]]:
     with session_scope() as session:
         rows = list(
             session.scalars(
                 select(ContentPlan)
+                .where(ContentPlan.workspace_id == workspace_id)
                 .order_by(desc(ContentPlan.publish_date), desc(ContentPlan.id))
                 .limit(limit)
             )
@@ -279,18 +311,28 @@ def _list_content_plan(limit: int) -> list[dict[str, Any]]:
         return [_content_plan_payload(row) for row in rows]
 
 
-def _workspace_settings() -> dict[str, str | None]:
+def _workspace_settings(workspace_id: str) -> dict[str, str | None]:
     with session_scope() as session:
-        return SettingsRepository(session).get_many(sorted(BUSINESS_SETTING_KEYS))
+        return SettingsRepository(session).get_many(
+            sorted(BUSINESS_SETTING_KEYS), workspace_id=workspace_id
+        )
 
 
-def _save_workspace_settings(values: dict[str, str | None]) -> dict[str, str | None]:
+def _save_workspace_settings(
+    values: dict[str, str | None], workspace_id: str
+) -> dict[str, str | None]:
     with session_scope() as session:
         repository = SettingsRepository(session)
         for key, value in values.items():
             if key in BUSINESS_SETTING_KEYS:
-                repository.set(key, value.strip() if value else None)
-        return repository.get_many(sorted(BUSINESS_SETTING_KEYS))
+                repository.set(
+                    key,
+                    value.strip() if value else None,
+                    workspace_id=workspace_id,
+                )
+        return repository.get_many(
+            sorted(BUSINESS_SETTING_KEYS), workspace_id=workspace_id
+        )
 
 
 def _infer_chat_action(message: str) -> str | None:
@@ -312,8 +354,10 @@ def _infer_chat_action(message: str) -> str | None:
 
 
 @secured_router.get("/dashboard")
-async def dashboard() -> dict[str, Any]:
-    return await asyncio.to_thread(_dashboard_data)
+async def dashboard(
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
+    return await asyncio.to_thread(_dashboard_data, workspace.id)
 
 
 @secured_router.get("/health")
@@ -326,11 +370,15 @@ async def web_health() -> dict[str, str]:
 
 
 @secured_router.post("/market-scan")
-async def market_scan(payload: MarketScanRequest) -> dict[str, Any]:
+async def market_scan(
+    payload: MarketScanRequest,
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
     report, sources = await MarketIntelligenceService().run_market_scan(
         niche=payload.niche,
         region_language=payload.region_language,
         competitor_keywords=payload.competitor_keywords,
+        workspace_id=workspace.id,
     )
     return {
         "status": "completed",
@@ -340,9 +388,13 @@ async def market_scan(payload: MarketScanRequest) -> dict[str, Any]:
 
 
 @secured_router.post("/competitor-report")
-async def competitor_report(payload: CompetitorReportRequest) -> dict[str, Any]:
+async def competitor_report(
+    payload: CompetitorReportRequest,
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
     report = await MarketIntelligenceService().generate_competitor_report(
-        query=payload.query
+        query=payload.query,
+        workspace_id=workspace.id,
     )
     return {"status": "completed", "report": _report_payload(report)}
 
@@ -350,17 +402,24 @@ async def competitor_report(payload: CompetitorReportRequest) -> dict[str, Any]:
 @secured_router.get("/content-plan")
 async def content_plan_list(
     limit: int = Query(default=40, ge=1, le=200),
+    workspace: WorkspaceContext = Depends(require_workspace_context),
 ) -> dict[str, Any]:
-    return {"items": await asyncio.to_thread(_list_content_plan, limit)}
+    return {
+        "items": await asyncio.to_thread(_list_content_plan, limit, workspace.id)
+    }
 
 
 @secured_router.post("/content-plan")
-async def content_plan_create(payload: ContentPlanRequest) -> dict[str, Any]:
+async def content_plan_create(
+    payload: ContentPlanRequest,
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
     items = await ContentPlanService().generate_weekly_plan(
         {
             "weekly_objective": payload.weekly_objective,
             "business": payload.business,
-        }
+        },
+        workspace_id=workspace.id,
     )
     return {
         "status": "completed",
@@ -369,24 +428,35 @@ async def content_plan_create(payload: ContentPlanRequest) -> dict[str, Any]:
 
 
 @secured_router.post("/content-plan/{item_id}/draft")
-async def content_plan_draft(item_id: int) -> dict[str, Any]:
-    draft = await DraftService().create_from_plan(item_id)
+async def content_plan_draft(
+    item_id: int,
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
+    draft = await DraftService().create_from_plan(item_id, workspace_id=workspace.id)
     return {"status": "completed", "draft": _draft_payload(draft)}
 
 
 @secured_router.post("/create-post")
-async def create_post(payload: CreatePostRequest) -> dict[str, Any]:
-    draft = await DraftService().create_post(payload.model_dump(exclude_none=True))
+async def create_post(
+    payload: CreatePostRequest,
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
+    draft = await DraftService().create_post(
+        payload.model_dump(exclude_none=True), workspace_id=workspace.id
+    )
     return {"status": "completed", "draft": _draft_payload(draft)}
 
 
 @secured_router.get("/drafts")
 async def drafts(
     limit: int = Query(default=50, ge=1, le=200),
+    workspace: WorkspaceContext = Depends(require_workspace_context),
 ) -> dict[str, Any]:
     def load() -> list[Draft]:
         with session_scope() as session:
-            return DraftsRepository(session).list_recent(limit)
+            return DraftsRepository(session).list_recent(
+                limit, workspace_id=workspace.id
+            )
 
     rows = await asyncio.to_thread(load)
     return {"items": [_draft_payload(row) for row in rows]}
@@ -396,13 +466,14 @@ async def drafts(
 async def update_draft(
     draft_id: int,
     payload: DraftActionRequest,
+    workspace: WorkspaceContext = Depends(require_workspace_context),
 ) -> dict[str, Any]:
     service = DraftService()
     if payload.action == "regenerate":
-        draft = await service.regenerate(draft_id)
+        draft = await service.regenerate(draft_id, workspace_id=workspace.id)
     elif payload.action == "sync_notion":
-        await service.ensure_notion(draft_id)
-        draft = await service.get(draft_id)
+        await service.ensure_notion(draft_id, workspace_id=workspace.id)
+        draft = await service.get(draft_id, workspace_id=workspace.id)
     else:
         draft = await service.record_action(
             draft_id=draft_id,
@@ -410,6 +481,7 @@ async def update_draft(
             action=payload.action,
             approved_by=payload.approved_by,
             comment=payload.comment,
+            workspace_id=workspace.id,
         )
     if draft is None:
         raise HTTPException(status_code=404, detail="Черновик не найден.")
@@ -419,14 +491,18 @@ async def update_draft(
 @secured_router.get("/reports")
 async def reports(
     limit: int = Query(default=50, ge=1, le=200),
+    workspace: WorkspaceContext = Depends(require_workspace_context),
 ) -> dict[str, Any]:
-    rows = await ReportService().list_latest(limit)
+    rows = await ReportService().list_latest(limit, workspace_id=workspace.id)
     return {"items": [_report_payload(row) for row in rows]}
 
 
 @secured_router.get("/reports/{report_id}")
-async def report(report_id: int) -> dict[str, Any]:
-    row = await ReportService().get_report(report_id)
+async def report(
+    report_id: int,
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
+    row = await ReportService().get_report(report_id, workspace_id=workspace.id)
     if row is None:
         raise HTTPException(status_code=404, detail="Отчёт не найден.")
     return {"report": _report_payload(row)}
@@ -435,20 +511,33 @@ async def report(report_id: int) -> dict[str, Any]:
 @secured_router.get("/sources")
 async def sources(
     active_only: bool = Query(default=False),
+    workspace: WorkspaceContext = Depends(require_workspace_context),
 ) -> dict[str, Any]:
-    rows = await SourceAnalysisService().list_sources(active_only=active_only)
+    rows = await SourceAnalysisService().list_sources(
+        active_only=active_only, workspace_id=workspace.id
+    )
     return {"items": [_source_payload(row) for row in rows]}
 
 
 @secured_router.post("/sources")
-async def add_source(payload: AddSourceRequest) -> dict[str, Any]:
-    source = await SourceAnalysisService().add_source(**payload.model_dump())
+async def add_source(
+    payload: AddSourceRequest,
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
+    source = await SourceAnalysisService().add_source(
+        **payload.model_dump(), workspace_id=workspace.id
+    )
     return {"status": "completed", "source": _source_payload(source)}
 
 
 @secured_router.post("/sources/discover")
-async def discover_sources(payload: DiscoverSourcesRequest) -> dict[str, Any]:
-    rows = await SourceDiscoveryService().discover_sources(**payload.model_dump())
+async def discover_sources(
+    payload: DiscoverSourcesRequest,
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
+    rows = await SourceDiscoveryService().discover_sources(
+        **payload.model_dump(), workspace_id=workspace.id
+    )
     return {
         "status": "completed",
         "items": [_source_payload(row) for row in rows],
@@ -456,8 +545,12 @@ async def discover_sources(payload: DiscoverSourcesRequest) -> dict[str, Any]:
 
 
 @secured_router.post("/sources/monitor")
-async def monitor_sources() -> dict[str, Any]:
-    report_row, items = await SourceDiscoveryService().monitor_active_sources()
+async def monitor_sources(
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
+    report_row, items = await SourceDiscoveryService().monitor_active_sources(
+        workspace_id=workspace.id
+    )
     return {
         "status": "completed",
         "report": _report_payload(report_row),
@@ -466,38 +559,53 @@ async def monitor_sources() -> dict[str, Any]:
 
 
 @secured_router.post("/notion/sync")
-async def notion_sync(payload: NotionSyncRequest) -> dict[str, Any]:
+async def notion_sync(
+    payload: NotionSyncRequest,
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
     if payload.target == "report":
         if payload.target_id is None:
             raise HTTPException(status_code=422, detail="Укажите ID отчёта.")
-        url = await ReportService().sync_report_to_notion(payload.target_id)
+        url = await ReportService().sync_report_to_notion(
+            payload.target_id, workspace_id=workspace.id
+        )
         return {"status": "completed", "target": "report", "url": url}
     if payload.target == "draft":
         if payload.target_id is None:
             raise HTTPException(status_code=422, detail="Укажите ID черновика.")
-        url = await DraftService().ensure_notion(payload.target_id)
+        url = await DraftService().ensure_notion(
+            payload.target_id, workspace_id=workspace.id
+        )
         return {"status": "completed", "target": "draft", "url": url}
-    counts = await NotionService().sync_recent_data()
+    counts = await NotionService().sync_recent_data(workspace_id=workspace.id)
     return {"status": "completed", "target": "recent", "counts": counts}
 
 
 @secured_router.get("/settings")
-async def settings() -> dict[str, Any]:
+async def settings(
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
     return {
-        "workspace_mode": "single",
-        "settings": await asyncio.to_thread(_workspace_settings),
+        "workspace_mode": "isolated",
+        "settings": await asyncio.to_thread(_workspace_settings, workspace.id),
     }
 
 
 @secured_router.patch("/settings")
-async def update_settings(payload: WorkspaceSettingsRequest) -> dict[str, Any]:
+async def update_settings(
+    payload: WorkspaceSettingsRequest,
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
     values = payload.model_dump()
-    saved = await asyncio.to_thread(_save_workspace_settings, values)
+    saved = await asyncio.to_thread(_save_workspace_settings, values, workspace.id)
     return {"status": "completed", "settings": saved}
 
 
 @secured_router.post("/chat")
-async def chat(payload: ChatRequest) -> dict[str, Any]:
+async def chat(
+    payload: ChatRequest,
+    workspace: WorkspaceContext = Depends(require_workspace_context),
+) -> dict[str, Any]:
     action = payload.action or _infer_chat_action(payload.message)
     context = payload.context
     if action == "market_scan":
@@ -508,12 +616,13 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
             ),
             competitor_keywords=str(context.get("competitor_keywords") or ""),
         )
-        result = await market_scan(request)
+        result = await market_scan(request, workspace)
     elif action == "competitors":
         result = await competitor_report(
             CompetitorReportRequest(
                 query=str(context.get("query") or payload.message)
-            )
+            ),
+            workspace,
         )
     elif action == "content_plan":
         result = await content_plan_create(
@@ -526,7 +635,8 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
                     if isinstance(context.get("business"), dict)
                     else {}
                 ),
-            )
+            ),
+            workspace,
         )
     elif action == "create_post":
         result = await create_post(
@@ -537,16 +647,17 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
                     str(context["title"]) if context.get("title") else None
                 ),
                 cta=str(context["cta"]) if context.get("cta") else None,
-            )
+            ),
+            workspace,
         )
     elif action == "drafts":
-        result = await drafts(limit=50)
+        result = await drafts(limit=50, workspace=workspace)
     elif action == "reports":
-        result = await reports(limit=50)
+        result = await reports(limit=50, workspace=workspace)
     elif action == "sources":
-        result = await sources(active_only=False)
+        result = await sources(active_only=False, workspace=workspace)
     elif action == "notion_sync":
-        result = await notion_sync(NotionSyncRequest())
+        result = await notion_sync(NotionSyncRequest(), workspace)
     else:
         return {
             "status": "needs_action",

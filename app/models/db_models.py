@@ -55,6 +55,7 @@ class MarketScanJob(Base, TimestampMixin):
     __tablename__ = "market_scan_jobs"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text, index=True)
     user_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="SET NULL")
     )
@@ -76,6 +77,7 @@ class Source(Base, TimestampMixin):
     __tablename__ = "sources"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text, index=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     source_type: Mapped[str | None] = mapped_column(Text)
     url: Mapped[str | None] = mapped_column(Text)
@@ -99,6 +101,7 @@ class SourceItem(Base, TimestampMixin):
     __tablename__ = "source_items"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text, index=True)
     source_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("sources.id", ondelete="CASCADE")
     )
@@ -173,6 +176,7 @@ class ReviewImport(Base):
     __tablename__ = "reviews_imports"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text, index=True)
     title: Mapped[str | None] = mapped_column(Text)
     source_name: Mapped[str | None] = mapped_column(Text)
     raw_text: Mapped[str | None] = mapped_column(Text)
@@ -220,6 +224,7 @@ class ContentPlan(Base, TimestampMixin):
     __tablename__ = "content_plan"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text, index=True)
     publish_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     channel: Mapped[str | None] = mapped_column(Text)
     content_type: Mapped[str | None] = mapped_column(Text)
@@ -240,6 +245,7 @@ class Draft(Base, TimestampMixin):
     __tablename__ = "drafts"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text, index=True)
     content_plan_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("content_plan.id", ondelete="SET NULL")
     )
@@ -292,6 +298,7 @@ class Report(Base, TimestampMixin):
     __tablename__ = "reports"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text, index=True)
     report_type: Mapped[str | None] = mapped_column(Text)
     title: Mapped[str | None] = mapped_column(Text)
     report_text: Mapped[str | None] = mapped_column(Text)
@@ -318,6 +325,7 @@ class Publication(Base, TimestampMixin):
     __tablename__ = "publications"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text, index=True)
     draft_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("drafts.id", ondelete="SET NULL")
     )
@@ -359,5 +367,6 @@ class Setting(Base, TimestampMixin):
     __tablename__ = "settings"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text, index=True)
     key: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     value: Mapped[str | None] = mapped_column(Text)

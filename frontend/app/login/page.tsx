@@ -23,9 +23,11 @@ export default function LoginPage() {
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const configured = isSupabaseConfigured();
   const { t } = useLanguage();
@@ -38,13 +40,34 @@ function LoginContent() {
     }
     setLoading(true);
     setError("");
-    const { error: authError } = await createClient().auth.signInWithPassword({
-      email,
-      password,
-    });
+    setNotice("");
+    const supabase = createClient();
+    const { data, error: authError } =
+      mode === "register"
+        ? await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              emailRedirectTo: `${window.location.origin}/dashboard`,
+            },
+          })
+        : await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
     setLoading(false);
     if (authError) {
-      setError(t("Не удалось войти. Проверьте почту и пароль."));
+      setError(
+        t(
+          mode === "register"
+            ? "Не удалось зарегистрироваться. Проверьте почту и пароль."
+            : "Не удалось войти. Проверьте почту и пароль.",
+        ),
+      );
+      return;
+    }
+    if (mode === "register" && !data.session) {
+      setNotice(t("Проверьте почту, чтобы подтвердить регистрацию."));
       return;
     }
     router.push(searchParams.get("next") || "/dashboard");
@@ -61,7 +84,9 @@ function LoginContent() {
           <h1>{t("Рынок, отчёты и контент в одном процессе.")}</h1>
           <p>
             {t(
-              "Войдите, чтобы продолжить работу с источниками, планами и согласованием материалов.",
+              mode === "register"
+                ? "Создайте аккаунт, чтобы работать только со своими данными."
+                : "Войдите, чтобы продолжить работу с источниками, планами и согласованием материалов.",
             )}
           </p>
         </div>
@@ -72,8 +97,14 @@ function LoginContent() {
       </div>
       <div className="auth-panel">
         <form onSubmit={submit}>
-          <p className="eyebrow">{t("Вход")}</p>
-          <h2>{t("Открыть рабочую область")}</h2>
+          <p className="eyebrow">{t(mode === "register" ? "Регистрация" : "Вход")}</p>
+          <h2>
+            {t(
+              mode === "register"
+                ? "Создать рабочую область"
+                : "Открыть рабочую область",
+            )}
+          </h2>
           {!configured ? (
             <div className="notice">
               {t(
@@ -96,7 +127,7 @@ function LoginContent() {
           <label>
             <span>{t("Пароль")}</span>
             <input
-              autoComplete="current-password"
+              autoComplete={mode === "register" ? "new-password" : "current-password"}
               disabled={!configured}
               onChange={(event) => setPassword(event.target.value)}
               placeholder={t("Пароль")}
@@ -105,15 +136,35 @@ function LoginContent() {
               value={password}
             />
           </label>
+          {notice ? <div className="notice">{notice}</div> : null}
           {error ? <p className="form-error">{error}</p> : null}
           <button className="button button-primary button-wide" disabled={loading}>
             {loading
-              ? t("Проверяем доступ")
+              ? t(mode === "register" ? "Создаём аккаунт" : "Проверяем доступ")
               : configured
-                ? t("Войти")
+                ? t(mode === "register" ? "Зарегистрироваться" : "Войти")
                 : t("Открыть локальный режим")}
             <Icon name="arrow" />
           </button>
+          {configured ? (
+            <button
+              className="auth-switch"
+              onClick={() => {
+                setMode((current) =>
+                  current === "login" ? "register" : "login",
+                );
+                setError("");
+                setNotice("");
+              }}
+              type="button"
+            >
+              {t(
+                mode === "register"
+                  ? "Уже есть аккаунт? Войти"
+                  : "Нет аккаунта? Зарегистрироваться",
+              )}
+            </button>
+          ) : null}
         </form>
       </div>
     </main>

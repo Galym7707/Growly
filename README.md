@@ -356,9 +356,9 @@ Mini App integration must:
 
 ## Current Limitations
 
-- The database schema is single-workspace. Supabase Auth protects the web session,
-  but true multi-company isolation requires `workspace_id` on all business tables
-  and enforcement in repositories or PostgreSQL RLS.
+- Supabase Auth protects the web session. Web dashboard data is scoped by
+  `workspace_id`, which is passed from the authenticated Supabase user to the
+  backend. PostgreSQL RLS is still not enabled.
 - Long web operations are synchronous HTTP requests. The UI shows a pending state,
   but streaming progress and resumable web jobs are not implemented.
 - Instagram publishing is not implemented and must use an official API.

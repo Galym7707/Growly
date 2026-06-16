@@ -25,29 +25,43 @@ class ReportService:
         self.ai = ai or groq or AIService()
         self.notion = notion or NotionService()
 
-    async def list_latest(self, limit: int = 10) -> list[Report]:
+    async def list_latest(
+        self, limit: int = 10, workspace_id: str | None = None
+    ) -> list[Report]:
         def load() -> list[Report]:
             with session_scope() as session:
-                return ReportsRepository(session).list_latest(limit)
+                return ReportsRepository(session).list_latest(
+                    limit, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 
-    async def get_report(self, report_id: int) -> Report | None:
+    async def get_report(
+        self, report_id: int, workspace_id: str | None = None
+    ) -> Report | None:
         def load() -> Report | None:
             with session_scope() as session:
-                return ReportsRepository(session).get_report(report_id)
+                return ReportsRepository(session).get_report(
+                    report_id, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 
-    async def latest_report(self, report_type: str) -> Report | None:
+    async def latest_report(
+        self, report_type: str, workspace_id: str | None = None
+    ) -> Report | None:
         def load() -> Report | None:
             with session_scope() as session:
-                return ReportsRepository(session).latest_report(report_type)
+                return ReportsRepository(session).latest_report(
+                    report_type, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 
-    async def sync_report_to_notion(self, report_id: int) -> str:
-        report = await self.get_report(report_id)
+    async def sync_report_to_notion(
+        self, report_id: int, workspace_id: str | None = None
+    ) -> str:
+        report = await self.get_report(report_id, workspace_id=workspace_id)
         if report is None:
             raise ValueError("Отчёт не найден.")
         page = await asyncio.wait_for(

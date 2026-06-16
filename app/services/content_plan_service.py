@@ -12,11 +12,11 @@ from app.database import session_scope
 from app.models import (
     ContentPlan,
     Report,
-    Setting,
     SourceItem,
 )
 from app.repositories.market_scan_jobs_repo import MarketScanJobsRepository
 from app.repositories.reports_repo import ReportsRepository
+from app.repositories.settings_repo import SettingsRepository
 from app.services.ai_service import AIService
 from app.services.market_context import build_market_context
 from app.services.notion_service import NotionService
@@ -31,6 +31,13 @@ CONTENT_PLAN_MAX_SNIPPET_CHARS = 300
 CONTENT_PLAN_MAX_EVIDENCE_URLS = 8
 CONTENT_PLAN_MAX_REPORT_SUMMARY_CHARS = 1800
 ContentPlanProgress = Callable[[str], Awaitable[None]]
+BUSINESS_PROFILE_KEYS = (
+    "business_niche",
+    "business_region",
+    "business_language",
+    "business_offer",
+    "business_audience",
+)
 
 
 class ContentPlanService:
@@ -49,19 +56,28 @@ class ContentPlanService:
         business_context: dict[str, Any] | str | None = None,
         *,
         progress: ContentPlanProgress | None = None,
+        workspace_id: str | None = None,
     ) -> list[ContentPlan]:
         self.reduced_context_used = False
         await self._emit_progress(
             progress,
             "Шаг 1/4: беру последний анализ рынка...",
         )
-        data = await asyncio.to_thread(self._load_context_data, business_context)
+        data = await (
+            asyncio.to_thread(self._load_context_data, business_context)
+            if workspace_id is None
+            else asyncio.to_thread(
+                self._load_context_data, business_context, workspace_id
+            )
+        )
 
         await self._emit_progress(
             progress,
             "Шаг 2/4: сжимаю источники для ИИ...",
         )
-        context = await self._build_bounded_context(data)
+        context = await self._build_bounded_context(
+            data, workspace_id=workspace_id
+        )
 
         await self._emit_progress(
             progress,
@@ -89,7 +105,11 @@ class ContentPlanService:
         thresholds = await asyncio.to_thread(self._load_thresholds)
         self._validate_mix(normalized, thresholds)
 
-        items = await asyncio.to_thread(self._save_plan_items, normalized)
+        items = await (
+            asyncio.to_thread(self._save_plan_items, normalized)
+            if workspace_id is None
+            else asyncio.to_thread(self._save_plan_items, normalized, workspace_id)
+        )
         await self._emit_progress(
             progress,
             "Шаг 4/4: сохраняю в контент-календарь Notion...",
@@ -108,6 +128,8 @@ class ContentPlanService:
     async def _build_bounded_context(
         self,
         data: dict[str, Any],
+        *,
+        workspace_id: str | None = None,
     ) -> dict[str, Any]:
         source_items = data.pop("source_items")
         data["evidence_urls"] = self._deduplicate(
@@ -145,11 +167,19 @@ class ContentPlanService:
             ]
             batch_summaries.append(parsed)
 
-        await asyncio.to_thread(
-            self._save_batch_summaries,
-            batch_summaries,
-            source_items,
-        )
+        if workspace_id is None:
+            await asyncio.to_thread(
+                self._save_batch_summaries,
+                batch_summaries,
+                source_items,
+            )
+        else:
+            await asyncio.to_thread(
+                self._save_batch_summaries,
+                batch_summaries,
+                source_items,
+                workspace_id,
+            )
         data["source_items"] = []
         data["source_batch_summaries"] = batch_summaries
         return data
@@ -283,7 +313,9 @@ class ContentPlanService:
         return self._thresholds_from_settings(raw)
 
     def _load_context_data(
-        self, business_context: dict[str, Any] | str | None
+        self,
+        business_context: dict[str, Any] | str | None,
+        workspace_id: str | None = None,
     ) -> dict[str, Any]:
         with session_scope() as session:
             reports_repo = ReportsRepository(session)
@@ -301,11 +333,15 @@ class ContentPlanService:
             )
             latest_market_scan = None
             if selected_report_id:
-                candidate = reports_repo.get_report(int(selected_report_id))
+                candidate = reports_repo.get_report(
+                    int(selected_report_id), workspace_id=workspace_id
+                )
                 if candidate and candidate.report_type == "market_scan":
                     latest_market_scan = candidate
             elif use_market_context and selected_context is None:
-                latest_market_scan = reports_repo.latest_report("market_scan")
+                latest_market_scan = reports_repo.latest_report(
+                    "market_scan", workspace_id=workspace_id
+                )
 
             active_market_context = (
                 self._market_context_from_report(latest_market_scan)
@@ -324,6 +360,11 @@ class ContentPlanService:
                     session.scalars(
                         select(SourceItem)
                         .where(SourceItem.id.in_(source_item_ids))
+                        .where(
+                            SourceItem.workspace_id == workspace_id
+                            if workspace_id is not None
+                            else True
+                        )
                         .order_by(desc(SourceItem.collected_at))
                     )
                 )
@@ -331,8 +372,10 @@ class ContentPlanService:
                 else []
             )
             latest_competitor_report = (
-                reports_repo.latest_report("competitor_report")
-                or reports_repo.latest_report("competitor")
+                reports_repo.latest_report(
+                    "competitor_report", workspace_id=workspace_id
+                )
+                or reports_repo.latest_report("competitor", workspace_id=workspace_id)
             )
             competitor_payload = (
                 latest_competitor_report.raw_json
@@ -346,14 +389,9 @@ class ContentPlanService:
                 or competitor_payload.get("market_report_id") != active_report_id
             ):
                 latest_competitor_report = None
-            settings = list(
-                session.scalars(
-                    select(Setting)
-                    .where(Setting.key.like("business_%"))
-                    .order_by(Setting.key)
-                )
+            profile = SettingsRepository(session).get_many(
+                list(BUSINESS_PROFILE_KEYS), workspace_id=workspace_id
             )
-            profile = {row.key: row.value for row in settings}
             market_payload = (
                 latest_market_scan.raw_json
                 if latest_market_scan and isinstance(latest_market_scan.raw_json, dict)
@@ -438,21 +476,25 @@ class ContentPlanService:
     async def latest_market_context(
         self,
         user_id: int | None = None,
+        workspace_id: str | None = None,
     ) -> dict[str, Any] | None:
         return await asyncio.to_thread(
             self._load_market_context,
             None,
             user_id,
+            workspace_id,
         )
 
     async def market_context_for_report(
         self,
         report_id: int,
+        workspace_id: str | None = None,
     ) -> dict[str, Any] | None:
         return await asyncio.to_thread(
             self._load_market_context,
             report_id,
             None,
+            workspace_id,
         )
 
     @classmethod
@@ -460,20 +502,25 @@ class ContentPlanService:
         cls,
         report_id: int | None,
         user_id: int | None,
+        workspace_id: str | None,
     ) -> dict[str, Any] | None:
         with session_scope() as session:
             reports = ReportsRepository(session)
             if report_id is not None:
-                report = reports.get_report(report_id)
+                report = reports.get_report(report_id, workspace_id=workspace_id)
             elif user_id is not None:
-                job = MarketScanJobsRepository(session).latest_for_user(user_id)
+                job = MarketScanJobsRepository(session).latest_for_user(
+                    user_id, workspace_id=workspace_id
+                )
                 report = (
-                    reports.get_report(job.report_id)
+                    reports.get_report(job.report_id, workspace_id=workspace_id)
                     if job and job.report_id
                     else None
                 )
             else:
-                report = reports.latest_report("market_scan")
+                report = reports.latest_report(
+                    "market_scan", workspace_id=workspace_id
+                )
             if report is None or report.report_type != "market_scan":
                 return None
             return cls._market_context_from_report(report)
@@ -512,6 +559,7 @@ class ContentPlanService:
     def _save_batch_summaries(
         batch_summaries: list[dict[str, Any]],
         source_items: list[SourceItem],
+        workspace_id: str | None = None,
     ) -> None:
         with session_scope() as session:
             ReportsRepository(session).create_report(
@@ -534,16 +582,20 @@ class ContentPlanService:
                     "source_item_ids": [item.id for item in source_items],
                 },
                 status="ready",
+                workspace_id=workspace_id,
             )
 
     @staticmethod
     def _save_plan_items(
         normalized: list[dict[str, Any]],
+        workspace_id: str | None = None,
     ) -> list[ContentPlan]:
         with session_scope() as session:
             repo = ReportsRepository(session)
             return [
-                repo.create_content_plan_item(item)
+                repo.create_content_plan_item(
+                    {**item, "workspace_id": workspace_id}
+                )
                 for item in normalized
             ]
 
@@ -562,34 +614,58 @@ class ContentPlanService:
     def _list(value: Any) -> list[Any]:
         return value if isinstance(value, list) else []
 
-    async def intelligence_status(self) -> dict[str, bool]:
+    async def intelligence_status(
+        self, workspace_id: str | None = None
+    ) -> dict[str, bool]:
         def load() -> dict[str, bool]:
             with session_scope() as session:
                 reports = ReportsRepository(session)
+                source_statement = select(SourceItem.id).limit(1)
+                if workspace_id is not None:
+                    source_statement = source_statement.where(
+                        SourceItem.workspace_id == workspace_id
+                    )
                 return {
                     "source_items": bool(
-                        session.scalar(select(SourceItem.id).limit(1))
+                        session.scalar(source_statement)
                     ),
-                    "market_scan": reports.latest_report("market_scan") is not None,
+                    "market_scan": reports.latest_report(
+                        "market_scan", workspace_id=workspace_id
+                    )
+                    is not None,
                     "competitor_report": (
-                        reports.latest_report("competitor_report") is not None
-                        or reports.latest_report("competitor") is not None
+                        reports.latest_report(
+                            "competitor_report", workspace_id=workspace_id
+                        )
+                        is not None
+                        or reports.latest_report(
+                            "competitor", workspace_id=workspace_id
+                        )
+                        is not None
                     ),
                 }
 
         return await asyncio.to_thread(load)
 
-    async def list_draft_items(self, limit: int = 20) -> list[ContentPlan]:
+    async def list_draft_items(
+        self, limit: int = 20, workspace_id: str | None = None
+    ) -> list[ContentPlan]:
         def load() -> list[ContentPlan]:
             with session_scope() as session:
-                return ReportsRepository(session).list_draft_plan_items(limit)
+                return ReportsRepository(session).list_draft_plan_items(
+                    limit, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 
-    async def get_item(self, item_id: int) -> ContentPlan | None:
+    async def get_item(
+        self, item_id: int, workspace_id: str | None = None
+    ) -> ContentPlan | None:
         def load() -> ContentPlan | None:
             with session_scope() as session:
-                return ReportsRepository(session).get_content_plan_item(item_id)
+                return ReportsRepository(session).get_content_plan_item(
+                    item_id, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 

@@ -340,12 +340,14 @@ class NotionService:
 
         return await asyncio.to_thread(read)
 
-    async def _set_settings(self, values: dict[str, str]) -> None:
+    async def _set_settings(
+        self, values: dict[str, str], workspace_id: str | None = None
+    ) -> None:
         def write() -> None:
             with session_scope() as session:
                 repo = SettingsRepository(session)
                 for key, value in values.items():
-                    repo.set(key, value)
+                    repo.set(key, value, workspace_id=workspace_id)
 
         await asyncio.to_thread(write)
 
@@ -935,45 +937,85 @@ class NotionService:
     def page_url(page_id: str) -> str:
         return f"https://www.notion.so/{page_id.replace('-', '')}"
 
-    async def sync_recent_data(self, limit: int = 25) -> dict[str, int]:
+    async def sync_recent_data(
+        self, limit: int = 25, workspace_id: str | None = None
+    ) -> dict[str, int]:
         def load() -> dict[str, list[Any]]:
             with session_scope() as session:
+                def scoped(statement: Any, model: Any) -> Any:
+                    if workspace_id is None:
+                        return statement
+                    return statement.where(model.workspace_id == workspace_id)
+
                 return {
                     "sources": list(
-                        session.scalars(select(Source).order_by(desc(Source.updated_at)).limit(limit))
+                        session.scalars(
+                            scoped(
+                                select(Source)
+                                .order_by(desc(Source.updated_at))
+                                .limit(limit),
+                                Source,
+                            )
+                        )
                     ),
                     "content": list(
                         session.scalars(
-                            select(ContentPlan)
-                            .order_by(desc(ContentPlan.updated_at))
-                            .limit(limit)
+                            scoped(
+                                select(ContentPlan)
+                                .order_by(desc(ContentPlan.updated_at))
+                                .limit(limit),
+                                ContentPlan,
+                            )
                         )
                     ),
                     "source_items": list(
                         session.scalars(
-                            select(SourceItem)
-                            .order_by(desc(SourceItem.collected_at))
-                            .limit(limit)
+                            scoped(
+                                select(SourceItem)
+                                .order_by(desc(SourceItem.collected_at))
+                                .limit(limit),
+                                SourceItem,
+                            )
                         )
                     ),
                     "drafts": list(
-                        session.scalars(select(Draft).order_by(desc(Draft.updated_at)).limit(limit))
+                        session.scalars(
+                            scoped(
+                                select(Draft)
+                                .order_by(desc(Draft.updated_at))
+                                .limit(limit),
+                                Draft,
+                            )
+                        )
                     ),
                     "reports": list(
-                        session.scalars(select(Report).order_by(desc(Report.created_at)).limit(limit))
+                        session.scalars(
+                            scoped(
+                                select(Report)
+                                .order_by(desc(Report.created_at))
+                                .limit(limit),
+                                Report,
+                            )
+                        )
                     ),
                     "reviews": list(
                         session.scalars(
-                            select(ReviewImport)
-                            .order_by(desc(ReviewImport.created_at))
-                            .limit(limit)
+                            scoped(
+                                select(ReviewImport)
+                                .order_by(desc(ReviewImport.created_at))
+                                .limit(limit),
+                                ReviewImport,
+                            )
                         )
                     ),
                     "publications": list(
                         session.scalars(
-                            select(Publication)
-                            .order_by(desc(Publication.updated_at))
-                            .limit(limit)
+                            scoped(
+                                select(Publication)
+                                .order_by(desc(Publication.updated_at))
+                                .limit(limit),
+                                Publication,
+                            )
                         )
                     ),
                 }
@@ -999,7 +1041,8 @@ class NotionService:
             {
                 "notion_last_sync_counts": json.dumps(counts),
                 "notion_last_sync_at": datetime.now(UTC).isoformat(),
-            }
+            },
+            workspace_id=workspace_id,
         )
         return counts
 

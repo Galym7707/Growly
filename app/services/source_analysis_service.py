@@ -48,6 +48,7 @@ class SourceAnalysisService:
         category: str,
         priority: str,
         check_frequency: str,
+        workspace_id: str | None = None,
     ) -> Source:
         def save() -> Source:
             with session_scope() as session:
@@ -58,6 +59,7 @@ class SourceAnalysisService:
                     category=category.strip(),
                     priority=priority.strip(),
                     check_frequency=check_frequency.strip(),
+                    workspace_id=workspace_id,
                 )
 
         source = await asyncio.to_thread(save)
@@ -69,25 +71,35 @@ class SourceAnalysisService:
             logger.warning("Source %s could not sync to Notion.", source.id)
         return source
 
-    async def list_sources(self, *, active_only: bool = True) -> list[Source]:
+    async def list_sources(
+        self, *, active_only: bool = True, workspace_id: str | None = None
+    ) -> list[Source]:
         def load() -> list[Source]:
             with session_scope() as session:
-                return SourcesRepository(session).list_sources(active_only=active_only)
+                return SourcesRepository(session).list_sources(
+                    active_only=active_only, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 
-    async def find_source(self, value: str) -> Source | None:
+    async def find_source(
+        self, value: str, workspace_id: str | None = None
+    ) -> Source | None:
         def load() -> Source | None:
             with session_scope() as session:
-                return SourcesRepository(session).find(value)
+                return SourcesRepository(session).find(
+                    value, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 
-    async def disable_source(self, value: str) -> Source:
+    async def disable_source(
+        self, value: str, workspace_id: str | None = None
+    ) -> Source:
         def update() -> Source:
             with session_scope() as session:
                 repo = SourcesRepository(session)
-                source = repo.find(value)
+                source = repo.find(value, workspace_id=workspace_id)
                 if source is None:
                     raise ValueError("Source was not found.")
                 return repo.disable(source)
@@ -206,12 +218,12 @@ class SourceAnalysisService:
         return await asyncio.to_thread(save)
 
     async def generate_competitor_report(
-        self, query: str | None = None
+        self, query: str | None = None, workspace_id: str | None = None
     ) -> Report:
         return await MarketIntelligenceService(
             groq=self.groq,
             notion=self.notion,
-        ).generate_competitor_report(query=query)
+        ).generate_competitor_report(query=query, workspace_id=workspace_id)
 
     @staticmethod
     def _build_context() -> dict[str, Any]:
