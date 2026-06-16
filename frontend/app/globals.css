@@ -668,9 +668,27 @@ button {
   text-align: center;
 }
 
-.landing-footer > span {
+.landing-contact {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.landing-contact span {
   color: var(--muted);
   text-align: right;
+}
+
+.landing-contact a {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.landing-contact a:hover {
+  color: var(--accent);
 }
 
 .auth-page {
@@ -1817,7 +1835,9 @@ input:disabled {
   }
 
   .landing-footer p,
-  .landing-footer > span {
+  .landing-contact,
+  .landing-contact span {
+    justify-items: start;
     text-align: left;
   }
 

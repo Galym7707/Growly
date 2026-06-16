@@ -73,6 +73,7 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Telegram и Instagram": "Telegram and Instagram",
     "Начните с первого анализа рынка.": "Start with your first market analysis.",
     "Открыть рабочую область": "Open workspace",
+    "Контакты": "Contacts",
     "Рабочее пространство Growly": "Growly workspace",
     "Рынок, отчёты и контент в одном процессе.":
       "Market research, reports, and content in one workflow.",
@@ -432,6 +433,7 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Telegram и Instagram": "Telegram және Instagram",
     "Начните с первого анализа рынка.": "Алғашқы нарық талдауынан бастаңыз.",
     "Открыть рабочую область": "Жұмыс аймағын ашу",
+    "Контакты": "Байланыс",
     "Рабочее пространство Growly": "Growly жұмыс кеңістігі",
     "Рынок, отчёты и контент в одном процессе.":
       "Нарық, есептер және контент бір үдерісте.",

@@ -213,7 +213,12 @@ export default function LandingPage() {
       <footer className="landing-footer">
         <Logo />
         <p>{t("Аналитика, контент и согласование в одной системе.")}</p>
-        <span>Growly</span>
+        <div className="landing-contact">
+          <span>{t("Контакты")}</span>
+          <a href="https://t.me/whoisnelya" rel="noreferrer" target="_blank">
+            @whoisnelya
+          </a>
+        </div>
       </footer>
     </div>
   );
