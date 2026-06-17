@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, time
+from datetime import UTC, datetime, time, timedelta
 from typing import Any, Awaitable, Callable
 
 from sqlalchemy import desc, select
@@ -86,6 +86,7 @@ class ContentPlanService:
         normalized = [
             self._normalize_item(item) for item in payload if isinstance(item, dict)
         ]
+        normalized = self._ensure_current_plan_dates(normalized)
         thresholds = await asyncio.to_thread(self._load_thresholds)
         self._validate_mix(normalized, thresholds)
 
@@ -354,6 +355,9 @@ class ContentPlanService:
                 )
             )
             profile = {row.key: row.value for row in settings}
+            requested_business = (
+                brief.get("business") if isinstance(brief.get("business"), dict) else {}
+            )
             market_payload = (
                 latest_market_scan.raw_json
                 if latest_market_scan and isinstance(latest_market_scan.raw_json, dict)
@@ -374,21 +378,34 @@ class ContentPlanService:
                     ],
                 ]
             )[:CONTENT_PLAN_MAX_EVIDENCE_URLS]
+            today = datetime.now(UTC).date()
             return {
                 "weekly_objective": business_context
                 or {"note": "No additional brief supplied."},
+                "current_date": today.isoformat(),
+                "planning_window": {
+                    "start": today.isoformat(),
+                    "end": (today + timedelta(days=6)).isoformat(),
+                },
                 "business": {
                     "niche": (
-                        (active_market_context or {}).get("category")
+                        requested_business.get("niche")
+                        or requested_business.get("business_niche")
+                        or (active_market_context or {}).get("category")
                         or (active_market_context or {}).get("topic")
                         or profile.get("business_niche")
                     ),
                     "region": (
-                        (active_market_context or {}).get("region")
+                        requested_business.get("region")
+                        or requested_business.get("business_region")
+                        or (active_market_context or {}).get("region")
                         or profile.get("business_region")
                     ),
                     "language": (
-                        (active_market_context or {}).get("language")
+                        requested_business.get("language")
+                        or brief.get("language")
+                        or requested_business.get("business_language")
+                        or (active_market_context or {}).get("language")
                         or profile.get("business_language")
                     ),
                     "offer": profile.get("business_offer"),
@@ -637,6 +654,24 @@ class ContentPlanService:
             "why_recommended": str(item["why_recommended"]).strip(),
             "status": "draft",
         }
+
+    @staticmethod
+    def _ensure_current_plan_dates(
+        items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        today = datetime.now(UTC).date()
+        for index, item in enumerate(items):
+            value = item.get("publish_date")
+            if not isinstance(value, datetime) or value.date() >= today:
+                continue
+            replacement_date = today + timedelta(days=index % 7)
+            replacement_time = time(hour=9 + min(index % 6, 5))
+            item["publish_date"] = datetime.combine(
+                replacement_date,
+                replacement_time,
+                tzinfo=value.tzinfo,
+            )
+        return items
 
     @staticmethod
     def _save_page_id(item_id: int, page_id: str) -> None:

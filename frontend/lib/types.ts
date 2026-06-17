@@ -65,6 +65,24 @@ export type ContentPlanItem = {
   status: string;
   notion_synced: boolean;
   created_at: string;
+  updated_at: string;
+};
+
+export type ContentPlanSource = {
+  report_id: number;
+  report_title: string | null;
+  sources_count: number;
+  created_at: string | null;
+  language: string | null;
+  notion_synced: boolean;
+  notion_url: string | null;
+};
+
+export type ContentPlanResponse = {
+  plan_id?: number | string | null;
+  content_plan_id?: number | string | null;
+  items: ContentPlanItem[];
+  source?: ContentPlanSource | null;
 };
 
 export type DashboardData = {

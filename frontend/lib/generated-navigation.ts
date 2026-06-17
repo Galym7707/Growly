@@ -57,10 +57,20 @@ export function extractGeneratedContentPlanId(value: unknown): string | null {
       ? asRecord(response.items[0])
       : null;
   return firstId(
+    response.plan_id,
     response.content_plan_id,
     response.id,
     response.contentPlanId,
     item?.id,
     firstItem?.id,
   );
+}
+
+export function contentPlanPathFromGeneratedResponse(
+  value: unknown,
+): string | null {
+  const contentPlanId = extractGeneratedContentPlanId(value);
+  return contentPlanId
+    ? `/content-plan/${encodeURIComponent(contentPlanId)}`
+    : null;
 }

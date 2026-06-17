@@ -135,6 +135,7 @@ class MarketIntelligenceService:
         user_id: int | None = None,
         job_id: int | None = None,
         progress: ProgressCallback | None = None,
+        output_language: str | None = None,
     ) -> tuple[Report, list[SourceItem]]:
         logger.info("market_scan_started")
         if job_id is None and user_id is not None:
@@ -238,6 +239,7 @@ class MarketIntelligenceService:
                 saved=saved,
                 job_id=job_id,
                 progress=progress,
+                output_language=output_language,
             )
             logger.info("groq_status=ready")
             logger.info("groq_analysis_finished")
@@ -442,6 +444,7 @@ class MarketIntelligenceService:
         existing_report_id: int | None = None,
         job_id: int | None = None,
         progress: ProgressCallback | None = None,
+        output_language: str | None = None,
     ) -> tuple[Report, list[SourceItem]]:
         analysis, batch_summaries = await self._analyze_source_item_batches(
             " | ".join(queries),
@@ -459,6 +462,7 @@ class MarketIntelligenceService:
             niche,
             [self.source_item_to_dict(item) for item in saved],
             batch_summaries=batch_summaries,
+            output_language=output_language,
         )
         if existing_report_id is None:
             report = await asyncio.to_thread(
@@ -562,6 +566,7 @@ class MarketIntelligenceService:
         saved_source_items: list[dict[str, Any]],
         *,
         batch_summaries: list[dict[str, Any]] | None = None,
+        output_language: str | None = None,
     ) -> dict[str, Any]:
         aggregate_summary = self._batch_summary(
             self._merge_batch_analyses(batch_summaries or [])
@@ -581,6 +586,7 @@ class MarketIntelligenceService:
                     ],
                     "sources_count": len(saved_source_items),
                     "generated_at": datetime.now(UTC).isoformat(),
+                    "language": output_language,
                 }
             ),
             timeout=GROQ_GENERATION_TIMEOUT_SECONDS,
@@ -595,12 +601,16 @@ class MarketIntelligenceService:
         *,
         query: str | None = None,
         market_report_id: int | None = None,
+        output_language: str | None = None,
     ) -> Report:
         context = await asyncio.to_thread(
             self._competitor_context,
             query,
             market_report_id,
         )
+        if output_language:
+            context["language"] = output_language
+            context["output_language"] = output_language
         if not context["source_items"]:
             raise ValueError(
                 "Нет сохранённых материалов источников. Сначала выполните "
@@ -1541,7 +1551,8 @@ async def analyze_search_results(
 async def generate_market_scan_report(
     query: str,
     saved_source_items: list[dict[str, Any]],
+    output_language: str | None = None,
 ) -> dict[str, Any]:
     return await MarketIntelligenceService().generate_market_scan_report(
-        query, saved_source_items
+        query, saved_source_items, output_language=output_language
     )

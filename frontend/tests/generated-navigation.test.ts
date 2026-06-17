@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  contentPlanPathFromGeneratedResponse,
   extractGeneratedContentPlanId,
   extractGeneratedDraftId,
   extractGeneratedReportId,
@@ -31,6 +32,9 @@ describe("generated navigation helpers", () => {
     ).toBe("45");
     expect(extractGeneratedContentPlanId({ content_plan_id: "plan-1" })).toBe(
       "plan-1",
+    );
+    expect(contentPlanPathFromGeneratedResponse({ plan_id: 45 })).toBe(
+      "/content-plan/45",
     );
     expect(extractGeneratedDraftId({ draft_id: 88 })).toBe("88");
     expect(extractGeneratedDraftId({ draft: { id: "draft-2" } })).toBe(

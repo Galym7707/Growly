@@ -298,3 +298,25 @@ def test_global_groq_budget_removes_raw_json_and_truncates_context() -> None:
     assert "raw_json" not in repr(context)
     assert len(context["evidence_urls"]) == 10
     assert len(context["report_context"]) == 4000
+
+
+def test_content_plan_old_dates_are_moved_to_current_window() -> None:
+    items = [
+        {
+            "publish_date": datetime(2024, 9, 1, 9, 0),
+            "channel": "Telegram",
+            "content_type": "post",
+            "topic": "Topic",
+            "goal": "Goal",
+            "target_audience": "Audience",
+            "key_message": "Message",
+            "cta": "CTA",
+            "source_idea": "Internal data",
+            "why_recommended": "Reason",
+            "status": "draft",
+        }
+    ]
+
+    normalized = ContentPlanService._ensure_current_plan_dates(items)
+
+    assert normalized[0]["publish_date"].date() >= datetime.now().date()

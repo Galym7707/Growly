@@ -126,3 +126,75 @@ def test_market_scan_response_includes_stable_report_id(monkeypatch) -> None:
     assert payload["sources_count"] == 2
     assert payload["sources_saved"] == 2
     assert payload["report"]["id"] == 123
+
+
+def test_content_plans_create_returns_plan_id_and_passes_language(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "growly_web_api_key", None)
+    now = datetime.now(UTC)
+    captured: dict[str, object] = {}
+    item = SimpleNamespace(
+        id=45,
+        publish_date=now,
+        channel="Telegram",
+        content_type="weekly_digest",
+        topic="Market proof",
+        goal="Trust",
+        target_audience="Founders",
+        key_message="Evidence",
+        cta="Book a call",
+        source_idea="Internal data",
+        why_recommended="Based on latest scan",
+        status="draft",
+        notion_page_id=None,
+        created_at=now,
+        updated_at=now,
+    )
+
+    async def generate_weekly_plan(self, business_context):
+        captured["context"] = business_context
+        return [item]
+
+    monkeypatch.setattr(
+        "app.web_api.ContentPlanService.generate_weekly_plan",
+        generate_weekly_plan,
+    )
+
+    response = TestClient(app).post(
+        "/api/content-plans",
+        json={
+            "weekly_objective": "Build trust",
+            "business": {},
+            "language": "en",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["plan_id"] == 45
+    assert payload["content_plan_id"] == 45
+    assert payload["items"][0]["id"] == 45
+    assert captured["context"]["language"] == "en"  # type: ignore[index]
+    assert captured["context"]["business"]["language"] == "en"  # type: ignore[index]
+
+
+def test_content_plans_detail_uses_real_backend_response(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "growly_web_api_key", None)
+
+    def detail(plan_id: int):
+        return {
+            "plan_id": plan_id,
+            "items": [{"id": plan_id, "topic": "Real item"}],
+            "source": {"report_id": 7, "sources_count": 42},
+        }
+
+    monkeypatch.setattr("app.web_api._content_plan_detail_response", detail)
+
+    response = TestClient(app).get("/api/content-plans/45")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["plan_id"] == 45
+    assert payload["items"][0]["topic"] == "Real item"
+    assert payload["source"]["report_id"] == 7

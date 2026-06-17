@@ -39,4 +39,12 @@ describe("Growly UI policy", () => {
       /NEXT_PUBLIC_(?:GROWLY_API_KEY|SUPABASE_SERVICE_ROLE_KEY|NOTION_API_KEY|TELEGRAM_BOT_API_KEY|GROQ_API_KEY|TAVILY_API_KEY)/,
     );
   });
+
+  it("does not ship fixed old plan dates or brochure CTA copy in production UI", () => {
+    const clientSource = sourceFiles
+      .map((path) => readFileSync(path, "utf8"))
+      .join("\n");
+    expect(clientSource).not.toMatch(/2024-\d{2}-\d{2}|September 2024/);
+    expect(clientSource).not.toContain("Скачайте нашу брошюру");
+  });
 });

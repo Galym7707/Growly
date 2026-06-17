@@ -14,14 +14,20 @@ Each object must contain:
 publish_date, channel, content_type, topic, goal, target_audience, key_message, cta,
 source_idea, why_recommended.
 publish_date must be an ISO 8601 date and time.
+Use current_date and planning_window from context. Do not use fixed historical
+dates or any date before current_date.
 Use a useful mix of asset/product, case, educational, pain-point, offer, comparison,
 Reels/Shorts, WhatsApp, Stories, and weekly digest formats where relevant.
 Do not promise guaranteed results, invent customer evidence, or expose confidential names.
 Do not copy competitor wording. Explain evidence limitations in why_recommended.
 When public evidence is available, source_idea must include a supporting URL.
 When evidence is unavailable, state that source_idea is based on limited internal data.
-Write all user-facing text values in Russian by default. Keep only URLs, channel
-names, and required JSON field names unchanged.
+CTA values must match the active niche, offer, audience, and latest market/report
+context. Do not use a generic brochure/download CTA unless the context explicitly
+mentions a brochure.
+Write all user-facing text values in the language requested by context.business.language
+or context.language. Use Russian only when no language is supplied. Keep only URLs,
+channel names, and required JSON field names unchanged.
 
 Context:
 {context_json}

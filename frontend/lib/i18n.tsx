@@ -137,6 +137,11 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Формируем план": "Building plan",
     "Создать план": "Create plan",
     "Создано элементов: {count}.": "Items created: {count}.",
+    "Не удалось создать контент-план.": "Could not create the content plan.",
+    "Причина: {reason}": "Reason: {reason}",
+    "Созданный план на основе реальных отчётов Growly.":
+      "A generated plan based on real Growly reports.",
+    "Вернуться к планам": "Back to plans",
     "Черновик «{name}» создан.": "Draft “{name}” created.",
     "Календарь": "Calendar",
     "Запланированные материалы": "Scheduled content",
@@ -503,6 +508,11 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Формируем план": "Жоспар құрылуда",
     "Создать план": "Жоспар жасау",
     "Создано элементов: {count}.": "Жасалған элементтер: {count}.",
+    "Не удалось создать контент-план.": "Контент-жоспар жасау мүмкін болмады.",
+    "Причина: {reason}": "Себебі: {reason}",
+    "Созданный план на основе реальных отчётов Growly.":
+      "Growly нақты есептері негізінде жасалған жоспар.",
+    "Вернуться к планам": "Жоспарларға қайту",
     "Черновик «{name}» создан.": "«{name}» нобайы жасалды.",
     "Календарь": "Күнтізбе",
     "Запланированные материалы": "Жоспарланған материалдар",

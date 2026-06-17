@@ -12,6 +12,7 @@ import { Icon, type IconName } from "@/components/icons";
 import { PageHeader } from "@/components/ui";
 import { apiRequest } from "@/lib/api";
 import {
+  contentPlanPathFromGeneratedResponse,
   extractGeneratedContentPlanId,
   extractGeneratedDraftId,
   reportPathFromGeneratedResponse,
@@ -188,6 +189,7 @@ function ChatContent() {
                 : action === "create_post"
                   ? { brief: message, channel: "Telegram" }
                   : {},
+          language: locale,
         }),
       });
       setMessages((current) => [
@@ -294,7 +296,7 @@ function generatedNavigationTarget(
     return reportPathFromGeneratedResponse(result);
   }
   if (action === "content_plan" && extractGeneratedContentPlanId(result)) {
-    return "/content-plan";
+    return contentPlanPathFromGeneratedResponse(result) || "/content-plan";
   }
   if (action === "create_post" && extractGeneratedDraftId(result)) {
     return "/drafts";

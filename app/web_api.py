@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
@@ -58,15 +58,18 @@ class MarketScanRequest(BaseModel):
     niche: str = Field(min_length=2, max_length=300)
     region_language: str = Field(default="Казахстан, русский язык", max_length=300)
     competitor_keywords: str = Field(default="", max_length=500)
+    language: Literal["ru", "en", "kk"] = "ru"
 
 
 class CompetitorReportRequest(BaseModel):
     query: str | None = Field(default=None, max_length=500)
+    language: Literal["ru", "en", "kk"] = "ru"
 
 
 class ContentPlanRequest(BaseModel):
     weekly_objective: str = Field(min_length=2, max_length=1000)
     business: dict[str, Any] = Field(default_factory=dict)
+    language: Literal["ru", "en", "kk"] = "ru"
 
 
 class CreatePostRequest(BaseModel):
@@ -74,6 +77,7 @@ class CreatePostRequest(BaseModel):
     channel: str = Field(default="Telegram", max_length=100)
     title: str | None = Field(default=None, max_length=300)
     cta: str | None = Field(default=None, max_length=1000)
+    language: Literal["ru", "en", "kk"] = "ru"
 
 
 class DraftActionRequest(BaseModel):
@@ -115,6 +119,7 @@ class ChatRequest(BaseModel):
         "notion_sync",
     ] | None = None
     context: dict[str, Any] = Field(default_factory=dict)
+    language: Literal["ru", "en", "kk"] = "ru"
 
 
 class WorkspaceSettingsRequest(BaseModel):
@@ -213,6 +218,7 @@ def _content_plan_payload(item: ContentPlan) -> dict[str, Any]:
         "status": item.status,
         "notion_synced": bool(item.notion_page_id),
         "created_at": _date_value(item.created_at),
+        "updated_at": _date_value(item.updated_at),
     }
 
 
@@ -279,6 +285,75 @@ def _list_content_plan(limit: int) -> list[dict[str, Any]]:
         return [_content_plan_payload(row) for row in rows]
 
 
+def _content_plan_source_payload(session: Any) -> dict[str, Any] | None:
+    report = ReportsRepository(session).latest_report("market_scan")
+    if report is None:
+        return None
+    raw = report.raw_json if isinstance(report.raw_json, dict) else {}
+    market_context = (
+        raw.get("market_context") if isinstance(raw.get("market_context"), dict) else {}
+    )
+    return {
+        "report_id": report.id,
+        "report_title": report.title,
+        "sources_count": report.sources_count,
+        "created_at": _date_value(report.created_at),
+        "language": market_context.get("language"),
+        "notion_synced": bool(report.notion_page_id),
+        "notion_url": (
+            NotionService.page_url(report.notion_page_id)
+            if report.notion_page_id
+            else None
+        ),
+    }
+
+
+def _list_content_plan_response(limit: int) -> dict[str, Any]:
+    with session_scope() as session:
+        rows = list(
+            session.scalars(
+                select(ContentPlan)
+                .order_by(desc(ContentPlan.publish_date), desc(ContentPlan.id))
+                .limit(limit)
+            )
+        )
+        return {
+            "items": [_content_plan_payload(row) for row in rows],
+            "source": _content_plan_source_payload(session),
+        }
+
+
+def _content_plan_detail_response(plan_id: int) -> dict[str, Any]:
+    with session_scope() as session:
+        anchor = session.get(ContentPlan, plan_id)
+        if anchor is None:
+            raise HTTPException(status_code=404, detail="Контент-план не найден.")
+        rows: list[ContentPlan]
+        if anchor.created_at:
+            rows = list(
+                session.scalars(
+                    select(ContentPlan)
+                    .where(
+                        ContentPlan.id >= anchor.id,
+                        ContentPlan.created_at
+                        >= anchor.created_at - timedelta(seconds=30),
+                        ContentPlan.created_at
+                        <= anchor.created_at + timedelta(seconds=30),
+                    )
+                    .order_by(ContentPlan.publish_date, ContentPlan.id)
+                )
+            )
+        else:
+            rows = [anchor]
+        if not rows:
+            rows = [anchor]
+        return {
+            "plan_id": plan_id,
+            "items": [_content_plan_payload(row) for row in rows],
+            "source": _content_plan_source_payload(session),
+        }
+
+
 def _workspace_settings() -> dict[str, str | None]:
     with session_scope() as session:
         return SettingsRepository(session).get_many(sorted(BUSINESS_SETTING_KEYS))
@@ -331,6 +406,7 @@ async def market_scan(payload: MarketScanRequest) -> dict[str, Any]:
         niche=payload.niche,
         region_language=payload.region_language,
         competitor_keywords=payload.competitor_keywords,
+        output_language=payload.language,
     )
     report_payload = _report_payload(report)
     return {
@@ -346,7 +422,8 @@ async def market_scan(payload: MarketScanRequest) -> dict[str, Any]:
 @secured_router.post("/competitor-report")
 async def competitor_report(payload: CompetitorReportRequest) -> dict[str, Any]:
     report = await MarketIntelligenceService().generate_competitor_report(
-        query=payload.query
+        query=payload.query,
+        output_language=payload.language,
     )
     return {
         "status": "completed",
@@ -361,7 +438,19 @@ async def competitor_report(payload: CompetitorReportRequest) -> dict[str, Any]:
 async def content_plan_list(
     limit: int = Query(default=40, ge=1, le=200),
 ) -> dict[str, Any]:
-    return {"items": await asyncio.to_thread(_list_content_plan, limit)}
+    return await asyncio.to_thread(_list_content_plan_response, limit)
+
+
+@secured_router.get("/content-plans")
+async def content_plans_list(
+    limit: int = Query(default=40, ge=1, le=200),
+) -> dict[str, Any]:
+    return await content_plan_list(limit=limit)
+
+
+@secured_router.get("/content-plans/{plan_id}")
+async def content_plan_detail(plan_id: int) -> dict[str, Any]:
+    return await asyncio.to_thread(_content_plan_detail_response, plan_id)
 
 
 @secured_router.post("/content-plan")
@@ -369,14 +458,22 @@ async def content_plan_create(payload: ContentPlanRequest) -> dict[str, Any]:
     items = await ContentPlanService().generate_weekly_plan(
         {
             "weekly_objective": payload.weekly_objective,
-            "business": payload.business,
+            "business": {**payload.business, "language": payload.language},
+            "language": payload.language,
         }
     )
+    plan_id = items[0].id if items else None
     return {
         "status": "completed",
-        "content_plan_id": items[0].id if items else None,
+        "plan_id": plan_id,
+        "content_plan_id": plan_id,
         "items": [_content_plan_payload(item) for item in items],
     }
+
+
+@secured_router.post("/content-plans")
+async def content_plans_create(payload: ContentPlanRequest) -> dict[str, Any]:
+    return await content_plan_create(payload)
 
 
 @secured_router.post("/content-plan/{item_id}/draft")
@@ -526,12 +623,14 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
                 context.get("region_language") or "Казахстан, русский язык"
             ),
             competitor_keywords=str(context.get("competitor_keywords") or ""),
+            language=payload.language,
         )
         result = await market_scan(request)
     elif action == "competitors":
         result = await competitor_report(
             CompetitorReportRequest(
-                query=str(context.get("query") or payload.message)
+                query=str(context.get("query") or payload.message),
+                language=payload.language,
             )
         )
     elif action == "content_plan":
@@ -541,10 +640,14 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
                     context.get("weekly_objective") or payload.message
                 ),
                 business=(
-                    context.get("business")
+                    {
+                        **context.get("business"),
+                        "language": payload.language,
+                    }
                     if isinstance(context.get("business"), dict)
-                    else {}
+                    else {"language": payload.language}
                 ),
+                language=payload.language,
             )
         )
     elif action == "create_post":
@@ -556,6 +659,7 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
                     str(context["title"]) if context.get("title") else None
                 ),
                 cta=str(context["cta"]) if context.get("cta") else None,
+                language=payload.language,
             )
         )
     elif action == "drafts":

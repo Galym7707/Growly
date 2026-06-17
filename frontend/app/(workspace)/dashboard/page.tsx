@@ -140,7 +140,11 @@ export default function DashboardPage() {
               />
               <ResultRow
                 date={data.latest_content_plan?.created_at}
-                href="/content-plan"
+                href={
+                  data.latest_content_plan
+                    ? `/content-plan/${data.latest_content_plan.id}`
+                    : "/content-plan"
+                }
                 label={t("Контент-план")}
                 locale={locale}
                 status={data.latest_content_plan?.status}

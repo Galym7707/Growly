@@ -57,6 +57,7 @@ export default function MarketScanPage() {
           niche,
           region_language: region,
           competitor_keywords: competitors,
+          language: locale,
         }),
       });
       const reportPath = reportPathFromGeneratedResponse(response);
