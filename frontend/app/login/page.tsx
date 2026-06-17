@@ -172,11 +172,14 @@ function LoginContent() {
               }}
               type="button"
             >
-              {t(
-                mode === "register"
-                  ? "Уже есть аккаунт? Войти"
-                  : "Нет аккаунта? Зарегистрироваться",
-              )}
+              <span>
+                {t(
+                  mode === "register"
+                    ? "Уже есть аккаунт? Войти"
+                    : "Нет аккаунта? Зарегистрироваться",
+                )}
+              </span>
+              <Icon name="arrow" />
             </button>
           ) : null}
         </form>

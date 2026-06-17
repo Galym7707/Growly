@@ -800,6 +800,43 @@ input:disabled {
   font-size: 13px;
 }
 
+.auth-switch {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--green);
+  display: flex;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  gap: 9px;
+  justify-content: center;
+  margin-top: 14px;
+  min-height: 44px;
+  padding: 10px 14px;
+  text-align: center;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+  width: 100%;
+}
+
+.auth-switch:hover {
+  background: var(--green-soft);
+  border-color: #c8d9cf;
+  color: var(--green-dark);
+  transform: translateY(-1px);
+}
+
+.auth-switch svg {
+  flex: 0 0 auto;
+  height: 17px;
+  width: 17px;
+}
+
 .app-shell {
   min-height: 100svh;
 }
