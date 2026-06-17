@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isAuthRequired } from "@/lib/auth-config";
 
 const protectedPrefixes = [
   "/dashboard",
@@ -15,11 +16,20 @@ const protectedPrefixes = [
 ];
 
 export async function proxy(request: NextRequest) {
-  const authRequired = process.env.NEXT_PUBLIC_AUTH_REQUIRED === "true";
+  const authRequired = isAuthRequired();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!authRequired || !supabaseUrl || !supabaseKey) {
+  const isProtected = protectedPrefixes.some((prefix) =>
+    request.nextUrl.pathname.startsWith(prefix),
+  );
+  if (!authRequired) {
     return NextResponse.next({ request });
+  }
+  if (!supabaseUrl || !supabaseKey) {
+    if (!isProtected) {
+      return NextResponse.next({ request });
+    }
+    return denyAccess(request);
   }
 
   let response = NextResponse.next({ request });
@@ -42,17 +52,24 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  const { data } = await supabase.auth.getClaims();
-  const isProtected = protectedPrefixes.some((prefix) =>
-    request.nextUrl.pathname.startsWith(prefix),
-  );
-  if (!data?.claims && isProtected) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
+  const { data } = await supabase.auth.getUser();
+  if (!data.user && isProtected) {
+    return denyAccess(request);
   }
   return response;
+}
+
+function denyAccess(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.json(
+      { detail: "Требуется вход в Growly." },
+      { status: 401 },
+    );
+  }
+  const url = request.nextUrl.clone();
+  url.pathname = "/login";
+  url.searchParams.set("next", request.nextUrl.pathname);
+  return NextResponse.redirect(url);
 }
 
 export const config = {

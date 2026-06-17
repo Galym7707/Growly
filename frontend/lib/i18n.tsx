@@ -84,6 +84,7 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Проверяем доступ": "Checking access",
     "Войти": "Sign in",
     "Открыть локальный режим": "Open local mode",
+    "Вход временно недоступен": "Sign in is temporarily unavailable",
     "Черновики на согласовании": "Drafts awaiting approval",
     "Открыть список": "Open list",
     "Активные источники": "Active sources",
@@ -254,6 +255,8 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
       "Growly collects public sources, prepares reports, and keeps research, planning, and publishing in one workflow.",
     "Supabase Auth не настроен. В локальном режиме можно открыть интерфейс без авторизации.":
       "Supabase Auth is not configured. Local mode can be opened without authentication.",
+    "Supabase Auth не настроен. Вход в рабочую область временно недоступен.":
+      "Supabase Auth is not configured. Workspace sign-in is temporarily unavailable.",
     "Tavily ищет только публично доступные страницы.":
       "Tavily searches only publicly available pages.",
     "Анализ ещё не запускался. Укажите нишу и регион.":
@@ -444,6 +447,7 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Проверяем доступ": "Қолжетімділікті тексерудеміз",
     "Войти": "Кіру",
     "Открыть локальный режим": "Жергілікті режимді ашу",
+    "Вход временно недоступен": "Кіру уақытша қолжетімсіз",
     "Черновики на согласовании": "Бекітудегі нобайлар",
     "Открыть список": "Тізімді ашу",
     "Активные источники": "Белсенді дереккөздер",
@@ -614,6 +618,8 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
       "Growly ашық дереккөздерді жинайды, есептер дайындайды және талдау мен жариялауды бір үдеріске біріктіреді.",
     "Supabase Auth не настроен. В локальном режиме можно открыть интерфейс без авторизации.":
       "Supabase Auth бапталмаған. Жергілікті режимде интерфейсті авторизациясыз ашуға болады.",
+    "Supabase Auth не настроен. Вход в рабочую область временно недоступен.":
+      "Supabase Auth бапталмаған. Жұмыс кеңістігіне кіру уақытша қолжетімсіз.",
     "Tavily ищет только публично доступные страницы.":
       "Tavily тек ашық қолжетімді беттерді іздейді.",
     "Анализ ещё не запускался. Укажите нишу и регион.":

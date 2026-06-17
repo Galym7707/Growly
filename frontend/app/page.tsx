@@ -51,7 +51,7 @@ export default function LandingPage() {
           <a href="#cases">{t("Для кого")}</a>
         </nav>
         <LanguageSwitcher />
-        <Link className="button button-dark button-small" href="/dashboard">
+        <Link className="button button-dark button-small" href="/login">
           {t("Открыть Growly")}
         </Link>
       </header>
@@ -67,7 +67,7 @@ export default function LandingPage() {
               )}
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/dashboard">
+              <Link className="button button-primary" href="/register">
                 {t("Начать работу")}
                 <Icon name="arrow" />
               </Link>
@@ -203,7 +203,7 @@ export default function LandingPage() {
             <p className="eyebrow">Growly</p>
             <h2>{t("Начните с первого анализа рынка.")}</h2>
           </div>
-          <Link className="button button-light" href="/market-scan">
+          <Link className="button button-light" href="/register">
             {t("Открыть рабочую область")}
             <Icon name="arrow" />
           </Link>
