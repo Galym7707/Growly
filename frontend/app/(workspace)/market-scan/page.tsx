@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/ui";
 import { apiRequest } from "@/lib/api";
+import { reportPathFromGeneratedResponse } from "@/lib/generated-navigation";
 import { useLanguage } from "@/lib/i18n";
 import type { Report } from "@/lib/types";
 
@@ -22,7 +24,11 @@ export default function MarketScanPage() {
   const [competitors, setCompetitors] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<Report | null>(null);
+  const [success, setSuccess] = useState<{
+    reportPath: string | null;
+    sourcesCount: number;
+  } | null>(null);
+  const router = useRouter();
   const { locale, t } = useLanguage();
 
   useEffect(() => {
@@ -39,11 +45,12 @@ export default function MarketScanPage() {
     event.preventDefault();
     setLoading(true);
     setError("");
-    setResult(null);
+    setSuccess(null);
     try {
       const response = await apiRequest<{
-        report: Report;
-        sources_saved: number;
+        report?: Report;
+        sources_count?: number;
+        sources_saved?: number;
       }>("/market-scan", {
         method: "POST",
         body: JSON.stringify({
@@ -52,9 +59,22 @@ export default function MarketScanPage() {
           competitor_keywords: competitors,
         }),
       });
-      setResult(response.report);
+      const reportPath = reportPathFromGeneratedResponse(response);
+      setSuccess({
+        reportPath,
+        sourcesCount:
+          response.sources_saved ??
+          response.sources_count ??
+          response.report?.sources_count ??
+          0,
+      });
+      if (reportPath) {
+        router.push(reportPath);
+      }
     } catch (value) {
-      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
+      setError(
+        value instanceof Error ? t(value.message) : t("Неизвестная ошибка"),
+      );
     } finally {
       setLoading(false);
     }
@@ -117,12 +137,26 @@ export default function MarketScanPage() {
         </div>
       ) : null}
       {error ? <div className="feedback feedback-error">{error}</div> : null}
-      {result ? (
+      {success ? (
         <div className="feedback feedback-success">
-          {t("Отчёт готов. Сохранено источников: {count}.", {
-            count: result.sources_count,
-          })}{" "}
-          <Link href={`/reports/${result.id}`}>{t("Открыть отчёт")}</Link>
+          {success.reportPath
+            ? t("Отчёт готов. Сохранено источников: {count}.", {
+                count: success.sourcesCount,
+              })
+            : t("Отчёт создан, но ссылка на него не получена. Откройте раздел Отчёты.")}
+          <div className="feedback-actions">
+            {success.reportPath ? (
+              <Link className="button button-secondary button-small" href={success.reportPath}>
+                {t("Открыть отчёт")}
+                <Icon name="arrow" />
+              </Link>
+            ) : (
+              <Link className="button button-secondary button-small" href="/reports">
+                {t("Открыть отчёты")}
+                <Icon name="arrow" />
+              </Link>
+            )}
+          </div>
         </div>
       ) : null}
     </div>

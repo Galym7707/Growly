@@ -332,9 +332,13 @@ async def market_scan(payload: MarketScanRequest) -> dict[str, Any]:
         region_language=payload.region_language,
         competitor_keywords=payload.competitor_keywords,
     )
+    report_payload = _report_payload(report)
     return {
         "status": "completed",
-        "report": _report_payload(report),
+        "message": "Отчёт готов",
+        "report_id": report.id,
+        "sources_count": len(sources),
+        "report": report_payload,
         "sources_saved": len(sources),
     }
 
@@ -344,7 +348,13 @@ async def competitor_report(payload: CompetitorReportRequest) -> dict[str, Any]:
     report = await MarketIntelligenceService().generate_competitor_report(
         query=payload.query
     )
-    return {"status": "completed", "report": _report_payload(report)}
+    return {
+        "status": "completed",
+        "message": "Отчёт готов",
+        "report_id": report.id,
+        "sources_count": report.sources_count,
+        "report": _report_payload(report),
+    }
 
 
 @secured_router.get("/content-plan")
@@ -364,6 +374,7 @@ async def content_plan_create(payload: ContentPlanRequest) -> dict[str, Any]:
     )
     return {
         "status": "completed",
+        "content_plan_id": items[0].id if items else None,
         "items": [_content_plan_payload(item) for item in items],
     }
 
@@ -371,13 +382,21 @@ async def content_plan_create(payload: ContentPlanRequest) -> dict[str, Any]:
 @secured_router.post("/content-plan/{item_id}/draft")
 async def content_plan_draft(item_id: int) -> dict[str, Any]:
     draft = await DraftService().create_from_plan(item_id)
-    return {"status": "completed", "draft": _draft_payload(draft)}
+    return {
+        "status": "completed",
+        "draft_id": draft.id,
+        "draft": _draft_payload(draft),
+    }
 
 
 @secured_router.post("/create-post")
 async def create_post(payload: CreatePostRequest) -> dict[str, Any]:
     draft = await DraftService().create_post(payload.model_dump(exclude_none=True))
-    return {"status": "completed", "draft": _draft_payload(draft)}
+    return {
+        "status": "completed",
+        "draft_id": draft.id,
+        "draft": _draft_payload(draft),
+    }
 
 
 @secured_router.get("/drafts")

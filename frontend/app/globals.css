@@ -1394,6 +1394,13 @@ input:disabled {
   color: var(--red);
 }
 
+.feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 .data-table-wrap {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -1640,6 +1647,14 @@ input:disabled {
 
 .report-aside dd {
   margin: 0;
+}
+
+.report-aside-actions {
+  border-bottom: 0 !important;
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 24px;
+  padding: 0 !important;
 }
 
 .chat-layout {

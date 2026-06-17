@@ -121,6 +121,9 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Формирую отчёт": "Building report",
     "Синхронизирую с Notion": "Syncing with Notion",
     "Открыть отчёт": "Open report",
+    "Открыть отчёты": "Open reports",
+    "Отчёт создан, но ссылка на него не получена. Откройте раздел Отчёты.":
+      "Report was created, but its link was not returned. Open Reports.",
     "База знаний": "Knowledge base",
     "Поиск по отчётам": "Search reports",
     "Найти отчёт": "Find a report",
@@ -484,6 +487,9 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Формирую отчёт": "Есеп құрудамын",
     "Синхронизирую с Notion": "Notion-мен синхрондаудамын",
     "Открыть отчёт": "Есепті ашу",
+    "Открыть отчёты": "Есептерді ашу",
+    "Отчёт создан, но ссылка на него не получена. Откройте раздел Отчёты.":
+      "Есеп жасалды, бірақ оған сілтеме алынбады. Есептер бөлімін ашыңыз.",
     "База знаний": "Білім базасы",
     "Поиск по отчётам": "Есептерден іздеу",
     "Найти отчёт": "Есепті табу",

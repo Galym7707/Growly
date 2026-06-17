@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import {
   EmptyState,
@@ -21,6 +22,7 @@ export default function ContentPlanPage() {
   const [draftingId, setDraftingId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
+  const router = useRouter();
   const { locale, t } = useLanguage();
 
   const load = useCallback(async () => {
@@ -58,6 +60,7 @@ export default function ContentPlanPage() {
       setItems(response.items);
       setFeedback(t("Создано элементов: {count}.", { count: response.items.length }));
       setObjective("");
+      router.push("/content-plan");
     } catch (value) {
       setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {
@@ -77,7 +80,7 @@ export default function ContentPlanPage() {
       setFeedback(t("Черновик «{name}» создан.", {
         name: response.draft.title || response.draft.id,
       }));
-      await load();
+      router.push("/drafts");
     } catch (value) {
       setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     } finally {

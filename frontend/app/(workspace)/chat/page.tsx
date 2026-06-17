@@ -7,10 +7,15 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Icon, type IconName } from "@/components/icons";
 import { PageHeader } from "@/components/ui";
 import { apiRequest } from "@/lib/api";
+import {
+  extractGeneratedContentPlanId,
+  extractGeneratedDraftId,
+  reportPathFromGeneratedResponse,
+} from "@/lib/generated-navigation";
 import { useLanguage } from "@/lib/i18n";
 
 type Action =
@@ -95,6 +100,7 @@ export default function ChatPage() {
 }
 
 function ChatContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedAction = searchParams.get("action") as Action | null;
   const [action, setAction] = useState<Action>(
@@ -193,6 +199,10 @@ function ChatContent() {
           meta: response.status,
         },
       ]);
+      const target = generatedNavigationTarget(action, response.result);
+      if (target) {
+        router.push(target);
+      }
     } catch (value) {
       setMessages((current) => [
         ...current,
@@ -267,6 +277,29 @@ function ChatContent() {
       </div>
     </div>
   );
+}
+
+function generatedNavigationTarget(
+  action: Action,
+  result:
+    | {
+        report?: { id?: number; title?: string };
+        items?: unknown[];
+        draft?: { id?: number; title?: string };
+      }
+    | undefined,
+): string | null {
+  if (!result) return null;
+  if (action === "market_scan" || action === "competitors") {
+    return reportPathFromGeneratedResponse(result);
+  }
+  if (action === "content_plan" && extractGeneratedContentPlanId(result)) {
+    return "/content-plan";
+  }
+  if (action === "create_post" && extractGeneratedDraftId(result)) {
+    return "/drafts";
+  }
+  return null;
 }
 
 function describeResult(

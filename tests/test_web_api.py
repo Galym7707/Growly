@@ -76,3 +76,53 @@ def test_reports_endpoint_serializes_structured_report(monkeypatch) -> None:
     payload = response.json()["items"][0]
     assert payload["id"] == 7
     assert payload["structure"]["competitors"][0]["competitor"] == "Example"
+
+
+def test_market_scan_response_includes_stable_report_id(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "growly_web_api_key", None)
+    now = datetime.now(UTC)
+    report = SimpleNamespace(
+        id=123,
+        report_type="market_scan",
+        title="Market scan",
+        body="Report body",
+        report_text="Report body",
+        summary="Summary",
+        query="delivery",
+        sources_count=2,
+        evidence_json=[],
+        recommendations_json=[],
+        raw_json={},
+        week_start=None,
+        week_end=None,
+        status="ready",
+        notion_page_id=None,
+        created_at=now,
+        updated_at=now,
+    )
+
+    async def run_market_scan(self, **kwargs):
+        assert kwargs["niche"] == "delivery"
+        return report, [object(), object()]
+
+    monkeypatch.setattr(
+        "app.web_api.MarketIntelligenceService.run_market_scan",
+        run_market_scan,
+    )
+
+    response = TestClient(app).post(
+        "/api/market-scan",
+        json={
+            "niche": "delivery",
+            "region_language": "Kazakhstan, English",
+            "competitor_keywords": "",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["report_id"] == 123
+    assert payload["sources_count"] == 2
+    assert payload["sources_saved"] == 2
+    assert payload["report"]["id"] == 123

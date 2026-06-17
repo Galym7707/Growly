@@ -120,6 +120,16 @@ export default function ReportPage() {
                   <Icon name="external" />
                 </a>
               ) : null}
+              <div className="report-aside-actions">
+                <Link className="button button-secondary button-wide" href="/content-plan">
+                  <Icon name="book" />
+                  {t("Создать контент-план")}
+                </Link>
+                <Link className="button button-secondary button-wide" href="/chat?action=create_post">
+                  <Icon name="draft" />
+                  {t("Создать пост")}
+                </Link>
+              </div>
               <Link className="text-link" href="/reports">
                 {t("Вернуться к отчётам")}
               </Link>
