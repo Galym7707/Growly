@@ -4,6 +4,7 @@ import {
   formatContentType,
   sourceDisplay,
 } from "../lib/content-plan";
+import { contentPlanCopy } from "../lib/content-plan-copy";
 
 describe("content plan presentation", () => {
   it("localizes backend enum values", () => {
@@ -25,5 +26,19 @@ describe("content plan presentation", () => {
     expect(source.url).toBe("https://instagram.com/reel/example");
     expect(source.label).toBe("Instagram Reel");
     expect(source.label).not.toContain("https://");
+  });
+
+  it("uses friendly Russian empty and load error copy", () => {
+    const copy = contentPlanCopy("ru");
+
+    expect(copy.emptyText).toBe(
+      "Пока нет контент-плана. Создайте план на основе последнего анализа рынка.",
+    );
+    expect(copy.loadErrorTitle).toBe("Не удалось загрузить контент-план.");
+    expect(copy.loadErrorReasons).toEqual([
+      "контент-план ещё не создан",
+      "сервер временно недоступен",
+      "endpoint backend не найден",
+    ]);
   });
 });

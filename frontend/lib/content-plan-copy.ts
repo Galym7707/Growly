@@ -8,12 +8,21 @@ type ContentPlanCopy = {
   creating: string;
   emptyTitle: string;
   emptyText: string;
+  loadErrorReasons: string[];
+  loadErrorReasonsTitle: string;
+  loadErrorTitle: string;
   goalPlaceholder: string;
   manualCreate: string;
   newPlan: string;
   openReports: string;
   retry: string;
   runMarketScan: string;
+  debug: {
+    title: string;
+    url: string;
+    status: string;
+    message: string;
+  };
   table: {
     date: string;
     channel: string;
@@ -38,6 +47,13 @@ export function contentPlanCopy(locale: Locale): ContentPlanCopy {
       creating: "Creating",
       emptyTitle: "No content plan yet",
       emptyText: "No content plan yet. Create one from the latest market scan.",
+      loadErrorReasons: [
+        "the content plan has not been created yet",
+        "the server is temporarily unavailable",
+        "the backend endpoint was not found",
+      ],
+      loadErrorReasonsTitle: "Possible reasons:",
+      loadErrorTitle: "Could not load the content plan.",
       goalPlaceholder:
         "Example: explain the service value and collect consultation requests",
       manualCreate: "Create manually",
@@ -45,6 +61,12 @@ export function contentPlanCopy(locale: Locale): ContentPlanCopy {
       openReports: "Open reports",
       retry: "Retry",
       runMarketScan: "Run market scan",
+      debug: {
+        title: "Debug",
+        url: "Requested URL",
+        status: "Status code",
+        message: "Response message",
+      },
       table: {
         date: "Date",
         channel: "Channel",
@@ -69,6 +91,13 @@ export function contentPlanCopy(locale: Locale): ContentPlanCopy {
       emptyTitle: "Контент-жоспар жоқ",
       emptyText:
         "Әзірге контент-жоспар жоқ. Соңғы нарық талдауы негізінде жоспар жасаңыз.",
+      loadErrorReasons: [
+        "контент-жоспар әлі жасалмаған",
+        "сервер уақытша қолжетімсіз",
+        "backend endpoint табылмады",
+      ],
+      loadErrorReasonsTitle: "Мүмкін себептер:",
+      loadErrorTitle: "Контент-жоспарды жүктеу мүмкін болмады.",
       goalPlaceholder:
         "Мысалы: қызмет құндылығын түсіндіріп, консультацияға өтінім жинау",
       manualCreate: "Қолмен жасау",
@@ -76,6 +105,12 @@ export function contentPlanCopy(locale: Locale): ContentPlanCopy {
       openReports: "Есептерді ашу",
       retry: "Қайталау",
       runMarketScan: "Нарық талдауын бастау",
+      debug: {
+        title: "Debug",
+        url: "Сұралған URL",
+        status: "Статус коды",
+        message: "Жауап хабарламасы",
+      },
       table: {
         date: "Күні",
         channel: "Арна",
@@ -99,6 +134,13 @@ export function contentPlanCopy(locale: Locale): ContentPlanCopy {
     emptyTitle: "Контент-план пока не создан",
     emptyText:
       "Пока нет контент-плана. Создайте план на основе последнего анализа рынка.",
+    loadErrorReasons: [
+      "контент-план ещё не создан",
+      "сервер временно недоступен",
+      "endpoint backend не найден",
+    ],
+    loadErrorReasonsTitle: "Возможные причины:",
+    loadErrorTitle: "Не удалось загрузить контент-план.",
     goalPlaceholder:
       "Например: объяснить ценность услуги и получить заявки на консультацию",
     manualCreate: "Создать вручную",
@@ -106,6 +148,12 @@ export function contentPlanCopy(locale: Locale): ContentPlanCopy {
     openReports: "Открыть отчёты",
     retry: "Повторить",
     runMarketScan: "Запустить анализ рынка",
+    debug: {
+      title: "Debug",
+      url: "Requested URL",
+      status: "Status code",
+      message: "Response message",
+    },
     table: {
       date: "Дата",
       channel: "Канал",

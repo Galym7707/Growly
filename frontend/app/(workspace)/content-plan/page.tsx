@@ -3,10 +3,11 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ContentPlanErrorPanel } from "@/components/content-plan-error";
 import { ContentPlanView } from "@/components/content-plan-view";
 import { Icon } from "@/components/icons";
 import { LoadingState, PageHeader } from "@/components/ui";
-import { apiRequest } from "@/lib/api";
+import { apiErrorDebugInfo, apiRequest, type ApiDebugInfo } from "@/lib/api";
 import { contentPlanCopy } from "@/lib/content-plan-copy";
 import { contentPlanPathFromGeneratedResponse } from "@/lib/generated-navigation";
 import { useLanguage } from "@/lib/i18n";
@@ -22,25 +23,41 @@ export default function ContentPlanPage() {
   const [generating, setGenerating] = useState(false);
   const [draftingId, setDraftingId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [loadErrorDebug, setLoadErrorDebug] = useState<ApiDebugInfo | null>(
+    null,
+  );
+  const [actionErrorDebug, setActionErrorDebug] = useState<ApiDebugInfo | null>(
+    null,
+  );
   const [feedback, setFeedback] = useState("");
   const router = useRouter();
   const { locale, t } = useLanguage();
   const copy = contentPlanCopy(locale);
 
+  function friendlyActionReason(value: unknown): string {
+    const debugInfo = apiErrorDebugInfo(value);
+    const isNotFound =
+      debugInfo?.status === 404 ||
+      debugInfo?.message.trim().toLowerCase() === "not found";
+    if (isNotFound) return copy.loadErrorReasons[2];
+    return value instanceof Error ? t(value.message) : t("Неизвестная ошибка");
+  }
+
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    setLoadErrorDebug(null);
     try {
       const response = await apiRequest<ContentPlanResponse>("/content-plans");
       setData(response);
     } catch (value) {
-      setError(
-        value instanceof Error ? t(value.message) : t("Неизвестная ошибка"),
+      setLoadErrorDebug(
+        apiErrorDebugInfo(value) || { message: "", status: 0, url: "" },
       );
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -50,6 +67,7 @@ export default function ContentPlanPage() {
     event.preventDefault();
     setGenerating(true);
     setError("");
+    setActionErrorDebug(null);
     setFeedback("");
     try {
       const response = await apiRequest<ContentPlanResponse>("/content-plans", {
@@ -61,12 +79,13 @@ export default function ContentPlanPage() {
         }),
       });
       setData(response);
+      setLoadErrorDebug(null);
       setFeedback(t("Создано элементов: {count}.", { count: response.items.length }));
       setObjective("");
       router.push(contentPlanPathFromGeneratedResponse(response) || "/content-plan");
     } catch (value) {
-      const reason =
-        value instanceof Error ? t(value.message) : t("Неизвестная ошибка");
+      const reason = friendlyActionReason(value);
+      setActionErrorDebug(apiErrorDebugInfo(value));
       setError(
         `${t("Не удалось создать контент-план.")} ${t("Причина: {reason}", {
           reason,
@@ -80,6 +99,7 @@ export default function ContentPlanPage() {
   async function createDraft(itemId: number) {
     setDraftingId(itemId);
     setError("");
+    setActionErrorDebug(null);
     setFeedback("");
     try {
       const response = await apiRequest<{ draft: Draft }>(
@@ -91,9 +111,8 @@ export default function ContentPlanPage() {
       }));
       router.push("/drafts");
     } catch (value) {
-      setError(
-        value instanceof Error ? t(value.message) : t("Неизвестная ошибка"),
-      );
+      setActionErrorDebug(apiErrorDebugInfo(value));
+      setError(friendlyActionReason(value));
     } finally {
       setDraftingId(null);
     }
@@ -135,11 +154,28 @@ export default function ContentPlanPage() {
       {error ? (
         <div className="feedback feedback-error">
           {error}
+          {process.env.NODE_ENV === "development" && actionErrorDebug ? (
+            <div className="api-debug api-debug-inline">
+              <div>
+                <strong>Requested URL</strong>
+                <span>{actionErrorDebug.url}</span>
+              </div>
+              <div>
+                <strong>Status code</strong>
+                <span>{actionErrorDebug.status}</span>
+              </div>
+              <div>
+                <strong>Response message</strong>
+                <span>{actionErrorDebug.message}</span>
+              </div>
+            </div>
+          ) : null}
           <div className="feedback-actions">
             <button
               className="button button-secondary button-small"
               onClick={() => {
                 setError("");
+                setActionErrorDebug(null);
                 void load();
               }}
               type="button"
@@ -160,7 +196,16 @@ export default function ContentPlanPage() {
       ) : null}
 
       {loading ? <LoadingState /> : null}
-      {!loading && (!error || data.items.length) ? (
+      {!loading && loadErrorDebug ? (
+        <ContentPlanErrorPanel
+          debugInfo={loadErrorDebug}
+          onRetry={() => {
+            setLoadErrorDebug(null);
+            void load();
+          }}
+        />
+      ) : null}
+      {!loading && !loadErrorDebug ? (
         <ContentPlanView
           draftingId={draftingId}
           items={data.items}

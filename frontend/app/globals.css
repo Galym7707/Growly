@@ -1401,6 +1401,74 @@ input:disabled {
   margin-top: 12px;
 }
 
+.content-plan-error {
+  background: #fbf7f6;
+  border: 1px solid #ead4d0;
+  border-radius: var(--radius-md);
+  margin-top: 22px;
+  padding: 28px;
+}
+
+.content-plan-error h2 {
+  font-size: 22px;
+  letter-spacing: -0.035em;
+  margin: 0 0 14px;
+}
+
+.content-plan-error-label {
+  color: var(--ink);
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+
+.content-plan-error ul {
+  color: var(--muted);
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.api-debug {
+  border-top: 1px solid rgba(142, 67, 52, 0.18);
+  color: #6d514a;
+  font-size: 13px;
+  margin-top: 18px;
+  padding-top: 14px;
+}
+
+.api-debug summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.api-debug dl {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.api-debug div {
+  display: grid;
+  gap: 4px;
+}
+
+.api-debug dt,
+.api-debug strong {
+  color: #8a3d30;
+  font-weight: 750;
+}
+
+.api-debug dd,
+.api-debug span {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.api-debug-inline {
+  border-top-color: rgba(138, 61, 48, 0.24);
+}
+
 .empty-actions {
   display: flex;
   flex-wrap: wrap;
