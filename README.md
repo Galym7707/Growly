@@ -173,7 +173,7 @@ Frontend variables are documented in `frontend/.env.example`:
 | `NEXT_PUBLIC_GROWLY_API_URL` | public | FastAPI origin |
 | `NEXT_PUBLIC_SUPABASE_URL` | public | Supabase project URL for Auth |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | public | Publishable/anon key for Auth |
-| `NEXT_PUBLIC_AUTH_REQUIRED` | public | Protect workspace routes when `true` |
+| `NEXT_PUBLIC_AUTH_REQUIRED` | public | In local development, protect workspace routes when `true`; production always requires Auth |
 | `GROWLY_API_KEY` | server only | Sent to FastAPI as `X-Growly-API-Key` |
 
 Never expose service-role, Notion, Telegram, GitHub Models, Groq, Tavily, or
@@ -206,7 +206,8 @@ python run_bot.py
 ## Web Routes
 
 - `/`: public landing page
-- `/login`: Supabase password login or explicit local mode
+- `/login`: Supabase password login or explicit local mode in development
+- `/register`: registration entrypoint that opens the auth screen in signup mode
 - `/dashboard`: workspace overview
 - `/chat`: command-style interface over backend actions
 - `/market-scan`: market scan workflow

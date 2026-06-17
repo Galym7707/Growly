@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
+import { isAuthRequired } from "@/lib/auth-config";
 
 type WorkspaceHeaders =
   | { headers: Headers }
@@ -9,12 +10,20 @@ async function resolveWorkspaceHeaders(
   request: NextRequest,
 ): Promise<WorkspaceHeaders> {
   const headers = new Headers();
-  const authRequired = process.env.NEXT_PUBLIC_AUTH_REQUIRED === "true";
+  const authRequired = isAuthRequired();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!authRequired || !supabaseUrl || !supabaseKey) {
+  if (!authRequired) {
     headers.set("X-Growly-Workspace-Id", "local");
     return { headers };
+  }
+  if (!supabaseUrl || !supabaseKey) {
+    return {
+      response: NextResponse.json(
+        { detail: "Требуется вход в Growly." },
+        { status: 401 },
+      ),
+    };
   }
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {

@@ -6,6 +6,7 @@ import { FormEvent, Suspense, useState } from "react";
 import { Icon } from "@/components/icons";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { Logo } from "@/components/logo";
+import { isLocalAuthBypassAllowed } from "@/lib/auth-config";
 import { useLanguage } from "@/lib/i18n";
 import {
   createClient,
@@ -23,19 +24,25 @@ export default function LoginPage() {
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register">(
+    searchParams.get("mode") === "register" ? "register" : "login",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const configured = isSupabaseConfigured();
+  const localModeAllowed = isLocalAuthBypassAllowed();
   const { t } = useLanguage();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const nextPath = getSafeNextPath(searchParams.get("next"));
     if (!configured) {
-      router.push("/dashboard");
+      if (localModeAllowed) {
+        router.push(nextPath);
+      }
       return;
     }
     setLoading(true);
@@ -48,7 +55,7 @@ function LoginContent() {
             email,
             password,
             options: {
-              emailRedirectTo: `${window.location.origin}/dashboard`,
+              emailRedirectTo: `${window.location.origin}${nextPath}`,
             },
           })
         : await supabase.auth.signInWithPassword({
@@ -70,7 +77,7 @@ function LoginContent() {
       setNotice(t("Проверьте почту, чтобы подтвердить регистрацию."));
       return;
     }
-    router.push(searchParams.get("next") || "/dashboard");
+    router.push(nextPath);
     router.refresh();
   }
 
@@ -108,7 +115,9 @@ function LoginContent() {
           {!configured ? (
             <div className="notice">
               {t(
-                "Supabase Auth не настроен. В локальном режиме можно открыть интерфейс без авторизации.",
+                localModeAllowed
+                  ? "Supabase Auth не настроен. В локальном режиме можно открыть интерфейс без авторизации."
+                  : "Supabase Auth не настроен. Вход в рабочую область временно недоступен.",
               )}
             </div>
           ) : null}
@@ -138,12 +147,17 @@ function LoginContent() {
           </label>
           {notice ? <div className="notice">{notice}</div> : null}
           {error ? <p className="form-error">{error}</p> : null}
-          <button className="button button-primary button-wide" disabled={loading}>
+          <button
+            className="button button-primary button-wide"
+            disabled={loading || (!configured && !localModeAllowed)}
+          >
             {loading
               ? t(mode === "register" ? "Создаём аккаунт" : "Проверяем доступ")
               : configured
                 ? t(mode === "register" ? "Зарегистрироваться" : "Войти")
-                : t("Открыть локальный режим")}
+                : localModeAllowed
+                  ? t("Открыть локальный режим")
+                  : t("Вход временно недоступен")}
             <Icon name="arrow" />
           </button>
           {configured ? (
@@ -169,4 +183,9 @@ function LoginContent() {
       </div>
     </main>
   );
+}
+
+function getSafeNextPath(next: string | null): string {
+  if (next?.startsWith("/") && !next.startsWith("//")) return next;
+  return "/dashboard";
 }
