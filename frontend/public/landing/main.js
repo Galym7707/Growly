@@ -147,14 +147,6 @@
     });
   });
 
-  // ---------- PRODUCT ENTRY POINTS ----------
-  const openWorkspaceButton = document.querySelector('.cta-submit');
-  if (openWorkspaceButton) {
-    openWorkspaceButton.addEventListener('click', () => {
-      window.location.assign('/register');
-    });
-  }
-
   // ---------- SCROLL FADE-UP ----------
   const observer = new IntersectionObserver(
     (entries) => {

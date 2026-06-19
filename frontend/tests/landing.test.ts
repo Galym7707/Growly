@@ -22,8 +22,11 @@ describe("public landing page", () => {
   });
 
   it("keeps product entry points on the existing authentication routes", () => {
-    expect(landingHtml).toContain('href="/login" class="nav-cta"');
-    expect(readFileSync(path.join(frontendRoot, "public", "landing", "main.js"), "utf8"))
-      .toContain("window.location.assign('/register')");
+    expect(landingHtml).toContain('href="/login" class="nav-login"');
+    expect(landingHtml).toContain('href="/register" class="nav-cta"');
+    expect(landingHtml).toContain('href="/register" class="hero-primary"');
+    expect(landingHtml).toContain('href="/login" class="btn-ghost"');
+    expect(landingHtml).toContain('href="/register" class="cta-submit"');
+    expect(landingHtml).toContain('href="/login" class="cta-login"');
   });
 });
