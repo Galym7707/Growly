@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import {
@@ -10,7 +11,14 @@ import {
   PageHeader,
   Status,
 } from "@/components/ui";
-import { apiRequest, formatDate, formatReportTitle } from "@/lib/api";
+import {
+  apiRequest,
+  formatDate,
+  formatReportTitle,
+  formatReportType,
+} from "@/lib/api";
+import { useActiveContext } from "@/lib/active-context-provider";
+import { shortConclusion } from "@/lib/report-sections";
 import { useLanguage } from "@/lib/i18n";
 import type { Report } from "@/lib/types";
 
@@ -19,7 +27,7 @@ export default function ReportsPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { locale, t } = useLanguage();
+  const { t } = useLanguage();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,22 +84,9 @@ export default function ReportsPage() {
             <span className="muted">{t("Всего: {count}", { count: visible.length })}</span>
           </div>
           {visible.length ? (
-            <div className="report-list">
+            <div className="report-card-list">
               {visible.map((report) => (
-                <Link href={`/reports/${report.id}`} key={report.id}>
-                  <div>
-                    <h3>{formatReportTitle(report.title, report.type, locale)}</h3>
-                    <p>{report.summary || t("Краткий вывод не указан.")}</p>
-                  </div>
-                  <span className="meta">
-                    {t("{count} источников", { count: report.sources_count })}
-                  </span>
-                  <div>
-                    <Status value={report.status}>{report.status}</Status>
-                    <span className="meta">{formatDate(report.created_at, locale)}</span>
-                  </div>
-                  <Icon name="arrow" />
-                </Link>
+                <ReportCard key={report.id} report={report} />
               ))}
             </div>
           ) : (
@@ -106,5 +101,105 @@ export default function ReportsPage() {
         </>
       ) : null}
     </div>
+  );
+}
+
+function ReportCard({ report }: { report: Report }) {
+  const router = useRouter();
+  const { locale, t } = useLanguage();
+  const { setActiveReport } = useActiveContext();
+  const [busy, setBusy] = useState<null | "plan" | "post" | "notion">(null);
+  const [notice, setNotice] = useState("");
+
+  async function useForContentPlan() {
+    setBusy("plan");
+    setNotice("");
+    try {
+      await setActiveReport(report.id);
+      router.push("/content-plan");
+    } catch (value) {
+      setNotice(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
+      setBusy(null);
+    }
+  }
+
+  async function useForPost() {
+    setBusy("post");
+    setNotice("");
+    try {
+      await setActiveReport(report.id);
+      router.push("/create-post");
+    } catch (value) {
+      setNotice(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
+      setBusy(null);
+    }
+  }
+
+  async function saveToNotion() {
+    setBusy("notion");
+    setNotice("");
+    try {
+      await apiRequest("/notion/sync", {
+        method: "POST",
+        body: JSON.stringify({ target: "report", target_id: report.id }),
+      });
+      setNotice(t("Сохранено в Notion"));
+    } catch (value) {
+      setNotice(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const summary = shortConclusion(report.summary, 3) || t("Краткий вывод не указан.");
+
+  return (
+    <article className="report-card-item">
+      <div className="report-card-head">
+        <div>
+          <p className="eyebrow">{formatReportType(report.type, locale)}</p>
+          <h3>{formatReportTitle(report.title, report.type, locale)}</h3>
+        </div>
+        <Status value={report.status}>{report.status}</Status>
+      </div>
+      <p className="report-card-summary">{summary}</p>
+      <div className="report-card-meta">
+        <span>{formatDate(report.created_at, locale)}</span>
+        <span>{t("{count} источников", { count: report.sources_count })}</span>
+      </div>
+      <div className="report-card-actions">
+        <Link
+          className="button button-secondary button-small"
+          href={`/reports/${report.id}`}
+        >
+          {t("Открыть")}
+        </Link>
+        <button
+          className="button button-secondary button-small"
+          disabled={busy !== null}
+          onClick={useForContentPlan}
+          type="button"
+        >
+          {busy === "plan" ? t("Открываем") : t("Создать контент-план")}
+        </button>
+        <button
+          className="button button-secondary button-small"
+          disabled={busy !== null}
+          onClick={useForPost}
+          type="button"
+        >
+          {busy === "post" ? t("Открываем") : t("Создать пост")}
+        </button>
+        <button
+          className="button button-secondary button-small"
+          disabled={busy !== null}
+          onClick={saveToNotion}
+          type="button"
+        >
+          {busy === "notion" ? t("Сохраняем") : t("Сохранить в Notion")}
+        </button>
+      </div>
+      {notice ? <p className="report-card-notice">{notice}</p> : null}
+    </article>
   );
 }

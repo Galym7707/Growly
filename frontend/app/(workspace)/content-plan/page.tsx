@@ -8,6 +8,11 @@ import { ContentPlanView } from "@/components/content-plan-view";
 import { Icon } from "@/components/icons";
 import { LoadingState, PageHeader } from "@/components/ui";
 import { apiErrorDebugInfo, apiRequest, type ApiDebugInfo } from "@/lib/api";
+import {
+  activeContextTopic,
+  contentPlanRequestBody,
+} from "@/lib/active-context";
+import { useActiveContext } from "@/lib/active-context-provider";
 import { contentPlanCopy } from "@/lib/content-plan-copy";
 import { contentPlanPathFromGeneratedResponse } from "@/lib/generated-navigation";
 import { useLanguage } from "@/lib/i18n";
@@ -32,7 +37,9 @@ export default function ContentPlanPage() {
   const [feedback, setFeedback] = useState("");
   const router = useRouter();
   const { locale, t } = useLanguage();
+  const { active } = useActiveContext();
   const copy = contentPlanCopy(locale);
+  const activeTopic = activeContextTopic(active);
 
   function friendlyActionReason(value: unknown): string {
     const debugInfo = apiErrorDebugInfo(value);
@@ -70,13 +77,16 @@ export default function ContentPlanPage() {
     setActionErrorDebug(null);
     setFeedback("");
     try {
+      const effectiveObjective =
+        objective.trim() ||
+        (activeTopic
+          ? t("Контент-план по нише: {topic}", { topic: activeTopic })
+          : objective);
       const response = await apiRequest<ContentPlanResponse>("/content-plans", {
         method: "POST",
-        body: JSON.stringify({
-          weekly_objective: objective,
-          business: { language: locale },
-          language: locale,
-        }),
+        body: JSON.stringify(
+          contentPlanRequestBody(active, effectiveObjective, locale),
+        ),
       });
       setData(response);
       setLoadErrorDebug(null);
@@ -134,12 +144,30 @@ export default function ContentPlanPage() {
             "Укажите бизнес-цель на неделю. Growly использует последние отчёты и материалы источников.",
           )}
         </p>
+        {active && activeTopic ? (
+          <div className="active-source">
+            <div>
+              <p className="eyebrow">{copy.basedOn}</p>
+              <p className="active-source-topic">
+                {t("План будет создан на основе анализа: {topic}", {
+                  topic: activeTopic,
+                })}
+              </p>
+              <p className="active-source-meta">
+                {t("{count} источников", { count: active.sources_count })}
+              </p>
+            </div>
+            <Link className="button button-secondary button-small" href="/reports">
+              {t("Изменить источник")}
+            </Link>
+          </div>
+        ) : null}
         <label>
           <span>{t("Цель недели")}</span>
           <textarea
             onChange={(event) => setObjective(event.target.value)}
             placeholder={copy.goalPlaceholder}
-            required
+            required={!active}
             value={objective}
           />
         </label>

@@ -11,11 +11,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  asCompetitors,
-  asMetricRows,
-  asStrings,
-} from "@/lib/report-data";
+import { asCompetitors, asMetricRows } from "@/lib/report-data";
+import { reportSections, shortConclusion } from "@/lib/report-sections";
 import type { Report } from "@/lib/types";
 import { useLanguage } from "@/lib/i18n";
 
@@ -26,33 +23,27 @@ export function ReportView({ report }: { report: Report }) {
   const chartRows = asMetricRows(
     structure.publication_metrics || structure.metrics || structure.posts,
   );
-  const sections = [
-    ["Повторяющиеся предложения", structure.repeating_offers],
-    ["Призывы к действию", structure.repeating_ctas],
-    ["Пробелы в контенте", structure.content_gaps],
-    ["Боли аудитории", structure.audience_pains],
-    ["Рекомендуемое позиционирование", structure.recommended_positioning],
-    ["Действия на неделю", structure.actions_this_week],
-    ["Идеи контента", structure.content_ideas],
-    ["Риски и ограничения", structure.limitations || structure.risks],
-  ] as const;
+  const sections = reportSections(structure);
+  const conclusion = shortConclusion(report.summary, 5);
+  const evidence = report.evidence || [];
   const hasStructuredContent =
     competitorRows.length > 0 ||
     chartRows.length > 0 ||
-    sections.some(([, value]) => asStrings(value).length > 0);
+    sections.length > 0 ||
+    evidence.length > 0;
 
   return (
     <>
-      {report.summary ? (
+      {conclusion ? (
         <section className="report-summary">
           <p className="eyebrow">{t("Главный вывод")}</p>
-          <h2>{report.summary}</h2>
+          <h2>{conclusion}</h2>
         </section>
       ) : null}
 
       {competitorRows.length ? (
-        <section className="report-section">
-          <h2>{t("Сравнение конкурентов")}</h2>
+        <section className="report-section report-card">
+          <h2>{t("Конкуренты / источники")}</h2>
           <div className="data-table-wrap">
             <table className="data-table">
               <thead>
@@ -87,7 +78,7 @@ export function ReportView({ report }: { report: Report }) {
       ) : null}
 
       {chartRows.length ? (
-        <section className="report-section">
+        <section className="report-section report-card">
           <h2>{t("Динамика публикаций")}</h2>
           <div className="metric-chart">
             <ResponsiveContainer height="100%" width="100%">
@@ -116,31 +107,26 @@ export function ReportView({ report }: { report: Report }) {
         </section>
       ) : null}
 
-      {sections.map(([title, value]) => {
-        const values = asStrings(value);
-        return values.length ? (
-          <section className="report-section" key={title}>
-            <h2>{t(title)}</h2>
-            <ul>
-              {values.map((item, index) => (
-                <li key={`${item}-${index}`}>{item}</li>
-              ))}
-            </ul>
-          </section>
-        ) : null;
-      })}
+      {sections.map((section) => (
+        <section className="report-section report-card" key={section.key}>
+          <h2>{t(section.title)}</h2>
+          <ul>
+            {section.items.map((item, index) => (
+              <li key={`${section.key}-${index}`}>{item}</li>
+            ))}
+          </ul>
+        </section>
+      ))}
 
-      {report.evidence.length ? (
-        <section className="report-section">
+      {evidence.length ? (
+        <section className="report-section report-card">
           <h2>{t("Источники")}</h2>
           <ul>
-            {report.evidence.map((value, index) => {
+            {evidence.map((value, index) => {
               const href =
                 typeof value === "string"
                   ? value
-                  : typeof value === "object" &&
-                      value &&
-                      "url" in value
+                  : typeof value === "object" && value && "url" in value
                     ? String(value.url)
                     : "";
               return (
@@ -160,7 +146,7 @@ export function ReportView({ report }: { report: Report }) {
       ) : null}
 
       {report.body && !hasStructuredContent ? (
-        <section className="report-section">
+        <section className="report-section report-card">
           <h2>{t("Полный текст")}</h2>
           <div className="report-markdown">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>

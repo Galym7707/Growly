@@ -40,6 +40,18 @@ BUSINESS_SETTING_KEYS = {
     "business_notion_root",
 }
 
+ACTIVE_CONTEXT_KEYS = {
+    "active_report_id",
+    "active_topic",
+    "active_region",
+    "active_language",
+    "active_report_type",
+    "active_sources_count",
+    "active_created_at",
+}
+
+ACTIVE_CONTEXT_REPORT_TYPES = {"market_scan", "competitor_report", "competitor"}
+
 
 def require_web_api_key(
     x_growly_api_key: str | None = Header(default=None),
@@ -124,6 +136,10 @@ class ChatRequest(BaseModel):
     ] | None = None
     context: dict[str, Any] = Field(default_factory=dict)
     language: Literal["ru", "en", "kk"] = "ru"
+
+
+class ActiveContextRequest(BaseModel):
+    active_report_id: int | None = Field(default=None, ge=1)
 
 
 class WorkspaceSettingsRequest(BaseModel):
@@ -370,6 +386,87 @@ def _save_workspace_settings(values: dict[str, str | None]) -> dict[str, str | N
             if key in BUSINESS_SETTING_KEYS:
                 repository.set(key, value.strip() if value else None)
         return repository.get_many(sorted(BUSINESS_SETTING_KEYS))
+
+
+def _active_payload_from_report(
+    report: Report,
+    stored: dict[str, str | None],
+) -> dict[str, Any]:
+    raw = report.raw_json if isinstance(report.raw_json, dict) else {}
+    market_context = (
+        raw.get("market_context")
+        if isinstance(raw.get("market_context"), dict)
+        else {}
+    )
+    topic = (
+        market_context.get("topic")
+        or stored.get("active_topic")
+        or report.query
+        or report.title
+    )
+    return {
+        "report_id": report.id,
+        "report_title": report.title,
+        "report_type": report.report_type,
+        "topic": topic,
+        "region": market_context.get("region") or stored.get("active_region"),
+        "language": (
+            market_context.get("language") or stored.get("active_language")
+        ),
+        "sources_count": report.sources_count,
+        "created_at": _date_value(report.created_at),
+        "status": report.status,
+        "notion_synced": bool(report.notion_page_id),
+        "notion_url": (
+            NotionService.page_url(report.notion_page_id)
+            if report.notion_page_id
+            else None
+        ),
+    }
+
+
+def _resolve_active_report(session: Any, stored: dict[str, str | None]) -> Report | None:
+    reports = ReportsRepository(session)
+    raw_id = stored.get("active_report_id")
+    report = None
+    if raw_id and str(raw_id).isdigit():
+        report = reports.get_report(int(raw_id))
+    if (
+        report is None
+        or report.report_type not in ACTIVE_CONTEXT_REPORT_TYPES
+    ):
+        report = reports.latest_report("market_scan")
+    return report
+
+
+def _active_context_data() -> dict[str, Any]:
+    with session_scope() as session:
+        stored = SettingsRepository(session).get_many(sorted(ACTIVE_CONTEXT_KEYS))
+        report = _resolve_active_report(session, stored)
+        if report is None:
+            return {"active": None}
+        return {"active": _active_payload_from_report(report, stored)}
+
+
+def _set_active_context(report_id: int | None) -> dict[str, Any]:
+    with session_scope() as session:
+        settings_repo = SettingsRepository(session)
+        if report_id is None:
+            for key in ACTIVE_CONTEXT_KEYS:
+                settings_repo.set(key, None)
+            return {"active": None}
+        report = ReportsRepository(session).get_report(report_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail="Отчёт не найден.")
+        payload = _active_payload_from_report(report, {})
+        settings_repo.set("active_report_id", str(payload["report_id"]))
+        settings_repo.set("active_topic", payload["topic"])
+        settings_repo.set("active_region", payload["region"])
+        settings_repo.set("active_language", payload["language"])
+        settings_repo.set("active_report_type", payload["report_type"])
+        settings_repo.set("active_sources_count", str(payload["sources_count"]))
+        settings_repo.set("active_created_at", payload["created_at"])
+        return {"active": payload}
 
 
 def _infer_chat_action(message: str) -> str | None:
@@ -676,6 +773,16 @@ async def notion_sync(payload: NotionSyncRequest) -> dict[str, Any]:
         return {"status": "completed", "target": "draft", "url": url}
     counts = await NotionService().sync_recent_data()
     return {"status": "completed", "target": "recent", "counts": counts}
+
+
+@secured_router.get("/context/active")
+async def active_context() -> dict[str, Any]:
+    return await asyncio.to_thread(_active_context_data)
+
+
+@secured_router.patch("/context/active")
+async def update_active_context(payload: ActiveContextRequest) -> dict[str, Any]:
+    return await asyncio.to_thread(_set_active_context, payload.active_report_id)
 
 
 @secured_router.get("/settings")

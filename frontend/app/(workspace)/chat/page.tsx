@@ -3,6 +3,7 @@
 import {
   FormEvent,
   Suspense,
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -10,7 +11,9 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { Icon, type IconName } from "@/components/icons";
 import { PageHeader } from "@/components/ui";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, formatDate } from "@/lib/api";
+import { activeContextTopic, chatPlaceholderSource } from "@/lib/active-context";
+import { useActiveContext } from "@/lib/active-context-provider";
 import {
   contentPlanPathFromGeneratedResponse,
   extractGeneratedContentPlanId,
@@ -92,6 +95,9 @@ const actions: {
   },
 ];
 
+const INTRO_NO_CONTEXT =
+  "Выберите действие слева и опишите задачу. Growly вызовет тот же сервисный слой, который используется Telegram-ботом.";
+
 export default function ChatPage() {
   return (
     <Suspense fallback={<div className="workspace-page" />}>
@@ -112,28 +118,28 @@ function ChatContent() {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const { locale, t } = useLanguage();
+  const { active } = useActiveContext();
+  const activeTopic = activeContextTopic(active);
   const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 1,
-      role: "assistant",
-      text: "Выберите действие слева и опишите задачу. Growly вызовет тот же сервисный слой, который используется Telegram-ботом.",
-    },
+    { id: 1, role: "assistant", text: t(INTRO_NO_CONTEXT) },
   ]);
 
   useEffect(() => {
+    const intro = active
+      ? t(
+          "Последний анализ: {topic}. Источников: {count}. Что хотите сделать дальше?",
+          {
+            topic: activeTopic || t("анализ рынка"),
+            count: active.sources_count,
+          },
+        )
+      : t(INTRO_NO_CONTEXT);
     setMessages((current) =>
       current.map((message) =>
-        message.id === 1
-          ? {
-              ...message,
-              text: t(
-                "Выберите действие слева и опишите задачу. Growly вызовет тот же сервисный слой, который используется Telegram-ботом.",
-              ),
-            }
-          : message,
+        message.id === 1 ? { ...message, text: intro } : message,
       ),
     );
-  }, [t]);
+  }, [active, activeTopic, t]);
 
   const selected = useMemo(
     () => actions.find((item) => item.id === action)!,
@@ -146,75 +152,110 @@ function ChatContent() {
     }
   }, [requestedAction]);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  const runChat = useCallback(
+    async (
+      actionId: Action,
+      message: string,
+      context: Record<string, unknown>,
+      metaLabel: string,
+    ) => {
+      setMessages((current) => [
+        ...current,
+        { id: Date.now(), role: "user", text: message, meta: metaLabel },
+      ]);
+      setLoading(true);
+      try {
+        const response = await apiRequest<{
+          message: string;
+          status: string;
+          result?: {
+            report?: { id?: number; title?: string };
+            items?: unknown[];
+            draft?: { id?: number; title?: string };
+            counts?: Record<string, number>;
+          };
+        }>("/chat", {
+          method: "POST",
+          body: JSON.stringify({
+            action: actionId,
+            message,
+            context,
+            language: locale,
+          }),
+        });
+        setMessages((current) => [
+          ...current,
+          {
+            id: Date.now() + 1,
+            role: "assistant",
+            text: describeResult(response.result, t),
+            meta: response.status,
+          },
+        ]);
+        const target = generatedNavigationTarget(actionId, response.result);
+        if (target) {
+          router.push(target);
+        }
+      } catch (value) {
+        setMessages((current) => [
+          ...current,
+          {
+            id: Date.now() + 1,
+            role: "assistant",
+            text:
+              value instanceof Error
+                ? t(value.message)
+                : t("Задачу не удалось выполнить."),
+            meta: t("Ошибка"),
+          },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [locale, router, t],
+  );
+
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = text.trim() || t(selected.placeholder);
-    const userMessage: Message = {
-      id: Date.now(),
-      role: "user",
-      text: message,
-      meta: t(selected.label),
-    };
-    setMessages((current) => [...current, userMessage]);
     setText("");
+    void runChat(action, message, contextForAction(action, message, locale), t(selected.label));
+  }
+
+  async function saveActiveReportToNotion() {
+    if (!active) return;
     setLoading(true);
+    setMessages((current) => [
+      ...current,
+      {
+        id: Date.now(),
+        role: "user",
+        text: t("Сохранить в Notion"),
+        meta: t("Сохранить в Notion"),
+      },
+    ]);
     try {
-      const response = await apiRequest<{
-        message: string;
-        status: string;
-        result?: {
-          report?: { id?: number; title?: string };
-          items?: unknown[];
-          draft?: { id?: number; title?: string };
-          counts?: Record<string, number>;
-        };
-      }>("/chat", {
+      await apiRequest("/notion/sync", {
         method: "POST",
-        body: JSON.stringify({
-          action,
-          message,
-          context:
-            action === "market_scan"
-              ? {
-                  niche: message,
-                  region_language:
-                    locale === "en"
-                      ? "Kazakhstan, English"
-                      : locale === "kk"
-                        ? "Қазақстан, қазақ тілі"
-                        : "Казахстан, русский язык",
-                }
-              : action === "content_plan"
-                ? { weekly_objective: message }
-                : action === "create_post"
-                  ? { brief: message, channel: "Telegram" }
-                  : {},
-          language: locale,
-        }),
+        body: JSON.stringify({ target: "report", target_id: active.report_id }),
       });
       setMessages((current) => [
         ...current,
         {
           id: Date.now() + 1,
           role: "assistant",
-          text: describeResult(response.result, t),
-          meta: response.status,
+          text: t("Сохранено в Notion"),
+          meta: "completed",
         },
       ]);
-      const target = generatedNavigationTarget(action, response.result);
-      if (target) {
-        router.push(target);
-      }
     } catch (value) {
       setMessages((current) => [
         ...current,
         {
           id: Date.now() + 1,
           role: "assistant",
-          text:
-            value instanceof Error
-              ? t(value.message)
-              : t("Задачу не удалось выполнить."),
+          text: value instanceof Error ? t(value.message) : t("Неизвестная ошибка"),
           meta: t("Ошибка"),
         },
       ]);
@@ -222,6 +263,56 @@ function ChatContent() {
       setLoading(false);
     }
   }
+
+  const quickActions: { id: string; label: string; icon: IconName; run: () => void }[] =
+    active
+      ? [
+          {
+            id: "content_plan",
+            label: "Создать контент-план",
+            icon: "book",
+            run: () => router.push("/content-plan"),
+          },
+          {
+            id: "create_post",
+            label: "Создать пост",
+            icon: "draft",
+            run: () => router.push("/create-post"),
+          },
+          {
+            id: "ideas",
+            label: "Показать идеи",
+            icon: "report",
+            run: () => router.push(`/reports/${active.report_id}`),
+          },
+          {
+            id: "competitors",
+            label: "Сформировать конкурентный отчёт",
+            icon: "search",
+            run: () =>
+              void runChat(
+                "competitors",
+                activeTopic || t("последний анализ рынка"),
+                { query: activeTopic || "" },
+                t("Конкуренты"),
+              ),
+          },
+          {
+            id: "notion",
+            label: "Сохранить в Notion",
+            icon: "notion",
+            run: () => void saveActiveReportToNotion(),
+          },
+          {
+            id: "open",
+            label: "Открыть отчёт",
+            icon: "arrow",
+            run: () => router.push(`/reports/${active.report_id}`),
+          },
+        ]
+      : [];
+
+  const placeholder = t(chatPlaceholderSource(active, selected.placeholder));
 
   return (
     <div className="workspace-page">
@@ -246,6 +337,34 @@ function ChatContent() {
           ))}
         </aside>
         <section className="chat-panel">
+          {active ? (
+            <div className="chat-context">
+              <div className="chat-context-head">
+                <p className="eyebrow">{t("Последний анализ")}</p>
+                <h2>{activeTopic || t("Анализ рынка")}</h2>
+                <p className="chat-context-meta">
+                  {t("{count} источников", { count: active.sources_count })}
+                  {active.created_at
+                    ? ` · ${formatDate(active.created_at, locale)}`
+                    : ""}
+                </p>
+              </div>
+              <div className="chat-quick-actions">
+                {quickActions.map((item) => (
+                  <button
+                    className="button button-secondary button-small"
+                    disabled={loading}
+                    key={item.id}
+                    onClick={item.run}
+                    type="button"
+                  >
+                    <Icon name={item.icon} />
+                    {t(item.label)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="chat-messages" aria-live="polite">
             {messages.map((message) => (
               <article
@@ -267,7 +386,7 @@ function ChatContent() {
             <textarea
               aria-label={t("Сообщение")}
               onChange={(event) => setText(event.target.value)}
-              placeholder={t(selected.placeholder)}
+              placeholder={placeholder}
               value={text}
             />
             <button className="button button-primary" disabled={loading}>
@@ -279,6 +398,27 @@ function ChatContent() {
       </div>
     </div>
   );
+}
+
+function contextForAction(
+  action: Action,
+  message: string,
+  locale: string,
+): Record<string, unknown> {
+  if (action === "market_scan") {
+    return {
+      niche: message,
+      region_language:
+        locale === "en"
+          ? "Kazakhstan, English"
+          : locale === "kk"
+            ? "Қазақстан, қазақ тілі"
+            : "Казахстан, русский язык",
+    };
+  }
+  if (action === "content_plan") return { weekly_objective: message };
+  if (action === "create_post") return { brief: message, channel: "Telegram" };
+  return {};
 }
 
 function generatedNavigationTarget(

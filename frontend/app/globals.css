@@ -1685,9 +1685,9 @@ input:disabled {
 }
 
 .report-summary h2 {
-  font-size: 28px;
-  letter-spacing: -0.04em;
-  line-height: 1.2;
+  font-size: 21px;
+  letter-spacing: -0.02em;
+  line-height: 1.45;
   margin: 0;
 }
 
@@ -2260,4 +2260,189 @@ input:disabled {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+/* Active workspace context + report cards */
+.report-section.report-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  padding: 24px;
+}
+
+.report-card-list {
+  display: grid;
+  gap: 16px;
+}
+
+.report-card-item {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 12px;
+  padding: 22px;
+}
+
+.report-card-head {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.report-card-head h3 {
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  margin: 4px 0 0;
+}
+
+.report-card-summary {
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  margin: 0;
+  max-width: 760px;
+  overflow: hidden;
+}
+
+.report-card-meta {
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 16px;
+}
+
+.report-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-card-notice {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.active-source {
+  align-items: center;
+  background: var(--green-soft);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: space-between;
+  margin: 18px 0 6px;
+  padding: 16px 18px;
+}
+
+.active-source-topic {
+  font-weight: 600;
+  margin: 4px 0 0;
+}
+
+.active-source-meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.post-options {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.post-option {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 42px 1fr 22px;
+  min-height: 84px;
+  padding: 18px 21px;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease;
+  width: 100%;
+}
+
+.post-option:hover:not(:disabled):not(.post-option-disabled) {
+  border-color: #c5c7bf;
+  transform: translateY(-2px);
+}
+
+.post-option:disabled,
+.post-option-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.post-option-active {
+  border-color: var(--green);
+}
+
+.post-option > svg:first-child {
+  background: var(--green-soft);
+  border-radius: 9px;
+  color: var(--green);
+  height: 42px;
+  padding: 10px;
+  width: 42px;
+}
+
+.post-option > svg:last-child {
+  color: var(--muted);
+}
+
+.post-option div {
+  display: grid;
+  gap: 4px;
+}
+
+.post-option div span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chat-context {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 20px;
+}
+
+.chat-context-head h2 {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  margin: 4px 0 0;
+}
+
+.chat-context-meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+
+.chat-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-quick-actions .button svg {
+  height: 15px;
+  width: 15px;
 }

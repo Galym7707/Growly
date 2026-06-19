@@ -27,7 +27,7 @@ const quickActions = [
     icon: "book" as const,
   },
   {
-    href: "/chat?action=create_post",
+    href: "/create-post",
     title: "Подготовить пост",
     text: "Передать бриф и получить черновик.",
     icon: "draft" as const,

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { ReportView } from "@/components/report-view";
@@ -17,15 +17,30 @@ import {
   formatReportTitle,
   formatReportType,
 } from "@/lib/api";
+import { useActiveContext } from "@/lib/active-context-provider";
 import type { Report } from "@/lib/types";
 import { useLanguage } from "@/lib/i18n";
 
 export default function ReportPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [routing, setRouting] = useState<null | "plan" | "post">(null);
   const { locale, t } = useLanguage();
+  const { setActiveReport } = useActiveContext();
+
+  async function continueWith(target: "plan" | "post") {
+    setRouting(target);
+    try {
+      await setActiveReport(Number(params.id));
+    } catch {
+      // Navigation should still proceed; the destination falls back to the
+      // latest market scan when the active context could not be persisted.
+    }
+    router.push(target === "plan" ? "/content-plan" : "/create-post");
+  }
 
   const load = useCallback(async () => {
     setError("");
@@ -121,14 +136,24 @@ export default function ReportPage() {
                 </a>
               ) : null}
               <div className="report-aside-actions">
-                <Link className="button button-secondary button-wide" href="/content-plan">
+                <button
+                  className="button button-secondary button-wide"
+                  disabled={routing !== null}
+                  onClick={() => continueWith("plan")}
+                  type="button"
+                >
                   <Icon name="book" />
                   {t("Создать контент-план")}
-                </Link>
-                <Link className="button button-secondary button-wide" href="/chat?action=create_post">
+                </button>
+                <button
+                  className="button button-secondary button-wide"
+                  disabled={routing !== null}
+                  onClick={() => continueWith("post")}
+                  type="button"
+                >
                   <Icon name="draft" />
                   {t("Создать пост")}
-                </Link>
+                </button>
               </div>
               <Link className="text-link" href="/reports">
                 {t("Вернуться к отчётам")}

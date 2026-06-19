@@ -15,6 +15,7 @@ dist/
 build/
 node_modules/
 .next/
+*.tsbuildinfo
 *.egg-info/
 .idea/
 .vscode/

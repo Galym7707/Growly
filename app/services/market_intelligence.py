@@ -14,6 +14,7 @@ from app.database import session_scope
 from app.models import MarketScanJob, Report, Setting, SourceItem
 from app.repositories.market_scan_jobs_repo import MarketScanJobsRepository
 from app.repositories.reports_repo import ReportsRepository
+from app.repositories.settings_repo import SettingsRepository
 from app.repositories.sources_repo import SourcesRepository
 from app.search.base import BaseSearchProvider, SearchResult
 from app.search.factory import get_search_provider
@@ -1237,6 +1238,42 @@ class MarketIntelligenceService:
             job = MarketScanJobsRepository(session).latest_for_report(report_id)
             return job.id if job else None
 
+    @staticmethod
+    def _persist_active_context(session: Any, report: Report) -> None:
+        """Cache the latest scan as the active workspace context.
+
+        Stored in ``settings`` so every surface (web pages and the Telegram
+        bot) can resume from the most recent analysis instead of asking the
+        user to describe the niche again.
+        """
+
+        raw = report.raw_json if isinstance(report.raw_json, dict) else {}
+        context = (
+            raw.get("market_context")
+            if isinstance(raw.get("market_context"), dict)
+            else {}
+        )
+        repo = SettingsRepository(session)
+        repo.set("active_report_id", str(report.id))
+        repo.set(
+            "active_topic",
+            str(context.get("topic") or report.query or "").strip() or None,
+        )
+        repo.set(
+            "active_region",
+            str(context.get("region") or "").strip() or None,
+        )
+        repo.set(
+            "active_language",
+            str(context.get("language") or "").strip() or None,
+        )
+        repo.set("active_report_type", report.report_type or "market_scan")
+        repo.set("active_sources_count", str(report.sources_count or 0))
+        repo.set(
+            "active_created_at",
+            report.created_at.isoformat() if report.created_at else None,
+        )
+
     @classmethod
     def _save_market_scan_report(
         cls,
@@ -1248,7 +1285,7 @@ class MarketIntelligenceService:
     ) -> Report:
         body = cls.render_market_scan_report(payload)
         with session_scope() as session:
-            return ReportsRepository(session).create_report(
+            report = ReportsRepository(session).create_report(
                 report_type="market_scan",
                 title=f"Анализ рынка: {query}",
                 report_text=body,
@@ -1269,6 +1306,8 @@ class MarketIntelligenceService:
                 },
                 status="ready",
             )
+            cls._persist_active_context(session, report)
+            return report
 
     @classmethod
     def _save_partial_market_scan_report(
@@ -1289,7 +1328,7 @@ class MarketIntelligenceService:
                 "Результаты поиска сохранены, но ИИ-анализ временно недоступен."
             )
         with session_scope() as session:
-            return ReportsRepository(session).create_report(
+            report = ReportsRepository(session).create_report(
                 report_type="market_scan",
                 title=f"Анализ рынка: {query}",
                 report_text=message,
@@ -1310,6 +1349,8 @@ class MarketIntelligenceService:
                 },
                 status=MARKET_SCAN_PENDING_STATUS,
             )
+            cls._persist_active_context(session, report)
+            return report
 
     @classmethod
     def _update_market_scan_report(
@@ -1333,7 +1374,7 @@ class MarketIntelligenceService:
                 if isinstance(existing_payload.get("market_context"), dict)
                 else {}
             )
-            return ReportsRepository(session).update_report(
+            updated = ReportsRepository(session).update_report(
                 report,
                 report_text=body,
                 summary=str(payload.get("executive_summary") or "")[:1800],
@@ -1354,6 +1395,8 @@ class MarketIntelligenceService:
                 },
                 status="ready",
             )
+            cls._persist_active_context(session, updated)
+            return updated
 
     @staticmethod
     def _load_pending_scan(
