@@ -78,38 +78,33 @@ def test_reports_endpoint_serializes_structured_report(monkeypatch) -> None:
     assert payload["structure"]["competitors"][0]["competitor"] == "Example"
 
 
-def test_market_scan_response_includes_stable_report_id(monkeypatch) -> None:
+def test_market_scan_starts_background_job_without_waiting(monkeypatch) -> None:
     settings = get_settings()
     monkeypatch.setattr(settings, "growly_web_api_key", None)
-    now = datetime.now(UTC)
-    report = SimpleNamespace(
-        id=123,
-        report_type="market_scan",
-        title="Market scan",
-        body="Report body",
-        report_text="Report body",
-        summary="Summary",
-        query="delivery",
-        sources_count=2,
-        evidence_json=[],
-        recommendations_json=[],
-        raw_json={},
-        week_start=None,
-        week_end=None,
-        status="ready",
-        notion_page_id=None,
-        created_at=now,
-        updated_at=now,
+    job = SimpleNamespace(
+        id=77,
+        current_step="Шаг 1/5: ищу источники через Tavily...",
+        sources_count=0,
     )
+    scheduled: dict[str, object] = {}
 
-    async def run_market_scan(self, **kwargs):
-        assert kwargs["niche"] == "delivery"
-        return report, [object(), object()]
+    async def create_market_scan_job(self, user_id, query):
+        assert user_id is None
+        assert query == "delivery"
+        return job
+
+    def schedule(service, job_id, payload):
+        scheduled.update(
+            service=service,
+            job_id=job_id,
+            niche=payload.niche,
+        )
 
     monkeypatch.setattr(
-        "app.web_api.MarketIntelligenceService.run_market_scan",
-        run_market_scan,
+        "app.web_api.MarketIntelligenceService.create_market_scan_job",
+        create_market_scan_job,
     )
+    monkeypatch.setattr("app.web_api._schedule_market_scan_job", schedule)
 
     response = TestClient(app).post(
         "/api/market-scan",
@@ -120,12 +115,48 @@ def test_market_scan_response_includes_stable_report_id(monkeypatch) -> None:
         },
     )
 
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload == {
+        "status": "accepted",
+        "message": "Анализ рынка запущен",
+        "job_id": 77,
+        "current_step": "Шаг 1/5: ищу источники через Tavily...",
+        "sources_count": 0,
+    }
+    assert scheduled["job_id"] == 77
+    assert scheduled["niche"] == "delivery"
+
+
+def test_market_scan_job_status_includes_stable_report_id(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "growly_web_api_key", None)
+
+    async def market_scan_job(self, job_id):
+        assert job_id == 77
+        return {
+            "id": 77,
+            "status": "completed",
+            "current_step": "Готово.",
+            "sources_count": 42,
+            "report_id": 123,
+            "report_status": "ready",
+            "error_message": None,
+        }
+
+    monkeypatch.setattr(
+        "app.web_api.MarketIntelligenceService.market_scan_job",
+        market_scan_job,
+    )
+
+    response = TestClient(app).get("/api/market-scan/jobs/77")
+
     assert response.status_code == 200
     payload = response.json()
+    assert payload["status"] == "completed"
     assert payload["report_id"] == 123
-    assert payload["sources_count"] == 2
-    assert payload["sources_saved"] == 2
-    assert payload["report"]["id"] == 123
+    assert payload["sources_count"] == 42
+    assert payload["sources_saved"] == 42
 
 
 def test_content_plans_create_returns_plan_id_and_passes_language(monkeypatch) -> None:

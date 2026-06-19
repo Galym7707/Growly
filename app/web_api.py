@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import logging
 from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
@@ -23,8 +24,11 @@ from app.services.notion_service import NotionService
 from app.services.report_service import ReportService
 from app.services.source_analysis_service import SourceAnalysisService
 from app.services.source_discovery_service import SourceDiscoveryService
+from app.utils.errors import GrowlyError
 
 router = APIRouter(prefix="/api", tags=["web"])
+logger = logging.getLogger(__name__)
+_market_scan_tasks: set[asyncio.Task[None]] = set()
 
 BUSINESS_SETTING_KEYS = {
     "business_name",
@@ -400,8 +404,7 @@ async def web_health() -> dict[str, str]:
     }
 
 
-@secured_router.post("/market-scan")
-async def market_scan(payload: MarketScanRequest) -> dict[str, Any]:
+async def _run_market_scan_sync(payload: MarketScanRequest) -> dict[str, Any]:
     report, sources = await MarketIntelligenceService().run_market_scan(
         niche=payload.niche,
         region_language=payload.region_language,
@@ -416,6 +419,84 @@ async def market_scan(payload: MarketScanRequest) -> dict[str, Any]:
         "sources_count": len(sources),
         "report": report_payload,
         "sources_saved": len(sources),
+    }
+
+
+async def _run_market_scan_job(
+    service: MarketIntelligenceService,
+    job_id: int,
+    payload: MarketScanRequest,
+) -> None:
+    try:
+        await service.run_market_scan(
+            niche=payload.niche,
+            region_language=payload.region_language,
+            competitor_keywords=payload.competitor_keywords,
+            job_id=job_id,
+            output_language=payload.language,
+        )
+    except asyncio.CancelledError:
+        await service.cancel_market_scan_job(job_id)
+        raise
+    except Exception as exc:
+        safe_error = (
+            str(exc)
+            if isinstance(exc, GrowlyError)
+            else f"Unexpected {type(exc).__name__}"
+        )
+        await service.fail_market_scan_job(job_id, safe_error)
+        logger.exception(
+            "Web market scan job %s failed: %s",
+            job_id,
+            type(exc).__name__,
+        )
+
+
+def _schedule_market_scan_job(
+    service: MarketIntelligenceService,
+    job_id: int,
+    payload: MarketScanRequest,
+) -> None:
+    task = asyncio.create_task(_run_market_scan_job(service, job_id, payload))
+    _market_scan_tasks.add(task)
+    task.add_done_callback(_market_scan_tasks.discard)
+
+
+@secured_router.post(
+    "/market-scan",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def market_scan(payload: MarketScanRequest) -> dict[str, Any]:
+    service = MarketIntelligenceService()
+    job = await service.create_market_scan_job(None, payload.niche)
+    _schedule_market_scan_job(service, job.id, payload)
+    return {
+        "status": "accepted",
+        "message": "Анализ рынка запущен",
+        "job_id": job.id,
+        "current_step": job.current_step,
+        "sources_count": job.sources_count,
+    }
+
+
+@secured_router.get("/market-scan/jobs/{job_id}")
+async def market_scan_job(job_id: int) -> dict[str, Any]:
+    job = await MarketIntelligenceService().market_scan_job(job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Задание анализа рынка не найдено.",
+        )
+    return {
+        "status": job["status"],
+        "message": job["current_step"],
+        "job_id": job["id"],
+        "current_step": job["current_step"],
+        "sources_count": job["sources_count"],
+        "sources_saved": job["sources_count"],
+        "report_id": job["report_id"],
+        "report_status": job["report_status"],
+        "error_message": job["error_message"],
     }
 
 
@@ -625,7 +706,7 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
             competitor_keywords=str(context.get("competitor_keywords") or ""),
             language=payload.language,
         )
-        result = await market_scan(request)
+        result = await _run_market_scan_sync(request)
     elif action == "competitors":
         result = await competitor_report(
             CompetitorReportRequest(

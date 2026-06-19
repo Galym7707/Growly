@@ -76,6 +76,12 @@ class MarketIntelligenceService:
     ) -> dict[str, Any] | None:
         return await asyncio.to_thread(self._latest_market_scan_job, user_id)
 
+    async def market_scan_job(
+        self,
+        job_id: int,
+    ) -> dict[str, Any] | None:
+        return await asyncio.to_thread(self._market_scan_job, job_id)
+
     async def market_scan_job_id_for_report(
         self,
         report_id: int,
@@ -1189,20 +1195,41 @@ class MarketIntelligenceService:
             job = MarketScanJobsRepository(session).latest_for_user(user_id)
             if job is None:
                 return None
-            report = session.get(Report, job.report_id) if job.report_id else None
-            return {
-                "id": job.id,
-                "task_type": "market_scan",
-                "status": job.status,
-                "current_step": job.current_step,
-                "query": job.query,
-                "sources_count": job.sources_count,
-                "report_id": job.report_id,
-                "report_status": report.status if report else None,
-                "error_message": job.error_message,
-                "created_at": job.created_at,
-                "updated_at": job.updated_at,
-            }
+            return MarketIntelligenceService._market_scan_job_payload(
+                session,
+                job,
+            )
+
+    @staticmethod
+    def _market_scan_job(job_id: int) -> dict[str, Any] | None:
+        with session_scope() as session:
+            job = MarketScanJobsRepository(session).get(job_id)
+            if job is None:
+                return None
+            return MarketIntelligenceService._market_scan_job_payload(
+                session,
+                job,
+            )
+
+    @staticmethod
+    def _market_scan_job_payload(
+        session: Any,
+        job: MarketScanJob,
+    ) -> dict[str, Any]:
+        report = session.get(Report, job.report_id) if job.report_id else None
+        return {
+            "id": job.id,
+            "task_type": "market_scan",
+            "status": job.status,
+            "current_step": job.current_step,
+            "query": job.query,
+            "sources_count": job.sources_count,
+            "report_id": job.report_id,
+            "report_status": report.status if report else None,
+            "error_message": job.error_message,
+            "created_at": job.created_at,
+            "updated_at": job.updated_at,
+        }
 
     @staticmethod
     def _job_id_for_report(report_id: int) -> int | None:

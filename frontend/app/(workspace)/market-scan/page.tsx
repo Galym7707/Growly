@@ -8,6 +8,13 @@ import { PageHeader } from "@/components/ui";
 import { apiRequest } from "@/lib/api";
 import { reportPathFromGeneratedResponse } from "@/lib/generated-navigation";
 import { useLanguage } from "@/lib/i18n";
+import {
+  isFailedMarketScanJob,
+  marketScanErrorMessage,
+  marketScanJobPath,
+  marketScanStepIndex,
+  type MarketScanJobResponse,
+} from "@/lib/market-scan-job";
 import type { Report } from "@/lib/types";
 
 const steps = [
@@ -18,11 +25,48 @@ const steps = [
   "Синхронизирую с Notion",
 ];
 
+type MarketScanResponse = MarketScanJobResponse & {
+  id?: number | string;
+  reportId?: number | string;
+  report?: Report;
+};
+
+const MARKET_SCAN_POLL_INTERVAL_MS = 3_000;
+const MARKET_SCAN_POLL_ATTEMPTS = 300;
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function waitForMarketScan(
+  jobId: number | string,
+  onProgress: (response: MarketScanResponse) => void,
+): Promise<MarketScanResponse> {
+  for (let attempt = 0; attempt < MARKET_SCAN_POLL_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) await delay(MARKET_SCAN_POLL_INTERVAL_MS);
+    const response = await apiRequest<MarketScanResponse>(
+      marketScanJobPath(jobId),
+    );
+    onProgress(response);
+    if (reportPathFromGeneratedResponse(response)) return response;
+    if (isFailedMarketScanJob(response.status)) {
+      throw new Error(
+        response.error_message || "Не удалось завершить анализ рынка.",
+      );
+    }
+    if (["completed", "analysis_pending"].includes(response.status || "")) {
+      return response;
+    }
+  }
+  throw new Error("Анализ занимает больше времени, чем ожидалось.");
+}
+
 export default function MarketScanPage() {
   const [niche, setNiche] = useState("");
   const [region, setRegion] = useState("Казахстан, русский язык");
   const [competitors, setCompetitors] = useState("");
   const [loading, setLoading] = useState(false);
+  const [activeStep, setActiveStep] = useState(0);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<{
     reportPath: string | null;
@@ -46,12 +90,9 @@ export default function MarketScanPage() {
     setLoading(true);
     setError("");
     setSuccess(null);
+    setActiveStep(0);
     try {
-      const response = await apiRequest<{
-        report?: Report;
-        sources_count?: number;
-        sources_saved?: number;
-      }>("/market-scan", {
+      let response = await apiRequest<MarketScanResponse>("/market-scan", {
         method: "POST",
         body: JSON.stringify({
           niche,
@@ -60,6 +101,11 @@ export default function MarketScanPage() {
           language: locale,
         }),
       });
+      if (!reportPathFromGeneratedResponse(response) && response.job_id) {
+        response = await waitForMarketScan(response.job_id, (job) => {
+          setActiveStep(marketScanStepIndex(job.current_step));
+        });
+      }
       const reportPath = reportPathFromGeneratedResponse(response);
       setSuccess({
         reportPath,
@@ -73,8 +119,10 @@ export default function MarketScanPage() {
         router.push(reportPath);
       }
     } catch (value) {
+      const message =
+        value instanceof Error ? value.message : "Неизвестная ошибка";
       setError(
-        value instanceof Error ? t(value.message) : t("Неизвестная ошибка"),
+        t(marketScanErrorMessage(message)),
       );
     } finally {
       setLoading(false);
@@ -130,8 +178,25 @@ export default function MarketScanPage() {
       {loading ? (
         <div className="task-progress" aria-live="polite">
           {steps.map((step, index) => (
-            <div className={index === 0 ? "active" : ""} key={step}>
-              <Icon name={index === 0 ? "sync" : "chevron"} />
+            <div
+              className={
+                index < activeStep
+                  ? "done"
+                  : index === activeStep
+                    ? "active"
+                    : ""
+              }
+              key={step}
+            >
+              <Icon
+                name={
+                  index < activeStep
+                    ? "check"
+                    : index === activeStep
+                      ? "sync"
+                      : "chevron"
+                }
+              />
               {t(step)}
             </div>
           ))}
