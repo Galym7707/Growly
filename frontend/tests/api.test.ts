@@ -12,18 +12,12 @@ describe("api client", () => {
     vi.unstubAllEnvs();
   });
 
-  it("uses NEXT_PUBLIC_GROWLY_API_URL for backend /api endpoints", () => {
-    expect(buildApiUrl("/content-plans", "https://backend.example.com")).toBe(
-      "https://backend.example.com/api/content-plans",
-    );
-    expect(
-      buildApiUrl("/api/content-plans/45", "https://backend.example.com/api"),
-    ).toBe("https://backend.example.com/api/content-plans/45");
-  });
-
-  it("falls back only to the existing Next proxy route when no backend URL is set", () => {
-    expect(buildApiUrl("/content-plans", "")).toBe(
+  it("uses the existing Next proxy route so server-only API keys stay private", () => {
+    expect(buildApiUrl("/content-plans")).toBe(
       "/api/growly/content-plans",
+    );
+    expect(buildApiUrl("/api/content-plans/45")).toBe(
+      "/api/growly/content-plans/45",
     );
   });
 
@@ -38,7 +32,6 @@ describe("api client", () => {
   });
 
   it("returns debug metadata for plain text 404 responses", async () => {
-    vi.stubEnv("NEXT_PUBLIC_GROWLY_API_URL", "https://backend.example.com");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response("Not Found", { status: 404 })),
@@ -51,13 +44,12 @@ describe("api client", () => {
       expect(apiErrorDebugInfo(value)).toEqual({
         message: "Not Found",
         status: 404,
-        url: "https://backend.example.com/api/content-plans",
+        url: "/api/growly/content-plans",
       });
     }
   });
 
   it("returns debug metadata for network failures", async () => {
-    vi.stubEnv("NEXT_PUBLIC_GROWLY_API_URL", "https://backend.example.com");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
@@ -72,7 +64,7 @@ describe("api client", () => {
       expect(apiErrorDebugInfo(value)).toEqual({
         message: "Failed to fetch",
         status: 0,
-        url: "https://backend.example.com/api/content-plans",
+        url: "/api/growly/content-plans",
       });
     }
   });

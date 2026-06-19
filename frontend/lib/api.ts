@@ -19,25 +19,12 @@ export class ApiError extends Error {
 
 export function buildApiUrl(
   path: string,
-  baseUrl = process.env.NEXT_PUBLIC_GROWLY_API_URL,
 ): string {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const backendPath = normalizedPath.startsWith("/api/")
-    ? normalizedPath
-    : `/api${normalizedPath}`;
-  const configuredBase = baseUrl?.trim().replace(/\/+$/, "");
-
-  if (!configuredBase) {
-    const proxyPath = normalizedPath.startsWith("/api/")
-      ? normalizedPath.slice(4)
-      : normalizedPath;
-    return `/api/growly${proxyPath}`;
-  }
-
-  if (configuredBase.endsWith("/api")) {
-    return `${configuredBase}${backendPath.slice(4)}`;
-  }
-  return `${configuredBase}${backendPath}`;
+  const proxyPath = normalizedPath.startsWith("/api/")
+    ? normalizedPath.slice(4)
+    : normalizedPath;
+  return `/api/growly${proxyPath}`;
 }
 
 export function apiErrorDebugInfo(value: unknown): ApiDebugInfo | null {
