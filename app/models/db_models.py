@@ -336,8 +336,95 @@ class Publication(Base, TimestampMixin):
     metrics_json: Mapped[dict[str, Any]] = mapped_column(
         JSONB, server_default=text("'{}'::jsonb"), nullable=False
     )
+    workspace_id: Mapped[str | None] = mapped_column(Text)
+    content_item_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("content_plan.id", ondelete="SET NULL")
+    )
+    platform: Mapped[str | None] = mapped_column(Text)
+    provider: Mapped[str | None] = mapped_column(Text)
+    account_id: Mapped[str | None] = mapped_column(Text)
+    page_id: Mapped[str | None] = mapped_column(Text)
+    scheduled_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    external_submission_id: Mapped[str | None] = mapped_column(Text)
+    external_post_url: Mapped[str | None] = mapped_column(Text)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=text("'{}'::jsonb"), nullable=False
+    )
 
     draft: Mapped[Draft | None] = relationship(back_populates="publications")
+
+
+class Integration(Base, TimestampMixin):
+    __tablename__ = "integrations"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text)
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false"), nullable=False
+    )
+    status: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=text("'{}'::jsonb"), nullable=False
+    )
+    last_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+
+
+class SocialAccount(Base, TimestampMixin):
+    __tablename__ = "social_accounts"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text)
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    platform: Mapped[str | None] = mapped_column(Text)
+    external_account_id: Mapped[str | None] = mapped_column(Text)
+    display_name: Mapped[str | None] = mapped_column(Text)
+    username: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        Text, server_default="connected", nullable=False
+    )
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=text("'{}'::jsonb"), nullable=False
+    )
+
+
+class PublicationTarget(Base, TimestampMixin):
+    __tablename__ = "publication_targets"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text)
+    platform: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[str] = mapped_column(
+        Text, server_default="blotato", nullable=False
+    )
+    account_id: Mapped[str | None] = mapped_column(Text)
+    page_id: Mapped[str | None] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("true"), nullable=False
+    )
+
+
+class ManualPublishPackage(Base, TimestampMixin):
+    __tablename__ = "manual_publish_packages"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text)
+    draft_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("drafts.id", ondelete="SET NULL")
+    )
+    platform: Mapped[str] = mapped_column(Text, nullable=False)
+    caption: Mapped[str | None] = mapped_column(Text)
+    hook: Mapped[str | None] = mapped_column(Text)
+    script: Mapped[str | None] = mapped_column(Text)
+    visual_brief: Mapped[str | None] = mapped_column(Text)
+    hashtags: Mapped[str | None] = mapped_column(Text)
+    cta: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        Text, server_default="ready", nullable=False
+    )
 
 
 class AppLog(Base):

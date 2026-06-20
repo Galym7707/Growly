@@ -85,6 +85,40 @@ class Settings(BaseSettings):
         alias="WEB_ALLOWED_ORIGINS",
     )
 
+    blotato_enabled: bool = Field(default=False, alias="BLOTATO_ENABLED")
+    blotato_api_key: SecretStr | None = Field(default=None, alias="BLOTATO_API_KEY")
+    blotato_base_url: str = Field(
+        default="https://backend.blotato.com/v2",
+        alias="BLOTATO_BASE_URL",
+    )
+    blotato_instagram_account_id: str | None = Field(
+        default=None, alias="BLOTATO_INSTAGRAM_ACCOUNT_ID"
+    )
+    blotato_threads_account_id: str | None = Field(
+        default=None, alias="BLOTATO_THREADS_ACCOUNT_ID"
+    )
+    blotato_tiktok_account_id: str | None = Field(
+        default=None, alias="BLOTATO_TIKTOK_ACCOUNT_ID"
+    )
+    blotato_youtube_account_id: str | None = Field(
+        default=None, alias="BLOTATO_YOUTUBE_ACCOUNT_ID"
+    )
+    blotato_facebook_account_id: str | None = Field(
+        default=None, alias="BLOTATO_FACEBOOK_ACCOUNT_ID"
+    )
+    blotato_facebook_page_id: str | None = Field(
+        default=None, alias="BLOTATO_FACEBOOK_PAGE_ID"
+    )
+    blotato_linkedin_account_id: str | None = Field(
+        default=None, alias="BLOTATO_LINKEDIN_ACCOUNT_ID"
+    )
+    blotato_linkedin_page_id: str | None = Field(
+        default=None, alias="BLOTATO_LINKEDIN_PAGE_ID"
+    )
+    blotato_x_account_id: str | None = Field(
+        default=None, alias="BLOTATO_X_ACCOUNT_ID"
+    )
+
     instagram_enabled: bool = Field(default=False, alias="INSTAGRAM_ENABLED")
     bitrix_enabled: bool = Field(default=False, alias="BITRIX_ENABLED")
     bitrix_webhook_secret: SecretStr | None = Field(
@@ -155,6 +189,27 @@ class Settings(BaseSettings):
 
     def notion_token(self) -> str:
         return self.require_secret("notion_api_key", "NOTION_API_KEY")
+
+    def blotato_api_key_configured(self) -> bool:
+        return bool(
+            self.blotato_api_key
+            and self.blotato_api_key.get_secret_value().strip()
+        )
+
+    def blotato_key(self) -> str:
+        return self.require_secret("blotato_api_key", "BLOTATO_API_KEY")
+
+    def blotato_fallback_account(self, platform: str) -> str | None:
+        value = getattr(
+            self, f"blotato_{platform.strip().lower()}_account_id", None
+        )
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    def blotato_fallback_page(self, platform: str) -> str | None:
+        value = getattr(
+            self, f"blotato_{platform.strip().lower()}_page_id", None
+        )
+        return value.strip() if isinstance(value, str) and value.strip() else None
 
     def allowed_web_origins(self) -> list[str]:
         return [

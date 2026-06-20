@@ -165,6 +165,25 @@ Important optional backend variables:
 | `SCHEDULER_ENABLED` | `false` | Enables weekly jobs |
 | `TIMEZONE` | `Asia/Almaty` | Scheduler timezone |
 | `SEARCH_MAX_RESULTS` | `10` | Tavily results per query |
+| `BLOTATO_ENABLED` | `false` | Enables social auto-publishing via Blotato |
+| `BLOTATO_API_KEY` | empty | Backend-only Blotato API key (Hugging Face Secret) |
+| `BLOTATO_BASE_URL` | `https://backend.blotato.com/v2` | Blotato API base URL |
+
+## Social publishing (Blotato)
+
+Instagram, Threads, TikTok, YouTube Shorts, Facebook, LinkedIn and X/Twitter are
+published through Blotato; Telegram keeps using the Telegram Bot API. The
+frontend never calls Blotato and never receives `BLOTATO_API_KEY` — only the
+backend does. Add the Blotato secrets (above plus the optional
+`BLOTATO_*_ACCOUNT_ID` / `*_PAGE_ID` fallbacks in `.env.example`) as Hugging Face
+Space **Secrets**; do not add them to Vercel.
+
+Manage everything inside Growly: **Settings → Integrations** shows connection
+status and connected accounts, **Settings → Integrations → Настройка публикации**
+maps accounts to platforms, and each draft (`/drafts/{id}`) has a publishing panel
+to publish now, schedule, or generate a manual package when a platform is not
+connected. Full setup, endpoints, and the n8n workflow are documented in
+[`docs/blotato-publishing.md`](docs/blotato-publishing.md).
 
 Frontend variables are documented in `frontend/.env.example`:
 

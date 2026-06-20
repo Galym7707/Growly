@@ -41,6 +41,29 @@ class SearchServiceError(IntegrationError):
     """Raised when a web search provider cannot complete a request."""
 
 
+class BlotatoServiceError(IntegrationError):
+    """Raised when the Blotato publishing provider cannot complete a request."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        provider_message: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.provider_message = provider_message
+
+    def safe_details(self) -> dict[str, object]:
+        """Provider details safe to surface in development (no secrets)."""
+
+        return {
+            "status": self.status,
+            "provider_message": self.provider_message or str(self),
+        }
+
+
 class NotionServiceError(IntegrationError):
     """Raised when Notion cannot complete a synchronization request."""
 

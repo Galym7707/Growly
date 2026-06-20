@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import {
@@ -180,6 +181,23 @@ export default function SettingsPage() {
           </div>
         </form>
       ) : null}
+      <section className="workspace-section">
+        <div className="form-panel">
+          <div className="section-heading">
+            <div>
+              <h2>{t("Интеграции и публикация")}</h2>
+              <p className="muted">
+                {t("Telegram, Notion и автопубликация в соцсети через Blotato.")}
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/settings/integrations">
+              <Icon name="arrow" />
+              {t("Открыть интеграции")}
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <section className="workspace-section">
         <div className="form-panel">
           <h2>{t("Режим рабочего пространства")}</h2>

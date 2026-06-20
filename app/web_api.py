@@ -22,6 +22,7 @@ from app.services.draft_service import DraftService
 from app.services.market_intelligence import MarketIntelligenceService
 from app.services.notion_service import NotionService
 from app.services.report_service import ReportService
+from app.services.social_publishing_service import SocialPublishingService
 from app.services.source_analysis_service import SourceAnalysisService
 from app.services.source_discovery_service import SourceDiscoveryService
 from app.utils.errors import GrowlyError
@@ -65,6 +66,12 @@ def require_web_api_key(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Growly web API key.",
         )
+
+
+def get_workspace_id(
+    x_growly_workspace_id: str | None = Header(default=None),
+) -> str:
+    return (x_growly_workspace_id or "").strip() or "default"
 
 
 secured_router = APIRouter(dependencies=[Depends(require_web_api_key)])
@@ -156,6 +163,37 @@ class ChatRequest(BaseModel):
 
 class ActiveContextRequest(BaseModel):
     active_report_id: int | None = Field(default=None, ge=1)
+
+
+class BlotatoMappingItem(BaseModel):
+    platform: str = Field(min_length=1, max_length=50)
+    account_id: str | None = Field(default=None, max_length=200)
+    page_id: str | None = Field(default=None, max_length=200)
+
+
+class BlotatoMappingsRequest(BaseModel):
+    workspace_id: str | None = Field(default=None, max_length=200)
+    mappings: list[BlotatoMappingItem] = Field(default_factory=list, max_length=40)
+
+
+class PublishBlotatoRequest(BaseModel):
+    platforms: list[str] = Field(min_length=1, max_length=15)
+    publish_now: bool = True
+    scheduled_time: str | None = Field(default=None, max_length=60)
+    media_urls: list[str] = Field(default_factory=list, max_length=20)
+    language: Literal["ru", "en", "kk"] = "ru"
+
+
+class ScheduleBlotatoRequest(BaseModel):
+    platforms: list[str] = Field(min_length=1, max_length=15)
+    scheduled_time: str = Field(min_length=4, max_length=60)
+    media_urls: list[str] = Field(default_factory=list, max_length=20)
+    language: Literal["ru", "en", "kk"] = "ru"
+
+
+class ManualPackageRequest(BaseModel):
+    platforms: list[str] = Field(min_length=1, max_length=15)
+    language: Literal["ru", "en", "kk"] = "ru"
 
 
 class WorkspaceSettingsRequest(BaseModel):
@@ -1010,6 +1048,144 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
         "message": "Задача выполнена.",
         "result": result,
     }
+
+
+@secured_router.get("/integrations/status")
+async def integrations_status(
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    return await SocialPublishingService().integrations_status(workspace_id)
+
+
+@secured_router.get("/integrations/blotato/status")
+async def blotato_status(
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    return await SocialPublishingService().blotato_status(workspace_id)
+
+
+@secured_router.get("/integrations/blotato/accounts")
+async def blotato_accounts(
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    accounts = await SocialPublishingService().list_accounts(workspace_id)
+    return {"accounts": accounts}
+
+
+@secured_router.post("/integrations/blotato/test")
+async def blotato_test(
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    return await SocialPublishingService().test_connection(workspace_id)
+
+
+@secured_router.post("/integrations/blotato/mappings")
+async def blotato_set_mappings(
+    payload: BlotatoMappingsRequest,
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    target_workspace = payload.workspace_id or workspace_id
+    saved = await SocialPublishingService().save_mappings(
+        target_workspace,
+        [item.model_dump() for item in payload.mappings],
+    )
+    return {"mappings": saved}
+
+
+@secured_router.get("/integrations/blotato/mappings")
+async def blotato_get_mappings(
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    return {
+        "mappings": await SocialPublishingService().get_mappings(workspace_id)
+    }
+
+
+@secured_router.get("/drafts/{draft_id}")
+async def draft_detail(draft_id: int) -> dict[str, Any]:
+    def load() -> Draft | None:
+        with session_scope() as session:
+            return DraftsRepository(session).get(draft_id)
+
+    row = await asyncio.to_thread(load)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Черновик не найден.")
+    return {"draft": _draft_payload(row)}
+
+
+@secured_router.post("/drafts/{draft_id}/publish-blotato")
+async def publish_draft_blotato(
+    draft_id: int,
+    payload: PublishBlotatoRequest,
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    try:
+        return await SocialPublishingService().publish_draft(
+            workspace_id=workspace_id,
+            draft_id=draft_id,
+            platforms=payload.platforms,
+            publish_now=payload.publish_now,
+            scheduled_time=payload.scheduled_time,
+            media_urls=payload.media_urls,
+            language=payload.language,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@secured_router.post("/drafts/{draft_id}/schedule-blotato")
+async def schedule_draft_blotato(
+    draft_id: int,
+    payload: ScheduleBlotatoRequest,
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    try:
+        return await SocialPublishingService().publish_draft(
+            workspace_id=workspace_id,
+            draft_id=draft_id,
+            platforms=payload.platforms,
+            publish_now=False,
+            scheduled_time=payload.scheduled_time,
+            media_urls=payload.media_urls,
+            language=payload.language,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@secured_router.post("/drafts/{draft_id}/manual-package")
+async def draft_manual_package(
+    draft_id: int,
+    payload: ManualPackageRequest,
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    try:
+        packages = await SocialPublishingService().create_manual_package(
+            workspace_id=workspace_id,
+            draft_id=draft_id,
+            platforms=payload.platforms,
+            language=payload.language,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"packages": packages}
+
+
+@secured_router.post("/content-items/{item_id}/create-manual-package")
+async def content_item_manual_package(
+    item_id: int,
+    payload: ManualPackageRequest,
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    return await draft_manual_package(item_id, payload, workspace_id)
+
+
+@secured_router.get("/publications/{publication_id}/status")
+async def publication_status(publication_id: int) -> dict[str, Any]:
+    try:
+        return await SocialPublishingService().publication_status(publication_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 router.include_router(secured_router)

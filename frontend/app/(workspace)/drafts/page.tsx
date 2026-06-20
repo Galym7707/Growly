@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import {
@@ -111,6 +112,13 @@ export default function DraftsPage() {
                       </span>
                     </div>
                     <div className="item-actions">
+                      <Link
+                        className="button button-secondary"
+                        href={`/drafts/${draft.id}`}
+                      >
+                        <Icon name="arrow" />
+                        {t("Открыть и опубликовать")}
+                      </Link>
                       <button
                         className="button button-primary"
                         disabled={busy === draft.id || draft.status === "published"}
