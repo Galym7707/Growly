@@ -107,7 +107,7 @@ function ChatContent() {
   useEffect(() => {
     const intro = active
       ? t(
-          "Чат работает с отчётом «{topic}». Задайте вопрос или выберите действие.",
+          "Я работаю с отчётом «{topic}». Выберите действие или задайте вопрос по этому рынку.",
           { topic: activeTopic || t("отчёт") },
         )
       : t("Опишите нишу, продукт и регион — или вернитесь и выберите отчёт.");
@@ -278,7 +278,6 @@ function ChatContent() {
           { id: "competitors", label: "Сформировать конкурентный вывод", icon: "search", run: () => void runChat("competitors", activeTopic || t("последний анализ рынка"), { query: activeTopic || "" }, t("Конкуренты")) },
           { id: "post", label: "Создать пост", icon: "draft", run: () => router.push(`/create-post?reportId=${active.report_id}`) },
           { id: "notion", label: "Сохранить в Notion", icon: "notion", run: () => void saveActiveReportToNotion() },
-          { id: "change", label: "Изменить отчёт", icon: "arrow", run: () => void changeReport() },
         ]
       : [];
 
@@ -330,41 +329,90 @@ function ChatContent() {
           onSelect={handleSelect}
           selectingId={pickingId}
         />
+      ) : active ? (
+        <div className="chat-workspace">
+          <SelectedReportCard active={active} heading={t("Чат работает с отчётом")}>
+            <Link
+              className="button button-secondary button-small"
+              href={`/reports/${active.report_id}`}
+            >
+              {t("Открыть отчёт")}
+            </Link>
+            <button
+              className="button button-secondary button-small"
+              onClick={() => void changeReport()}
+              type="button"
+            >
+              {t("Изменить отчёт")}
+            </button>
+          </SelectedReportCard>
+
+          <div className="quick-action-grid">
+            {quickActions.map((item) => (
+              <button
+                className="quick-action"
+                disabled={loading}
+                key={item.id}
+                onClick={item.run}
+                type="button"
+              >
+                <Icon name={item.icon} />
+                <span>{t(item.label)}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="chat-board">
+            <div className="chat-messages" aria-live="polite">
+              {messages.map((message) => (
+                <article className={`message message-${message.role}`} key={message.id}>
+                  <p>{message.text}</p>
+                  {message.meta ? <small>{message.meta}</small> : null}
+                </article>
+              ))}
+              {messages.length <= 1 && !loading ? (
+                <p className="chat-empty-hint">
+                  {t("Выберите быстрое действие выше или задайте вопрос ниже.")}
+                </p>
+              ) : null}
+              {loading ? (
+                <article className="message message-assistant">
+                  <p>{t("Задача выполняется на сервере.")}</p>
+                  <small>{t("Длительные операции могут занять несколько минут.")}</small>
+                </article>
+              ) : null}
+            </div>
+            <form className="chat-composer" onSubmit={submitWithReport}>
+              <textarea
+                aria-label={t("Сообщение")}
+                onChange={(event) => setText(event.target.value)}
+                placeholder={placeholder}
+                value={text}
+              />
+              <button className="button button-primary" disabled={loading}>
+                <Icon name="arrow" />
+                {t("Отправить")}
+              </button>
+            </form>
+          </div>
+        </div>
       ) : (
         <div className="chat-layout">
-          {!active ? (
-            <aside className="chat-actions">
-              <h2>{t("Действия")}</h2>
-              {nicheActions.map((item) => (
-                <button
-                  className={nicheAction === item.id ? "active" : ""}
-                  key={item.id}
-                  onClick={() => setNicheAction(item.id)}
-                  type="button"
-                >
-                  <Icon name={item.icon} />
-                  {t(item.label)}
-                </button>
-              ))}
-            </aside>
-          ) : null}
+          <aside className="chat-actions">
+            <h2>{t("Действия")}</h2>
+            {nicheActions.map((item) => (
+              <button
+                className={nicheAction === item.id ? "active" : ""}
+                key={item.id}
+                onClick={() => setNicheAction(item.id)}
+                type="button"
+              >
+                <Icon name={item.icon} />
+                {t(item.label)}
+              </button>
+            ))}
+          </aside>
           <section className="chat-panel">
-            {active ? (
-              <SelectedReportCard active={active} heading={t("Чат работает с отчётом")}>
-                {quickActions.map((item) => (
-                  <button
-                    className="button button-secondary button-small"
-                    disabled={loading}
-                    key={item.id}
-                    onClick={item.run}
-                    type="button"
-                  >
-                    <Icon name={item.icon} />
-                    {t(item.label)}
-                  </button>
-                ))}
-              </SelectedReportCard>
-            ) : null}
             <div className="chat-messages" aria-live="polite">
               {messages.map((message) => (
                 <article className={`message message-${message.role}`} key={message.id}>
@@ -379,10 +427,7 @@ function ChatContent() {
                 </article>
               ) : null}
             </div>
-            <form
-              className="chat-composer"
-              onSubmit={active ? submitWithReport : submitNiche}
-            >
+            <form className="chat-composer" onSubmit={submitNiche}>
               <textarea
                 aria-label={t("Сообщение")}
                 onChange={(event) => setText(event.target.value)}

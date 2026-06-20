@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { FriendlyError } from "@/components/friendly-error";
@@ -28,6 +28,26 @@ const EMPTY_OPTIONS: ContentPlanOptions = {
   ctas: [],
 };
 
+const CHANNEL_DEFAULTS: ContentPlanOption[] = [
+  { label: "Telegram", value: "telegram" },
+  { label: "Instagram", value: "instagram" },
+  { label: "WhatsApp", value: "whatsapp" },
+  { label: "Сайт", value: "website" },
+];
+
+function ensureChannels(channels: ContentPlanOption[]): ContentPlanOption[] {
+  const seen = new Set(channels.map((option) => option.value));
+  const merged = [...channels];
+  for (const fallback of CHANNEL_DEFAULTS) {
+    if (!seen.has(fallback.value)) merged.push(fallback);
+  }
+  return merged;
+}
+
+function draftKey(reportId: number): string {
+  return `growly_plan_draft_${reportId}`;
+}
+
 export function ContentPlanForm({ active }: { active: ActiveContext }) {
   const router = useRouter();
   const { locale, t } = useLanguage();
@@ -40,7 +60,6 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
   const [audience, setAudience] = useState("");
   const [offer, setOffer] = useState("");
   const [channels, setChannels] = useState<string[]>([]);
-  const [contentTypes, setContentTypes] = useState<string[]>([]);
   const [cta, setCta] = useState("");
   const [custom, setCustom] = useState("");
 
@@ -48,6 +67,9 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
   const [submitError, setSubmitError] = useState("");
   const [submitDebug, setSubmitDebug] = useState<ApiDebugInfo | null>(null);
   const [createdPath, setCreatedPath] = useState<string | null>(null);
+  const [draftNote, setDraftNote] = useState("");
+
+  const restored = useRef(false);
 
   const loadOptions = useCallback(async () => {
     setLoadingOptions(true);
@@ -68,8 +90,6 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
         setUsedFallback(true);
       }
     } catch {
-      // The endpoint may be unavailable; still show useful report-derived
-      // defaults so the guided form is always usable.
       setOptions(fallbackContentPlanOptions(active, locale));
       setUsedFallback(true);
     } finally {
@@ -81,10 +101,57 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
     void loadOptions();
   }, [loadOptions]);
 
-  function toggle(list: string[], value: string): string[] {
-    return list.includes(value)
-      ? list.filter((item) => item !== value)
-      : [...list, value];
+  // Restore a locally saved draft for this report (once).
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(draftKey(active.report_id));
+      if (!raw) return;
+      const draft = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof draft.goal === "string") setGoal(draft.goal);
+      if (typeof draft.audience === "string") setAudience(draft.audience);
+      if (typeof draft.offer === "string") setOffer(draft.offer);
+      if (Array.isArray(draft.channels)) setChannels(draft.channels as string[]);
+      if (typeof draft.cta === "string") setCta(draft.cta);
+      if (typeof draft.custom === "string") setCustom(draft.custom);
+    } catch {
+      // Ignore malformed drafts.
+    }
+  }, [active.report_id]);
+
+  const channelOptions = ensureChannels(options.channels);
+  const allChannelsSelected =
+    channelOptions.length > 0 &&
+    channelOptions.every((option) => channels.includes(option.value));
+
+  function toggleChannel(value: string) {
+    setChannels((list) =>
+      list.includes(value)
+        ? list.filter((item) => item !== value)
+        : [...list, value],
+    );
+  }
+
+  function toggleAllChannels() {
+    setChannels(
+      allChannelsSelected ? [] : channelOptions.map((option) => option.value),
+    );
+  }
+
+  function saveDraft() {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        draftKey(active.report_id),
+        JSON.stringify({ goal, audience, offer, channels, cta, custom }),
+      );
+      setDraftNote(t("Черновик сохранён."));
+      window.setTimeout(() => setDraftNote(""), 2500);
+    } catch {
+      // Ignore storage failures.
+    }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -96,13 +163,20 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
     try {
       const body = contentPlanSubmitBody(
         active.report_id,
-        { goal, audience, offer, channels, contentTypes, cta, customInstruction: custom },
+        { goal, audience, offer, channels, contentTypes: [], cta, customInstruction: custom },
         locale,
       );
       const response = await apiRequest<{
         plan_id?: number | string | null;
         content_plan_id?: number | string | null;
       }>("/content-plans", { method: "POST", body: JSON.stringify(body) });
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.removeItem(draftKey(active.report_id));
+        } catch {
+          // Ignore.
+        }
+      }
       const path = contentPlanPathFromGeneratedResponse(response);
       if (path) {
         router.push(path);
@@ -140,60 +214,103 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
     );
   }
 
+  const steps = [
+    { label: t("Цель"), done: Boolean(goal.trim()), href: "#step-goal" },
+    { label: t("Аудитория"), done: Boolean(audience.trim()), href: "#step-audience" },
+    { label: t("Оффер"), done: Boolean(offer.trim()), href: "#step-offer" },
+    { label: t("Каналы"), done: channels.length > 0, href: "#step-channels" },
+    { label: t("CTA"), done: Boolean(cta.trim()), href: "#step-cta" },
+    { label: t("Создание"), done: false, href: "#step-create" },
+  ];
+
   return (
-    <form className="plan-builder" onSubmit={submit}>
-      {usedFallback ? (
-        <p className="plan-builder-notice">
-          {t("Показаны базовые варианты по теме отчёта.")}{" "}
+    <form className="plan-wizard" onSubmit={submit}>
+      <ol className="wizard-steps">
+        {steps.map((step, index) => (
+          <li key={step.label}>
+            <a className={`wizard-step${step.done ? " wizard-step-done" : ""}`} href={step.href}>
+              <span className="wizard-step-index">
+                {step.done ? <Icon name="check" /> : index + 1}
+              </span>
+              <span>{step.label}</span>
+            </a>
+          </li>
+        ))}
+      </ol>
+
+      <p className={`plan-note${usedFallback ? "" : " plan-note-muted"}`}>
+        {usedFallback
+          ? t("Показали базовые варианты. Можно обновить или вписать свой вариант.")
+          : t("Варианты подготовлены на основе выбранного отчёта.")}
+        {usedFallback ? (
           <button className="text-link" onClick={loadOptions} type="button">
-            {t("Обновить")}
+            {t("Обновить варианты")}
           </button>
-        </p>
-      ) : null}
-      <SingleChipField
-        label={t("Цель недели")}
-        options={options.goals}
-        value={goal}
-        onChange={setGoal}
-      />
-      <SingleChipField
-        label={t("Аудитория")}
-        options={options.audiences}
-        value={audience}
-        onChange={setAudience}
-      />
-      <SingleChipField
-        label={t("Оффер")}
-        options={options.offers}
-        value={offer}
-        onChange={setOffer}
-      />
-      <MultiChipField
-        label={t("Каналы")}
-        options={options.channels}
-        values={channels}
-        onToggle={(value) => setChannels((list) => toggle(list, value))}
-      />
-      <MultiChipField
-        label={t("Форматы")}
-        options={options.content_types}
-        values={contentTypes}
-        onToggle={(value) => setContentTypes((list) => toggle(list, value))}
-      />
-      <SingleChipField
-        label={t("Призыв к действию")}
-        options={options.ctas}
-        value={cta}
-        onChange={setCta}
-      />
-      <label className="plan-builder-custom">
-        <span>{t("Дополнительные пожелания")}</span>
+        ) : null}
+      </p>
+
+      <WizardCard
+        anchor="step-goal"
+        step={1}
+        title={t("Что должен сделать контент на этой неделе?")}
+      >
+        <SingleChipField options={options.goals} value={goal} onChange={setGoal} />
+      </WizardCard>
+
+      <WizardCard
+        anchor="step-audience"
+        step={2}
+        title={t("Для кого создаём контент?")}
+      >
+        <SingleChipField
+          options={options.audiences}
+          value={audience}
+          onChange={setAudience}
+        />
+      </WizardCard>
+
+      <WizardCard anchor="step-offer" step={3} title={t("Что продвигаем?")}>
+        <SingleChipField options={options.offers} value={offer} onChange={setOffer} />
+      </WizardCard>
+
+      <WizardCard anchor="step-channels" step={4} title={t("Где публикуем?")}>
+        <div className="chip-row">
+          {channelOptions.map((option) => (
+            <Chip
+              key={option.value}
+              label={option.label}
+              selected={channels.includes(option.value)}
+              onClick={() => toggleChannel(option.value)}
+            />
+          ))}
+          <Chip
+            label={t("Все каналы")}
+            selected={allChannelsSelected}
+            onClick={toggleAllChannels}
+          />
+        </div>
+      </WizardCard>
+
+      <WizardCard
+        anchor="step-cta"
+        step={5}
+        title={t("Какое действие должен совершить клиент?")}
+      >
+        <SingleChipField options={options.ctas} value={cta} onChange={setCta} />
+      </WizardCard>
+
+      <WizardCard
+        anchor="step-create"
+        step={6}
+        title={t("Дополнительная инструкция (необязательно)")}
+      >
         <textarea
+          className="wizard-textarea"
           onChange={(event) => setCustom(event.target.value)}
           placeholder={t("Например: спокойный тон, без громких обещаний")}
           value={custom}
         />
-      </label>
+      </WizardCard>
 
       {submitError ? (
         <FriendlyError
@@ -202,7 +319,15 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
         />
       ) : null}
 
-      <div className="form-actions">
+      <div className="wizard-actions">
+        {draftNote ? <span className="wizard-draft-note">{draftNote}</span> : null}
+        <button
+          className="button button-secondary"
+          onClick={saveDraft}
+          type="button"
+        >
+          {t("Сохранить как черновик")}
+        </button>
         <button className="button button-primary" disabled={submitting}>
           <Icon name={submitting ? "sync" : "book"} />
           {submitting ? t("Формируем план") : t("Создать контент-план")}
@@ -212,72 +337,79 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
   );
 }
 
-function SingleChipField({
+function WizardCard({
+  anchor,
+  step,
+  title,
+  children,
+}: {
+  anchor: string;
+  step: number;
+  title: string;
+  children: React.ReactNode;
+}) {
+  const { t } = useLanguage();
+  return (
+    <section className="wizard-card" id={anchor}>
+      <p className="eyebrow">{t("Шаг {step}", { step })}</p>
+      <h2>{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function Chip({
   label,
+  selected,
+  onClick,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-pressed={selected}
+      className={`chip${selected ? " chip-active" : ""}`}
+      onClick={onClick}
+      type="button"
+    >
+      {selected ? <Icon name="check" /> : null}
+      {label}
+    </button>
+  );
+}
+
+function SingleChipField({
   options,
   value,
   onChange,
 }: {
-  label: string;
   options: ContentPlanOption[];
   value: string;
   onChange: (value: string) => void;
 }) {
   const { t } = useLanguage();
   return (
-    <fieldset className="plan-field">
-      <legend>{label}</legend>
+    <>
       {options.length ? (
         <div className="chip-row">
           {options.map((option) => (
-            <button
-              className={`chip${value === option.value ? " chip-active" : ""}`}
+            <Chip
               key={`${option.label}-${option.value}`}
+              label={option.label}
+              selected={value === option.value}
               onClick={() => onChange(value === option.value ? "" : option.value)}
-              type="button"
-            >
-              {option.label}
-            </button>
+            />
           ))}
         </div>
       ) : null}
       <input
         className="chip-input"
         onChange={(event) => onChange(event.target.value)}
-        placeholder={t("Или впишите своё")}
+        placeholder={t("Свой вариант")}
         value={value}
       />
-    </fieldset>
-  );
-}
-
-function MultiChipField({
-  label,
-  options,
-  values,
-  onToggle,
-}: {
-  label: string;
-  options: ContentPlanOption[];
-  values: string[];
-  onToggle: (value: string) => void;
-}) {
-  if (!options.length) return null;
-  return (
-    <fieldset className="plan-field">
-      <legend>{label}</legend>
-      <div className="chip-row">
-        {options.map((option) => (
-          <button
-            className={`chip${values.includes(option.value) ? " chip-active" : ""}`}
-            key={`${option.label}-${option.value}`}
-            onClick={() => onToggle(option.value)}
-            type="button"
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </fieldset>
+    </>
   );
 }

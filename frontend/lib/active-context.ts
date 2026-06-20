@@ -232,20 +232,20 @@ const FALLBACK_GOALS = {
 };
 const FALLBACK_AUDIENCES = {
   ru: [
-    "Клиенты ниши «{topic}»",
     "Малый и средний бизнес",
+    "Владельцы интернет-магазинов",
     "Новые потенциальные клиенты",
-    "Текущие клиенты для повторных продаж",
+    "Постоянные клиенты для повторных продаж",
   ],
   en: [
-    "Customers in the «{topic}» niche",
     "Small and medium business",
+    "Online store owners",
     "New potential clients",
-    "Existing clients for repeat sales",
+    "Returning clients for repeat sales",
   ],
   kk: [
-    "«{topic}» нишасының клиенттері",
     "Шағын және орта бизнес",
+    "Интернет-дүкен иелері",
     "Жаңа әлеуетті клиенттер",
     "Қайта сатуға арналған тұрақты клиенттер",
   ],
@@ -307,6 +307,7 @@ export function fallbackContentPlanOptions(
       { label: "Instagram", value: "instagram" },
       { label: "Telegram", value: "telegram" },
       { label: "WhatsApp", value: "whatsapp" },
+      { label: "Сайт", value: "website" },
     ],
     content_types: tmpl(FALLBACK_CONTENT_TYPES[lang]),
     ctas: tmpl(FALLBACK_CTAS[lang]),

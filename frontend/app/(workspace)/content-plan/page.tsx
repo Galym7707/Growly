@@ -189,11 +189,17 @@ function ContentPlanContent() {
       ) : hydrating && !active ? (
         <LoadingState label={t("Загружаю контекст отчёта…")} />
       ) : mode === "form" && active ? (
-        <>
+        <div className="plan-stage">
           <SelectedReportCard
             active={active}
             heading={t("План будет создан на основе отчёта")}
           >
+            <Link
+              className="button button-secondary button-small"
+              href={`/reports/${active.report_id}`}
+            >
+              {t("Открыть отчёт")}
+            </Link>
             <button
               className="button button-secondary button-small"
               onClick={changeReport}
@@ -201,15 +207,9 @@ function ContentPlanContent() {
             >
               {t("Изменить отчёт")}
             </button>
-            <Link
-              className="button button-secondary button-small"
-              href={`/reports/${active.report_id}`}
-            >
-              {t("Открыть отчёт")}
-            </Link>
           </SelectedReportCard>
           <ContentPlanForm active={active} key={active.report_id} />
-        </>
+        </div>
       ) : mode === "manual" ? (
         <ManualPlanForm onBack={() => setManual(false)} />
       ) : (
@@ -222,9 +222,7 @@ function ContentPlanContent() {
         />
       )}
 
-      {loadingList ? (
-        <LoadingState />
-      ) : data.items.length ? (
+      {mode === "picker" && !loadingList && data.items.length ? (
         <ContentPlanView
           draftingId={draftingId}
           items={data.items}

@@ -36,13 +36,16 @@ def test_content_plan_options_are_derived_from_report_topic() -> None:
     options = ContentPlanService._fallback_options(context, "ru")
 
     audiences = " ".join(option["value"] for option in options["audiences"])
-    assert "Логистика и доставка товаров" in audiences
+    # Human business segments, not awkward "Клиенты ниши X" placeholder phrasing.
+    assert options["audiences"]
+    assert "Клиенты ниши" not in audiences
     offer_values = [option["value"] for option in options["offers"]]
     assert "Комплексная доставка по Казахстану" in offer_values
     cta_values = [option["value"] for option in options["ctas"]]
     assert "Рассчитать стоимость доставки" in cta_values
     channel_values = [option["value"] for option in options["channels"]]
     assert "telegram" in channel_values and "instagram" in channel_values
+    assert "website" in channel_values
     # No unrelated hardcoded niche examples leak into the options.
     assert "прокладк" not in audiences.casefold()
 

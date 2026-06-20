@@ -19,8 +19,14 @@ these keys:
 
 Rules:
 - Provide 4 to 6 items each for goals, audiences, offers, content_types and ctas.
+- audiences MUST be concrete, human business segments — real people or companies
+  (for example "владельцы интернет-магазинов", "малый и средний бизнес", "компании с
+  регулярными поставками", "клиенты, которым важно отслеживание заказа"). Use the
+  report's summary, audience pains, content gaps and recommendations to infer them.
+  NEVER output placeholder phrasing like "Клиенты ниши X" / "Customers in the X niche".
 - channels must list only channels that fit the niche (for example Instagram,
-  Telegram, WhatsApp); use the channel slug as "value" (instagram, telegram, whatsapp).
+  Telegram, WhatsApp, Сайт); use the channel slug as "value" (instagram, telegram,
+  whatsapp, website).
 - "label" is short button text (max ~40 characters). "value" is a fuller, concrete
   phrase a planner can act on.
 - Make options specific to the report's niche. Do not output generic placeholders or

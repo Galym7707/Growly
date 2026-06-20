@@ -55,20 +55,20 @@ _FALLBACK_GOALS = {
 }
 _FALLBACK_AUDIENCES = {
     "ru": [
-        "Клиенты ниши «{topic}»",
         "Малый и средний бизнес",
+        "Владельцы интернет-магазинов",
         "Новые потенциальные клиенты",
-        "Текущие клиенты для повторных продаж",
+        "Постоянные клиенты для повторных продаж",
     ],
     "en": [
-        "Customers in the «{topic}» niche",
         "Small and medium business",
+        "Online store owners",
         "New potential clients",
-        "Existing clients for repeat sales",
+        "Returning clients for repeat sales",
     ],
     "kk": [
-        "«{topic}» нишасының клиенттері",
         "Шағын және орта бизнес",
+        "Интернет-дүкен иелері",
         "Жаңа әлеуетті клиенттер",
         "Қайта сатуға арналған тұрақты клиенттер",
     ],
@@ -633,6 +633,11 @@ class ContentPlanService:
             "content_ideas": field("content_ideas"),
             "dominant_topics": field("dominant_topics"),
             "weekly_priorities": field("weekly_priorities", "actions_this_week"),
+            "recommendations": [
+                str(value)
+                for value in (getattr(report, "recommendations_json", None) or [])
+                if str(value).strip()
+            ][:12],
         }
 
     @classmethod
@@ -728,6 +733,7 @@ class ContentPlanService:
             {"label": "Instagram", "value": "instagram"},
             {"label": "Telegram", "value": "telegram"},
             {"label": "WhatsApp", "value": "whatsapp"},
+            {"label": "Сайт", "value": "website"},
         ]
 
     async def latest_market_context(

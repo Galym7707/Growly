@@ -51,12 +51,15 @@ describe("selection flow", () => {
     expect(body.report_id).toBeNull();
   });
 
-  it("builds report-derived fallback options without unrelated niches", () => {
+  it("builds human business-segment fallback options without placeholders", () => {
     const options = fallbackContentPlanOptions(active, "ru");
-    const audiences = options.audiences.map((option) => option.value).join(" ");
-    expect(audiences).toContain("Логистика и доставка товаров");
+    const audiences = options.audiences.map((option) => option.value);
+    expect(audiences.length).toBeGreaterThan(0);
+    // No awkward "Клиенты ниши X" placeholder phrasing.
+    expect(audiences.join(" ")).not.toContain("Клиенты ниши");
+    expect(audiences).toContain("Владельцы интернет-магазинов");
     const channels = options.channels.map((option) => option.value);
-    expect(channels).toEqual(["instagram", "telegram", "whatsapp"]);
+    expect(channels).toEqual(["instagram", "telegram", "whatsapp", "website"]);
     expect(options.goals.length).toBeGreaterThan(0);
     expect(options.ctas.length).toBeGreaterThan(0);
     const all = JSON.stringify(options).toLowerCase();
