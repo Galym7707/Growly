@@ -1,3 +1,5 @@
+import type { ContentPlanOptions } from "./types";
+
 export type ActiveContext = {
   report_id: number;
   report_title: string | null;
@@ -157,6 +159,157 @@ export function contentPlanSubmitBody(
     cta: selections.cta.trim(),
     custom_instruction: selections.customInstruction.trim(),
     language: locale,
+  };
+}
+
+/**
+ * Which view the content-plan page renders. A single source of truth so the
+ * picker and the form are never shown at the same time (and never both hidden).
+ */
+export function contentPlanMode(
+  active: ActiveContext | null,
+  manual: boolean,
+): "form" | "manual" | "picker" {
+  if (hasActiveContext(active) && !manual) return "form";
+  if (manual) return "manual";
+  return "picker";
+}
+
+export function chatMode(
+  active: ActiveContext | null,
+  skipReport: boolean,
+): "workspace" | "picker" {
+  return hasActiveContext(active) || skipReport ? "workspace" : "picker";
+}
+
+export type ChatRequestBody = {
+  action: string | null;
+  message: string;
+  context: Record<string, unknown>;
+  report_id: number | null;
+  language: string;
+};
+
+/** Every chat request carries the selected report id when one is active. */
+export function chatRequestBody(
+  active: ActiveContext | null,
+  action: string | null,
+  message: string,
+  context: Record<string, unknown>,
+  locale: string,
+): ChatRequestBody {
+  return {
+    action,
+    message,
+    context,
+    report_id: hasActiveContext(active) ? active!.report_id : null,
+    language: locale,
+  };
+}
+
+type FallbackLang = "ru" | "en" | "kk";
+const FALLBACK_LANGS: FallbackLang[] = ["ru", "en", "kk"];
+const FALLBACK_NICHE = { ru: "ниши", en: "the niche", kk: "нишаның" };
+const FALLBACK_GOALS = {
+  ru: [
+    "Получить больше заявок",
+    "Повысить доверие к сервису",
+    "Продать ключевую услугу",
+    "Объяснить ценность предложения",
+  ],
+  en: [
+    "Get more leads",
+    "Build service trust",
+    "Sell the core service",
+    "Explain the value proposition",
+  ],
+  kk: [
+    "Көбірек өтінім алу",
+    "Қызметке сенімді арттыру",
+    "Негізгі қызметті сату",
+    "Ұсыныс құндылығын түсіндіру",
+  ],
+};
+const FALLBACK_AUDIENCES = {
+  ru: [
+    "Клиенты ниши «{topic}»",
+    "Малый и средний бизнес",
+    "Новые потенциальные клиенты",
+    "Текущие клиенты для повторных продаж",
+  ],
+  en: [
+    "Customers in the «{topic}» niche",
+    "Small and medium business",
+    "New potential clients",
+    "Existing clients for repeat sales",
+  ],
+  kk: [
+    "«{topic}» нишасының клиенттері",
+    "Шағын және орта бизнес",
+    "Жаңа әлеуетті клиенттер",
+    "Қайта сатуға арналған тұрақты клиенттер",
+  ],
+};
+const FALLBACK_OFFERS = {
+  ru: [
+    "Основная услуга для ниши «{topic}»",
+    "Пробное предложение со скидкой",
+    "Комплексный пакет услуг",
+    "Консультация по теме «{topic}»",
+  ],
+  en: [
+    "Core service for the «{topic}» niche",
+    "Discounted trial offer",
+    "Bundled service package",
+    "Consultation about «{topic}»",
+  ],
+  kk: [
+    "«{topic}» нишасына негізгі қызмет",
+    "Жеңілдікпен сынақ ұсынысы",
+    "Кешенді қызмет пакеті",
+    "«{topic}» бойынша кеңес",
+  ],
+};
+const FALLBACK_CONTENT_TYPES = {
+  ru: ["Пост", "Reels / короткое видео", "Stories", "Кейс клиента", "FAQ / ответы на вопросы"],
+  en: ["Post", "Reels / short video", "Stories", "Customer case", "FAQ"],
+  kk: ["Пост", "Reels / қысқа видео", "Stories", "Клиент кейсі", "Жиі қойылатын сұрақтар"],
+};
+const FALLBACK_CTAS = {
+  ru: ["Оставить заявку", "Получить консультацию", "Узнать стоимость", "Написать в Telegram"],
+  en: ["Leave a request", "Get a consultation", "Find out the price", "Message us on Telegram"],
+  kk: ["Өтінім қалдыру", "Кеңес алу", "Бағасын білу", "Telegram-ға жазу"],
+};
+
+/**
+ * Report-derived default options used when the backend option endpoint is
+ * unavailable, so the guided form is always usable. Topic-anchored — never
+ * unrelated hardcoded niches.
+ */
+export function fallbackContentPlanOptions(
+  active: ActiveContext | null,
+  locale: string,
+): ContentPlanOptions {
+  const lang: FallbackLang = FALLBACK_LANGS.includes(locale as FallbackLang)
+    ? (locale as FallbackLang)
+    : "ru";
+  const topic = activeContextTopic(active) || FALLBACK_NICHE[lang];
+  const tmpl = (items: string[]) =>
+    items.map((item) => {
+      const value = item.replace("{topic}", topic);
+      return { label: value.slice(0, 60), value };
+    });
+  return {
+    goals: tmpl(FALLBACK_GOALS[lang]),
+    audiences: tmpl(FALLBACK_AUDIENCES[lang]),
+    offers: tmpl(FALLBACK_OFFERS[lang]),
+    channels: [
+      { label: "Instagram", value: "instagram" },
+      { label: "Telegram", value: "telegram" },
+      { label: "WhatsApp", value: "whatsapp" },
+    ],
+    content_types: tmpl(FALLBACK_CONTENT_TYPES[lang]),
+    ctas: tmpl(FALLBACK_CTAS[lang]),
   };
 }
 

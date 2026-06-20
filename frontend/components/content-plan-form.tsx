@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import {
   contentPlanSubmitBody,
+  fallbackContentPlanOptions,
   type ActiveContext,
 } from "@/lib/active-context";
 import { contentPlanPathFromGeneratedResponse } from "@/lib/generated-navigation";
@@ -33,8 +34,7 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
 
   const [options, setOptions] = useState<ContentPlanOptions>(EMPTY_OPTIONS);
   const [loadingOptions, setLoadingOptions] = useState(true);
-  const [optionsDebug, setOptionsDebug] = useState<ApiDebugInfo | null>(null);
-  const [optionsFailed, setOptionsFailed] = useState(false);
+  const [usedFallback, setUsedFallback] = useState(false);
 
   const [goal, setGoal] = useState("");
   const [audience, setAudience] = useState("");
@@ -51,21 +51,31 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
 
   const loadOptions = useCallback(async () => {
     setLoadingOptions(true);
-    setOptionsFailed(false);
-    setOptionsDebug(null);
+    setUsedFallback(false);
     try {
       const response = await apiRequest<Partial<ContentPlanOptions>>(
         `/reports/${active.report_id}/content-plan-options`,
         { method: "POST", body: JSON.stringify({ language: locale }) },
       );
-      setOptions({ ...EMPTY_OPTIONS, ...response });
-    } catch (value) {
-      setOptionsFailed(true);
-      setOptionsDebug(apiErrorDebugInfo(value));
+      const merged = { ...EMPTY_OPTIONS, ...response };
+      const hasAny = Object.values(merged).some(
+        (list) => Array.isArray(list) && list.length > 0,
+      );
+      if (hasAny) {
+        setOptions(merged);
+      } else {
+        setOptions(fallbackContentPlanOptions(active, locale));
+        setUsedFallback(true);
+      }
+    } catch {
+      // The endpoint may be unavailable; still show useful report-derived
+      // defaults so the guided form is always usable.
+      setOptions(fallbackContentPlanOptions(active, locale));
+      setUsedFallback(true);
     } finally {
       setLoadingOptions(false);
     }
-  }, [active.report_id, locale]);
+  }, [active, locale]);
 
   useEffect(() => {
     void loadOptions();
@@ -110,10 +120,7 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
   }
 
   if (loadingOptions) {
-    return <LoadingState label={t("Готовим варианты по отчёту")} />;
-  }
-  if (optionsFailed) {
-    return <FriendlyError debug={optionsDebug} onRetry={loadOptions} />;
+    return <LoadingState label={t("Готовлю варианты для контент-плана…")} />;
   }
 
   if (createdPath) {
@@ -135,8 +142,16 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
 
   return (
     <form className="plan-builder" onSubmit={submit}>
+      {usedFallback ? (
+        <p className="plan-builder-notice">
+          {t("Показаны базовые варианты по теме отчёта.")}{" "}
+          <button className="text-link" onClick={loadOptions} type="button">
+            {t("Обновить")}
+          </button>
+        </p>
+      ) : null}
       <SingleChipField
-        label={t("Цель")}
+        label={t("Цель недели")}
         options={options.goals}
         value={goal}
         onChange={setGoal}

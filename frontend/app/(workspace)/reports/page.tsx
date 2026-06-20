@@ -107,26 +107,27 @@ export default function ReportsPage() {
 function ReportCard({ report }: { report: Report }) {
   const router = useRouter();
   const { locale, t } = useLanguage();
-  const { setActiveReport } = useActiveContext();
+  const { applyReport } = useActiveContext();
   const [busy, setBusy] = useState<null | "plan" | "chat" | "post" | "notion">(null);
   const [notice, setNotice] = useState("");
 
-  async function openWith(target: "plan" | "chat" | "post") {
-    setBusy(target);
+  function openWith(target: "plan" | "chat" | "post") {
     setNotice("");
-    try {
-      await setActiveReport(report.id);
-      const route =
-        target === "plan"
-          ? `/content-plan?reportId=${report.id}`
-          : target === "chat"
-            ? `/chat?reportId=${report.id}`
-            : `/create-post?reportId=${report.id}`;
-      router.push(route);
-    } catch (value) {
-      setNotice(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
-      setBusy(null);
+    // Set the active report synchronously from the card data, then navigate —
+    // the destination opens directly in selected-report mode.
+    const next = applyReport(report);
+    if (!next) {
+      setNotice(t("Не удалось выбрать отчёт. Попробуйте ещё раз."));
+      return;
     }
+    setBusy(target);
+    const route =
+      target === "plan"
+        ? `/content-plan?reportId=${report.id}`
+        : target === "chat"
+          ? `/chat?reportId=${report.id}`
+          : `/create-post?reportId=${report.id}`;
+    router.push(route);
   }
 
   async function saveToNotion() {

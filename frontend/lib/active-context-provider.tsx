@@ -16,12 +16,16 @@ import {
   type ActiveContext,
   type ActiveContextResponse,
 } from "@/lib/active-context";
+import type { Report } from "@/lib/types";
 
 type ActiveContextValue = {
   active: ActiveContext | null;
   loading: boolean;
   refresh: () => Promise<void>;
-  setActiveReport: (reportId: number) => Promise<ActiveContext | null>;
+  /** Select a report we already have in memory — updates the UI synchronously. */
+  applyReport: (report: Report) => ActiveContext | null;
+  /** Hydrate the active report from its id (URL param / reload) via the API. */
+  loadActiveReport: (reportId: number) => Promise<ActiveContext | null>;
   clearActive: () => Promise<void>;
 };
 
@@ -63,22 +67,53 @@ export function ActiveContextProvider({
     writeStoredReportId(next ? next.report_id : null);
   }, []);
 
+  // Persist the choice server-side without blocking the UI. A failure here
+  // (e.g. backend not yet deployed) must never stop the user from continuing —
+  // the local state and localStorage already carry the selection.
+  const persist = useCallback((reportId: number) => {
+    void apiRequest("/context/active", {
+      method: "PATCH",
+      body: JSON.stringify({ active_report_id: reportId }),
+    }).catch(() => {});
+  }, []);
+
+  const applyReport = useCallback(
+    (report: Report) => {
+      const next = buildActiveContextFromReport(report);
+      if (!next) return null;
+      setActive(next);
+      persist(next.report_id);
+      return next;
+    },
+    [persist, setActive],
+  );
+
+  const loadActiveReport = useCallback(
+    async (reportId: number) => {
+      try {
+        const response = await apiRequest<{ report: unknown }>(
+          `/reports/${reportId}`,
+        );
+        const next = buildActiveContextFromReport(
+          (response as { report?: unknown }).report as never,
+        );
+        if (next) {
+          setActive(next);
+          persist(next.report_id);
+        }
+        return next;
+      } catch {
+        return null;
+      }
+    },
+    [persist, setActive],
+  );
+
   const hydrateFromStorage = useCallback(async (): Promise<ActiveContext | null> => {
     const storedId = readStoredReportId();
     if (storedId === null) return null;
-    try {
-      const response = await apiRequest<{ report: unknown }>(
-        `/reports/${storedId}`,
-      );
-      const next = buildActiveContextFromReport(
-        (response as { report?: unknown }).report as never,
-      );
-      if (next) setActiveState(next);
-      return next;
-    } catch {
-      return null;
-    }
-  }, []);
+    return loadActiveReport(storedId);
+  }, [loadActiveReport]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -89,8 +124,6 @@ export function ActiveContextProvider({
       if (next) {
         setActive(next);
       } else {
-        // Backend has no active context: fall back to the locally stored
-        // report so the user's choice survives reloads.
         await hydrateFromStorage();
       }
     } catch {
@@ -104,36 +137,17 @@ export function ActiveContextProvider({
     void refresh();
   }, [refresh]);
 
-  const setActiveReport = useCallback(
-    async (reportId: number) => {
-      const response = await apiRequest<ActiveContextResponse>(
-        "/context/active",
-        {
-          method: "PATCH",
-          body: JSON.stringify({ active_report_id: reportId }),
-        },
-      );
-      const next = normalizeActiveContext(response);
-      setActive(next);
-      return next;
-    },
-    [setActive],
-  );
-
   const clearActive = useCallback(async () => {
-    try {
-      await apiRequest("/context/active", {
-        method: "PATCH",
-        body: JSON.stringify({ active_report_id: null }),
-      });
-    } finally {
-      setActive(null);
-    }
+    setActive(null);
+    void apiRequest("/context/active", {
+      method: "PATCH",
+      body: JSON.stringify({ active_report_id: null }),
+    }).catch(() => {});
   }, [setActive]);
 
   const value = useMemo(
-    () => ({ active, loading, refresh, setActiveReport, clearActive }),
-    [active, loading, refresh, setActiveReport, clearActive],
+    () => ({ active, loading, refresh, applyReport, loadActiveReport, clearActive }),
+    [active, loading, refresh, applyReport, loadActiveReport, clearActive],
   );
 
   return (

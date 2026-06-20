@@ -22,7 +22,7 @@ import {
   apiRequest,
   type ApiDebugInfo,
 } from "@/lib/api";
-import { contentPlanRequestBody } from "@/lib/active-context";
+import { contentPlanMode, contentPlanRequestBody } from "@/lib/active-context";
 import { useActiveContext } from "@/lib/active-context-provider";
 import { contentPlanPathFromGeneratedResponse } from "@/lib/generated-navigation";
 import { useLanguage } from "@/lib/i18n";
@@ -41,10 +41,13 @@ function ContentPlanContent() {
   const searchParams = useSearchParams();
   const reportIdParam = searchParams.get("reportId");
   const { locale, t } = useLanguage();
-  const { active, setActiveReport, clearActive } = useActiveContext();
+  const { active, applyReport, loadActiveReport, clearActive } =
+    useActiveContext();
 
   const [manual, setManual] = useState(false);
   const [pickingId, setPickingId] = useState<number | null>(null);
+  const [hydrating, setHydrating] = useState(false);
+  const [selectError, setSelectError] = useState(false);
   const [data, setData] = useState<ContentPlanResponse>({ items: [], source: null });
   const [loadingList, setLoadingList] = useState(true);
   const [draftingId, setDraftingId] = useState<number | null>(null);
@@ -60,8 +63,14 @@ function ContentPlanContent() {
       return;
     }
     hydratedParam.current = reportIdParam;
-    void setActiveReport(Number(reportIdParam));
-  }, [reportIdParam, active, setActiveReport]);
+    setSelectError(false);
+    setHydrating(true);
+    void loadActiveReport(Number(reportIdParam))
+      .then((next) => {
+        if (!next) setSelectError(true);
+      })
+      .finally(() => setHydrating(false));
+  }, [reportIdParam, active, loadActiveReport]);
 
   const loadList = useCallback(async () => {
     setLoadingList(true);
@@ -79,23 +88,44 @@ function ContentPlanContent() {
     void loadList();
   }, [loadList]);
 
-  async function handleSelect(report: Report) {
+  function handleSelect(report: Report) {
+    setSelectError(false);
     setPickingId(report.id);
-    try {
-      await setActiveReport(report.id);
-      setManual(false);
-      router.replace(`/content-plan?reportId=${report.id}`);
-    } finally {
-      setPickingId(null);
+    // Apply synchronously from the report we already have — the UI flips into
+    // selected-report mode immediately, without waiting on a network round-trip.
+    const next = applyReport(report);
+    setPickingId(null);
+    if (!next) {
+      setSelectError(true);
+      return;
+    }
+    setManual(false);
+    hydratedParam.current = String(report.id);
+    router.replace(`/content-plan?reportId=${report.id}`);
+  }
+
+  function retrySelect() {
+    setSelectError(false);
+    hydratedParam.current = null;
+    if (reportIdParam && /^\d+$/.test(reportIdParam)) {
+      setHydrating(true);
+      void loadActiveReport(Number(reportIdParam))
+        .then((next) => {
+          if (!next) setSelectError(true);
+        })
+        .finally(() => setHydrating(false));
     }
   }
 
   async function changeReport() {
     await clearActive();
     setManual(false);
+    setSelectError(false);
     hydratedParam.current = null;
     router.replace("/content-plan");
   }
+
+  const mode = contentPlanMode(active, manual);
 
   async function createDraft(itemId: number) {
     setDraftingId(itemId);
@@ -128,7 +158,37 @@ function ContentPlanContent() {
 
       {feedback ? <div className="feedback feedback-success">{feedback}</div> : null}
 
-      {active && !manual ? (
+      {selectError ? (
+        <div className="feedback feedback-error" role="alert">
+          <p>{t("Не удалось выбрать отчёт. Попробуйте ещё раз.")}</p>
+          <div className="feedback-actions">
+            <button
+              className="button button-secondary button-small"
+              onClick={retrySelect}
+              type="button"
+            >
+              {t("Повторить")}
+            </button>
+            {reportIdParam ? (
+              <Link
+                className="button button-secondary button-small"
+                href={`/reports/${reportIdParam}`}
+              >
+                {t("Открыть отчёт")}
+              </Link>
+            ) : null}
+            <button
+              className="button button-secondary button-small"
+              onClick={changeReport}
+              type="button"
+            >
+              {t("Выбрать другой отчёт")}
+            </button>
+          </div>
+        </div>
+      ) : hydrating && !active ? (
+        <LoadingState label={t("Загружаю контекст отчёта…")} />
+      ) : mode === "form" && active ? (
         <>
           <SelectedReportCard
             active={active}
@@ -150,7 +210,7 @@ function ContentPlanContent() {
           </SelectedReportCard>
           <ContentPlanForm active={active} key={active.report_id} />
         </>
-      ) : manual ? (
+      ) : mode === "manual" ? (
         <ManualPlanForm onBack={() => setManual(false)} />
       ) : (
         <ReportPicker

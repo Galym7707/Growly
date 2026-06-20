@@ -33,7 +33,7 @@ function CreatePostContent() {
   const searchParams = useSearchParams();
   const reportIdParam = searchParams.get("reportId");
   const { locale, t } = useLanguage();
-  const { active, setActiveReport } = useActiveContext();
+  const { active, loadActiveReport } = useActiveContext();
   const activeTopic = activeContextTopic(active);
 
   const [hasPlan, setHasPlan] = useState(false);
@@ -53,8 +53,8 @@ function CreatePostContent() {
       return;
     }
     hydratedParam.current = reportIdParam;
-    void setActiveReport(Number(reportIdParam));
-  }, [reportIdParam, active, setActiveReport]);
+    void loadActiveReport(Number(reportIdParam));
+  }, [reportIdParam, active, loadActiveReport]);
 
   const loadPlan = useCallback(async () => {
     try {

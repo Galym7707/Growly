@@ -2579,3 +2579,17 @@ input:disabled {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+
+.plan-builder-notice {
+  background: var(--amber-soft);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 13px;
+  margin: 0;
+  padding: 10px 14px;
+}
+
+.plan-builder-notice .text-link {
+  color: var(--green);
+  text-decoration: underline;
+}

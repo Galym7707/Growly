@@ -29,17 +29,17 @@ export default function ReportPage() {
   const [syncing, setSyncing] = useState(false);
   const [routing, setRouting] = useState<null | "plan" | "post">(null);
   const { locale, t } = useLanguage();
-  const { setActiveReport } = useActiveContext();
+  const { applyReport } = useActiveContext();
 
-  async function continueWith(target: "plan" | "post") {
+  function continueWith(target: "plan" | "post") {
     setRouting(target);
-    try {
-      await setActiveReport(Number(params.id));
-    } catch {
-      // Navigation should still proceed; the destination falls back to the
-      // latest market scan when the active context could not be persisted.
-    }
-    router.push(target === "plan" ? "/content-plan" : "/create-post");
+    if (report) applyReport(report);
+    const id = report?.id ?? params.id;
+    router.push(
+      target === "plan"
+        ? `/content-plan?reportId=${id}`
+        : `/create-post?reportId=${id}`,
+    );
   }
 
   const load = useCallback(async () => {

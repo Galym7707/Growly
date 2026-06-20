@@ -9,16 +9,19 @@ import {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Icon, type IconName } from "@/components/icons";
 import { ReportPicker } from "@/components/report-picker";
 import { SelectedReportCard } from "@/components/selected-report-card";
-import { PageHeader } from "@/components/ui";
+import { LoadingState, PageHeader } from "@/components/ui";
 import { apiRequest } from "@/lib/api";
 import {
   activeContextTopic,
   CHAT_PLACEHOLDER_NO_CONTEXT,
+  chatMode,
   chatPlaceholderSource,
+  chatRequestBody,
 } from "@/lib/active-context";
 import { useActiveContext } from "@/lib/active-context-provider";
 import { reportPathFromGeneratedResponse } from "@/lib/generated-navigation";
@@ -69,11 +72,14 @@ function ChatContent() {
   const searchParams = useSearchParams();
   const reportIdParam = searchParams.get("reportId");
   const { locale, t } = useLanguage();
-  const { active, setActiveReport, clearActive } = useActiveContext();
+  const { active, applyReport, loadActiveReport, clearActive } =
+    useActiveContext();
   const activeTopic = activeContextTopic(active);
 
   const [skipReport, setSkipReport] = useState(false);
   const [pickingId, setPickingId] = useState<number | null>(null);
+  const [hydrating, setHydrating] = useState(false);
+  const [selectError, setSelectError] = useState(false);
   const [nicheAction, setNicheAction] = useState<Action>("market_scan");
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -89,8 +95,14 @@ function ChatContent() {
       return;
     }
     hydratedParam.current = reportIdParam;
-    void setActiveReport(Number(reportIdParam));
-  }, [reportIdParam, active, setActiveReport]);
+    setSelectError(false);
+    setHydrating(true);
+    void loadActiveReport(Number(reportIdParam))
+      .then((next) => {
+        if (!next) setSelectError(true);
+      })
+      .finally(() => setHydrating(false));
+  }, [reportIdParam, active, loadActiveReport]);
 
   useEffect(() => {
     const intro = active
@@ -131,13 +143,9 @@ function ChatContent() {
           };
         }>("/chat", {
           method: "POST",
-          body: JSON.stringify({
-            action: actionId,
-            message,
-            context,
-            report_id: active?.report_id,
-            language: locale,
-          }),
+          body: JSON.stringify(
+            chatRequestBody(active, actionId, message, context, locale),
+          ),
         });
         setMessages((current) => [
           ...current,
@@ -203,20 +211,37 @@ function ChatContent() {
     }
   }
 
-  async function handleSelect(report: Report) {
+  function handleSelect(report: Report) {
+    setSelectError(false);
     setPickingId(report.id);
-    try {
-      await setActiveReport(report.id);
-      setSkipReport(false);
-      router.replace(`/chat?reportId=${report.id}`);
-    } finally {
-      setPickingId(null);
+    const next = applyReport(report);
+    setPickingId(null);
+    if (!next) {
+      setSelectError(true);
+      return;
+    }
+    setSkipReport(false);
+    hydratedParam.current = String(report.id);
+    router.replace(`/chat?reportId=${report.id}`);
+  }
+
+  function retrySelect() {
+    setSelectError(false);
+    hydratedParam.current = null;
+    if (reportIdParam && /^\d+$/.test(reportIdParam)) {
+      setHydrating(true);
+      void loadActiveReport(Number(reportIdParam))
+        .then((next) => {
+          if (!next) setSelectError(true);
+        })
+        .finally(() => setHydrating(false));
     }
   }
 
   async function changeReport() {
     await clearActive();
     setSkipReport(false);
+    setSelectError(false);
     hydratedParam.current = null;
     router.replace("/chat");
   }
@@ -257,7 +282,7 @@ function ChatContent() {
         ]
       : [];
 
-  const showPicker = !active && !skipReport;
+  const showPicker = chatMode(active, skipReport) === "picker";
 
   return (
     <div className="workspace-page">
@@ -267,7 +292,37 @@ function ChatContent() {
         description={t("Быстрый доступ к основным действиям Growly без дублирования бизнес-логики.")}
       />
 
-      {showPicker ? (
+      {selectError ? (
+        <div className="feedback feedback-error" role="alert">
+          <p>{t("Не удалось выбрать отчёт. Попробуйте ещё раз.")}</p>
+          <div className="feedback-actions">
+            <button
+              className="button button-secondary button-small"
+              onClick={retrySelect}
+              type="button"
+            >
+              {t("Повторить")}
+            </button>
+            {reportIdParam ? (
+              <Link
+                className="button button-secondary button-small"
+                href={`/reports/${reportIdParam}`}
+              >
+                {t("Открыть отчёт")}
+              </Link>
+            ) : null}
+            <button
+              className="button button-secondary button-small"
+              onClick={changeReport}
+              type="button"
+            >
+              {t("Выбрать другой отчёт")}
+            </button>
+          </div>
+        </div>
+      ) : hydrating && !active ? (
+        <LoadingState label={t("Загружаю контекст отчёта…")} />
+      ) : showPicker ? (
         <ReportPicker
           title={t("Выберите отчёт, с которым будет работать чат")}
           manualLabel={t("Продолжить без отчёта")}
