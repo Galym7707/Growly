@@ -499,7 +499,7 @@ class DraftService:
             },
         }
         violations: list[str] = []
-        for attempt in range(2):
+        for attempt in range(3):
             if violations:
                 generation_context["revision_required"] = violations
             response = await self.ai.generate_content_draft(
@@ -516,7 +516,8 @@ class DraftService:
                 payload["brief_analysis"] = analysis
                 return payload
         raise AIServiceError(
-            "Generated draft did not pass CTA and claim safety checks."
+            "Не удалось подготовить безопасный текст поста. "
+            "Измените бриф или попробуйте ещё раз."
         )
 
     async def _analyze_brief(
@@ -612,7 +613,13 @@ class DraftService:
                     f"Unsupported claim matched pattern: {output_pattern}"
                 )
 
-        requested_cta = cls._requested_cta(context, analysis)
+        # Only enforce verbatim preservation for a CTA the user (or the content
+        # plan) explicitly supplied. A CTA merely inferred by brief analysis is
+        # guidance for generation, not a hard gate — requiring the model to echo
+        # an invented phrase verbatim rejected otherwise-valid drafts (e.g. the
+        # "create post from latest analysis" flow, which supplies no CTA).
+        del analysis
+        requested_cta = cls._requested_cta(context)
         if requested_cta and cls._normalize_text(requested_cta) not in normalized_draft:
             violations.append("The supplied CTA was not preserved in draft_text.")
         return violations

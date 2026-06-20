@@ -10,6 +10,7 @@ from app.bot.handlers import format_draft_message
 from app.config import Settings
 from app.services.content_types import detect_content_type
 from app.services.draft_service import DraftService
+from app.utils.errors import AIServiceError
 
 
 class FakeGroq:
@@ -144,6 +145,85 @@ async def test_forbidden_claim_is_revised_before_save(
     assert len(groq.prompt_names) == 2
     assert "гарантированная экономия" not in draft.draft_text.lower()
     assert "Пришлите смету на проверку" in draft.draft_text
+
+
+class _Groq:
+    """Fake AI returning a fixed analysis CTA and a fixed draft each call."""
+
+    def __init__(self, analyze_cta: str, draft: dict[str, Any]) -> None:
+        self.analyze_cta = analyze_cta
+        self.draft = draft
+        self.calls = 0
+
+    async def analyze_draft_brief(self, context: dict[str, Any]) -> str:
+        return json.dumps(
+            {
+                "product_service": "Логистика и доставка",
+                "audience": "B2B-заказчики",
+                "main_pain": "Срыв сроков поставки",
+                "business_context": "Доставка товаров по Казахстану",
+                "channel": "Telegram",
+                "cta": self.analyze_cta,
+                "allowed_claims": ["Отслеживание заказов"],
+                "forbidden_claims": ["Гарантированная экономия"],
+                "overpromising_risk": "Нельзя обещать экономию без расчёта",
+            },
+            ensure_ascii=False,
+        )
+
+    async def generate_content_draft(
+        self, prompt_name: str, context: dict[str, Any]
+    ) -> str:
+        del prompt_name, context
+        self.calls += 1
+        return json.dumps(self.draft, ensure_ascii=False)
+
+
+async def _run(monkeypatch: pytest.MonkeyPatch, groq: _Groq, brief: str) -> Any:
+    service = DraftService(
+        settings=Settings(_env_file=None, GROQ_MODEL="test-model"),
+        groq=groq,  # type: ignore[arg-type]
+    )
+
+    async def fake_save_new(**kwargs: Any) -> SimpleNamespace:
+        return SimpleNamespace(id=1, version=1, status="pending", **kwargs)
+
+    monkeypatch.setattr(service, "_save_new", fake_save_new)
+    return await service.create_post({"brief": brief})
+
+
+@pytest.mark.asyncio
+async def test_create_post_without_explicit_cta_does_not_require_inferred_cta(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # No "CTA:" line in the brief (the "create post from latest analysis" flow).
+    draft = payload(
+        "Неполная поставка останавливает работу на объекте и сдвигает сроки.\n\n"
+        "Мы сверяем комплект и показываем статус каждого заказа.\n\n"
+        "Напишите нам, чтобы обсудить вашу задачу."
+    )
+    groq = _Groq(analyze_cta="Пришлите смету на проверку", draft=draft)
+    result = await _run(
+        monkeypatch,
+        groq,
+        "Создай продающий пост для канала Telegram на основе последнего анализа. "
+        "Ниша: Логистика и доставка товаров. Добавь конкретный призыв к действию.",
+    )
+    # The draft does not echo the inferred CTA verbatim, yet it is accepted on
+    # the first attempt instead of being rejected.
+    assert groq.calls == 1
+    assert "Напишите нам" in result.draft_text
+
+
+@pytest.mark.asyncio
+async def test_persistent_unsafe_draft_raises_friendly_russian_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    draft = payload("Гарантированная экономия для каждого объекта.\n\nНапишите нам.")
+    groq = _Groq(analyze_cta="Напишите нам", draft=draft)
+    with pytest.raises(AIServiceError, match="Не удалось подготовить безопасный текст поста"):
+        await _run(monkeypatch, groq, "Создай пост. Ниша: Логистика.")
+    assert groq.calls == 3
 
 
 def test_telegram_draft_includes_type_why_and_risk() -> None:
