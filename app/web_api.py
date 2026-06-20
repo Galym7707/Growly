@@ -79,12 +79,25 @@ class MarketScanRequest(BaseModel):
 
 class CompetitorReportRequest(BaseModel):
     query: str | None = Field(default=None, max_length=500)
+    report_id: int | None = Field(default=None, ge=1)
     language: Literal["ru", "en", "kk"] = "ru"
 
 
 class ContentPlanRequest(BaseModel):
-    weekly_objective: str = Field(min_length=2, max_length=1000)
+    weekly_objective: str = Field(default="", max_length=2000)
     business: dict[str, Any] = Field(default_factory=dict)
+    report_id: int | None = Field(default=None, ge=1)
+    goal: str | None = Field(default=None, max_length=600)
+    audience: str | None = Field(default=None, max_length=600)
+    offer: str | None = Field(default=None, max_length=600)
+    channels: list[str] = Field(default_factory=list, max_length=12)
+    content_types: list[str] = Field(default_factory=list, max_length=12)
+    cta: str | None = Field(default=None, max_length=600)
+    custom_instruction: str | None = Field(default=None, max_length=2000)
+    language: Literal["ru", "en", "kk"] = "ru"
+
+
+class ContentPlanOptionsRequest(BaseModel):
     language: Literal["ru", "en", "kk"] = "ru"
 
 
@@ -133,8 +146,11 @@ class ChatRequest(BaseModel):
         "reports",
         "sources",
         "notion_sync",
+        "ideas",
+        "ask",
     ] | None = None
     context: dict[str, Any] = Field(default_factory=dict)
+    report_id: int | None = Field(default=None, ge=1)
     language: Literal["ru", "en", "kk"] = "ru"
 
 
@@ -601,6 +617,7 @@ async def market_scan_job(job_id: int) -> dict[str, Any]:
 async def competitor_report(payload: CompetitorReportRequest) -> dict[str, Any]:
     report = await MarketIntelligenceService().generate_competitor_report(
         query=payload.query,
+        market_report_id=payload.report_id,
         output_language=payload.language,
     )
     return {
@@ -631,14 +648,79 @@ async def content_plan_detail(plan_id: int) -> dict[str, Any]:
     return await asyncio.to_thread(_content_plan_detail_response, plan_id)
 
 
+def _build_content_plan_context(payload: ContentPlanRequest) -> dict[str, Any]:
+    labels = {
+        "ru": {
+            "goal": "Цель",
+            "audience": "Аудитория",
+            "offer": "Оффер",
+            "cta": "Призыв к действию",
+            "channels": "Каналы",
+            "formats": "Форматы",
+            "default": "Контент-план на основе выбранного отчёта.",
+        },
+        "en": {
+            "goal": "Goal",
+            "audience": "Audience",
+            "offer": "Offer",
+            "cta": "Call to action",
+            "channels": "Channels",
+            "formats": "Formats",
+            "default": "Content plan based on the selected report.",
+        },
+        "kk": {
+            "goal": "Мақсат",
+            "audience": "Аудитория",
+            "offer": "Оффер",
+            "cta": "Әрекетке шақыру",
+            "channels": "Арналар",
+            "formats": "Форматтар",
+            "default": "Таңдалған есеп негізіндегі контент-жоспар.",
+        },
+    }[payload.language]
+    parts: list[str] = []
+    if payload.goal:
+        parts.append(f"{labels['goal']}: {payload.goal}")
+    if payload.audience:
+        parts.append(f"{labels['audience']}: {payload.audience}")
+    if payload.offer:
+        parts.append(f"{labels['offer']}: {payload.offer}")
+    if payload.cta:
+        parts.append(f"{labels['cta']}: {payload.cta}")
+    if payload.channels:
+        parts.append(f"{labels['channels']}: {', '.join(payload.channels)}")
+    if payload.content_types:
+        parts.append(f"{labels['formats']}: {', '.join(payload.content_types)}")
+    if payload.custom_instruction and payload.custom_instruction.strip():
+        parts.append(payload.custom_instruction.strip())
+    objective = payload.weekly_objective.strip() or "; ".join(parts)
+    if not objective.strip():
+        objective = labels["default"]
+
+    business: dict[str, Any] = {**payload.business, "language": payload.language}
+    if payload.audience:
+        business.setdefault("target_audience", payload.audience)
+    if payload.offer:
+        business.setdefault("offer", payload.offer)
+    if payload.channels:
+        business.setdefault("preferred_channels", payload.channels)
+
+    context: dict[str, Any] = {
+        "weekly_objective": objective,
+        "business": business,
+        "language": payload.language,
+    }
+    if payload.report_id:
+        context["market_context"] = {"report_id": payload.report_id}
+    elif isinstance(payload.business.get("market_context"), dict):
+        context["market_context"] = payload.business["market_context"]
+    return context
+
+
 @secured_router.post("/content-plan")
 async def content_plan_create(payload: ContentPlanRequest) -> dict[str, Any]:
     items = await ContentPlanService().generate_weekly_plan(
-        {
-            "weekly_objective": payload.weekly_objective,
-            "business": {**payload.business, "language": payload.language},
-            "language": payload.language,
-        }
+        _build_content_plan_context(payload)
     )
     plan_id = items[0].id if items else None
     return {
@@ -726,6 +808,21 @@ async def report(report_id: int) -> dict[str, Any]:
     return {"report": _report_payload(row)}
 
 
+@secured_router.post("/reports/{report_id}/content-plan-options")
+async def report_content_plan_options(
+    report_id: int,
+    payload: ContentPlanOptionsRequest,
+) -> dict[str, Any]:
+    try:
+        options = await ContentPlanService().generate_content_plan_options(
+            report_id,
+            payload.language,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return options
+
+
 @secured_router.get("/sources")
 async def sources(
     active_only: bool = Query(default=False),
@@ -802,8 +899,37 @@ async def update_settings(payload: WorkspaceSettingsRequest) -> dict[str, Any]:
 
 @secured_router.post("/chat")
 async def chat(payload: ChatRequest) -> dict[str, Any]:
-    action = payload.action or _infer_chat_action(payload.message)
     context = payload.context
+    report_id = payload.report_id
+    if report_id is None and str(context.get("report_id") or "").isdigit():
+        report_id = int(context["report_id"])
+    action = payload.action or _infer_chat_action(payload.message)
+    if action is None and report_id is not None:
+        action = "ask"
+    if action == "ask":
+        if report_id is None:
+            raise HTTPException(status_code=400, detail="Сначала выберите отчёт.")
+        answer = await ReportService().answer_question(
+            report_id,
+            payload.message,
+            payload.language,
+        )
+        return {
+            "status": "completed",
+            "action": "ask",
+            "message": "Готово.",
+            "result": {"answer": answer},
+        }
+    if action == "ideas":
+        if report_id is None:
+            raise HTTPException(status_code=400, detail="Сначала выберите отчёт.")
+        answer = await ReportService().report_ideas(report_id, payload.language)
+        return {
+            "status": "completed",
+            "action": "ideas",
+            "message": "Готово.",
+            "result": {"answer": answer},
+        }
     if action == "market_scan":
         request = MarketScanRequest(
             niche=str(context.get("niche") or payload.message),
@@ -818,6 +944,7 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
         result = await competitor_report(
             CompetitorReportRequest(
                 query=str(context.get("query") or payload.message),
+                report_id=report_id,
                 language=payload.language,
             )
         )
@@ -835,6 +962,7 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
                     if isinstance(context.get("business"), dict)
                     else {"language": payload.language}
                 ),
+                report_id=report_id,
                 language=payload.language,
             )
         )

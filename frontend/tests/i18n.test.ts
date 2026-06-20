@@ -17,4 +17,22 @@ describe("Growly i18n", () => {
     expect(localeTag("en")).toBe("en-US");
     expect(localeTag("kk")).toBe("kk-KZ");
   });
+
+  it("translates the new report-context labels to all three languages", () => {
+    expect(translate("ru", "Использовать для контент-плана")).toBe(
+      "Использовать для контент-плана",
+    );
+    expect(translate("en", "Использовать для контент-плана")).toBe(
+      "Use for content plan",
+    );
+    expect(translate("kk", "Использовать для контент-плана")).toBe(
+      "Контент-жоспар үшін пайдалану",
+    );
+    expect(translate("en", "Источников: {count}", { count: 40 })).toBe(
+      "Sources: 40",
+    );
+    expect(translate("kk", "Выберите отчёт, с которым будет работать чат")).toBe(
+      "Чат жұмыс істейтін есепті таңдаңыз",
+    );
+  });
 });

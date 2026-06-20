@@ -10,9 +10,39 @@ from app.models import Publication, Report
 from app.repositories.reports_repo import ReportsRepository
 from app.services.ai_service import AIService
 from app.services.notion_service import NotionService
-from app.utils.errors import NotionServiceError
+from app.utils.errors import AIServiceError, ConfigurationError, NotionServiceError
 
 logger = logging.getLogger(__name__)
+
+_REPORT_CHAT_FALLBACK_PREFIX = {
+    "ru": "Краткий вывод отчёта:",
+    "en": "Report summary:",
+    "kk": "Есеп қорытындысы:",
+}
+_REPORT_CHAT_FALLBACK_EMPTY = {
+    "ru": "Не удалось получить ответ ИИ. Откройте отчёт, чтобы посмотреть детали.",
+    "en": "Could not get an AI answer. Open the report to review the details.",
+    "kk": "ИИ жауабын алу мүмкін болмады. Толығырақ есепті ашыңыз.",
+}
+_REPORT_IDEAS_HEADER = {
+    "ru": "Идеи постов из отчёта:",
+    "en": "Post ideas from the report:",
+    "kk": "Есептен жазба идеялары:",
+}
+_REPORT_IDEAS_EMPTY = {
+    "ru": (
+        "В отчёте пока нет готовых идей постов. Создайте контент-план, "
+        "чтобы сгенерировать темы."
+    ),
+    "en": (
+        "The report has no ready post ideas yet. Create a content plan to "
+        "generate topics."
+    ),
+    "kk": (
+        "Есепте әзірге дайын жазба идеялары жоқ. Тақырып жасау үшін "
+        "контент-жоспар құрыңыз."
+    ),
+}
 
 
 class ReportService:
@@ -45,6 +75,95 @@ class ReportService:
                 return ReportsRepository(session).latest_report(report_type)
 
         return await asyncio.to_thread(load)
+
+    async def answer_question(
+        self,
+        report_id: int,
+        message: str,
+        language: str = "ru",
+    ) -> str:
+        report = await self.get_report(report_id)
+        if report is None:
+            raise ValueError("Отчёт не найден.")
+        context = self._report_chat_context(report, message, language)
+        try:
+            answer = await self.ai.answer_report_question(context)
+            if answer and answer.strip():
+                return answer.strip()
+        except (AIServiceError, ConfigurationError):
+            logger.warning(
+                "Report chat AI unavailable for report %s; using fallback.",
+                report_id,
+            )
+        return self._fallback_answer(report, language)
+
+    async def report_ideas(self, report_id: int, language: str = "ru") -> str:
+        report = await self.get_report(report_id)
+        if report is None:
+            raise ValueError("Отчёт не найден.")
+        raw = report.raw_json if isinstance(report.raw_json, dict) else {}
+        ideas: list[str] = []
+        for key in ("content_ideas", "dominant_topics", "content_gaps"):
+            ideas = [
+                str(value).strip()
+                for value in (raw.get(key) or [])
+                if str(value).strip()
+            ]
+            if ideas:
+                break
+        lang = language if language in self._REPORT_LANGS else "ru"
+        if not ideas:
+            return _REPORT_IDEAS_EMPTY[lang]
+        body = "\n".join(f"• {idea}" for idea in ideas[:10])
+        return f"{_REPORT_IDEAS_HEADER[lang]}\n{body}"
+
+    _REPORT_LANGS = ("ru", "en", "kk")
+
+    @staticmethod
+    def _report_chat_context(
+        report: Report,
+        message: str,
+        language: str,
+    ) -> dict[str, Any]:
+        raw = report.raw_json if isinstance(report.raw_json, dict) else {}
+        market_context = (
+            raw.get("market_context")
+            if isinstance(raw.get("market_context"), dict)
+            else {}
+        )
+
+        def field(*names: str) -> list[Any]:
+            for name in names:
+                value = raw.get(name)
+                if isinstance(value, list) and value:
+                    return value[:10]
+            return []
+
+        return {
+            "language": language,
+            "question": message,
+            "report_title": report.title,
+            "report_type": report.report_type,
+            "topic": market_context.get("topic")
+            or report.query
+            or report.title,
+            "region": market_context.get("region"),
+            "summary": str(report.summary or "")[:1500],
+            "audience_pains": field("audience_pains"),
+            "repeated_offers": field("repeated_offers", "repeating_offers"),
+            "repeated_ctas": field("repeated_ctas", "repeating_ctas"),
+            "content_gaps": field("content_gaps"),
+            "content_ideas": field("content_ideas"),
+            "weekly_priorities": field("weekly_priorities", "actions_this_week"),
+        }
+
+    @staticmethod
+    def _fallback_answer(report: Report, language: str) -> str:
+        lang = language if language in ("ru", "en", "kk") else "ru"
+        summary = str(report.summary or "").strip()
+        if summary:
+            return f"{_REPORT_CHAT_FALLBACK_PREFIX[lang]} {summary}"
+        return _REPORT_CHAT_FALLBACK_EMPTY[lang]
 
     async def sync_report_to_notion(self, report_id: int) -> str:
         report = await self.get_report(report_id)

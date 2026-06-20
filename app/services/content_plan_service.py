@@ -32,6 +32,111 @@ CONTENT_PLAN_MAX_EVIDENCE_URLS = 8
 CONTENT_PLAN_MAX_REPORT_SUMMARY_CHARS = 1800
 ContentPlanProgress = Callable[[str], Awaitable[None]]
 
+_NICHE_WORD = {"ru": "ниши", "en": "the niche", "kk": "нишаның"}
+_FALLBACK_GOALS = {
+    "ru": [
+        "Получить больше заявок",
+        "Повысить доверие к бренду",
+        "Продать ключевую услугу",
+        "Объяснить ценность предложения",
+    ],
+    "en": [
+        "Get more leads",
+        "Build brand trust",
+        "Sell the core service",
+        "Explain the value proposition",
+    ],
+    "kk": [
+        "Көбірек өтінім алу",
+        "Брендке сенімді арттыру",
+        "Негізгі қызметті сату",
+        "Ұсыныс құндылығын түсіндіру",
+    ],
+}
+_FALLBACK_AUDIENCES = {
+    "ru": [
+        "Клиенты ниши «{topic}»",
+        "Малый и средний бизнес",
+        "Новые потенциальные клиенты",
+        "Текущие клиенты для повторных продаж",
+    ],
+    "en": [
+        "Customers in the «{topic}» niche",
+        "Small and medium business",
+        "New potential clients",
+        "Existing clients for repeat sales",
+    ],
+    "kk": [
+        "«{topic}» нишасының клиенттері",
+        "Шағын және орта бизнес",
+        "Жаңа әлеуетті клиенттер",
+        "Қайта сатуға арналған тұрақты клиенттер",
+    ],
+}
+_FALLBACK_OFFERS = {
+    "ru": [
+        "Основная услуга для ниши «{topic}»",
+        "Пробное предложение со скидкой",
+        "Комплексный пакет услуг",
+        "Консультация по теме «{topic}»",
+    ],
+    "en": [
+        "Core service for the «{topic}» niche",
+        "Discounted trial offer",
+        "Bundled service package",
+        "Consultation about «{topic}»",
+    ],
+    "kk": [
+        "«{topic}» нишасына негізгі қызмет",
+        "Жеңілдікпен сынақ ұсынысы",
+        "Кешенді қызмет пакеті",
+        "«{topic}» бойынша кеңес",
+    ],
+}
+_FALLBACK_CONTENT_TYPES = {
+    "ru": [
+        "Пост",
+        "Reels / короткое видео",
+        "Stories",
+        "Кейс клиента",
+        "FAQ / ответы на вопросы",
+    ],
+    "en": [
+        "Post",
+        "Reels / short video",
+        "Stories",
+        "Customer case",
+        "FAQ",
+    ],
+    "kk": [
+        "Пост",
+        "Reels / қысқа видео",
+        "Stories",
+        "Клиент кейсі",
+        "Жиі қойылатын сұрақтар",
+    ],
+}
+_FALLBACK_CTAS = {
+    "ru": [
+        "Оставить заявку",
+        "Получить консультацию",
+        "Узнать стоимость",
+        "Написать в Telegram",
+    ],
+    "en": [
+        "Leave a request",
+        "Get a consultation",
+        "Find out the price",
+        "Message us on Telegram",
+    ],
+    "kk": [
+        "Өтінім қалдыру",
+        "Кеңес алу",
+        "Бағасын білу",
+        "Telegram-ға жазу",
+    ],
+}
+
 
 class ContentPlanService:
     def __init__(
@@ -451,6 +556,179 @@ class ContentPlanService:
                     "weekly_digest": 1,
                 },
             }
+
+    CONTENT_PLAN_OPTION_KEYS = (
+        "goals",
+        "audiences",
+        "offers",
+        "channels",
+        "content_types",
+        "ctas",
+    )
+
+    async def generate_content_plan_options(
+        self,
+        report_id: int,
+        language: str = "ru",
+    ) -> dict[str, list[dict[str, str]]]:
+        report = await asyncio.to_thread(self._load_report, report_id)
+        if report is None:
+            raise ValueError("Отчёт не найден.")
+        context = self._content_plan_options_context(report, language)
+        options: dict[str, list[dict[str, str]]]
+        try:
+            response = await self.ai.generate_content_plan_options(context)
+            payload = parse_json_response(response)
+            options = self._normalize_options(payload)
+        except (AIServiceError, ConfigurationError, ValueError, TimeoutError):
+            logger.warning(
+                "Content plan options AI generation failed for report %s; "
+                "using report-derived fallback.",
+                report_id,
+            )
+            options = {}
+        merged = self._fallback_options(context, language)
+        for key in self.CONTENT_PLAN_OPTION_KEYS:
+            generated = options.get(key) or []
+            merged[key] = generated[:6] if generated else merged[key]
+        if not merged.get("channels"):
+            merged["channels"] = self._default_channels()
+        return merged
+
+    @staticmethod
+    def _load_report(report_id: int) -> Report | None:
+        with session_scope() as session:
+            return ReportsRepository(session).get_report(report_id)
+
+    @classmethod
+    def _content_plan_options_context(
+        cls,
+        report: Report,
+        language: str,
+    ) -> dict[str, Any]:
+        raw = report.raw_json if isinstance(report.raw_json, dict) else {}
+        market_context = cls._market_context_from_report(report)
+        topic = str(
+            market_context.get("topic") or report.query or report.title or ""
+        ).strip()
+
+        def field(*names: str) -> list[Any]:
+            for name in names:
+                value = raw.get(name)
+                if isinstance(value, list) and value:
+                    return value[:12]
+            return []
+
+        return {
+            "language": language,
+            "topic": topic,
+            "niche": topic,
+            "region": market_context.get("region"),
+            "report_type": report.report_type,
+            "summary": str(report.summary or "")[:1200],
+            "audience_pains": field("audience_pains"),
+            "repeated_offers": field("repeated_offers", "repeating_offers"),
+            "repeated_ctas": field("repeated_ctas", "repeating_ctas"),
+            "content_gaps": field("content_gaps"),
+            "content_ideas": field("content_ideas"),
+            "dominant_topics": field("dominant_topics"),
+            "weekly_priorities": field("weekly_priorities", "actions_this_week"),
+        }
+
+    @classmethod
+    def _normalize_options(
+        cls,
+        payload: Any,
+    ) -> dict[str, list[dict[str, str]]]:
+        if not isinstance(payload, dict):
+            return {}
+        result: dict[str, list[dict[str, str]]] = {}
+        for key in cls.CONTENT_PLAN_OPTION_KEYS:
+            items = payload.get(key)
+            if not isinstance(items, list):
+                continue
+            normalized: list[dict[str, str]] = []
+            seen: set[str] = set()
+            for item in items:
+                option = cls._normalize_option(item, channel=key == "channels")
+                if option is None:
+                    continue
+                marker = option["label"].casefold()
+                if marker in seen:
+                    continue
+                seen.add(marker)
+                normalized.append(option)
+            if normalized:
+                result[key] = normalized[:6]
+        return result
+
+    @staticmethod
+    def _normalize_option(
+        item: Any,
+        *,
+        channel: bool = False,
+    ) -> dict[str, str] | None:
+        if isinstance(item, dict):
+            label = str(item.get("label") or item.get("value") or "").strip()
+            value = str(item.get("value") or item.get("label") or "").strip()
+        elif isinstance(item, str):
+            label = value = item.strip()
+        else:
+            return None
+        if not label:
+            return None
+        label = label[:60]
+        if channel and value:
+            value = value.strip().lower().replace(" ", "_")
+        return {"label": label, "value": value or label}
+
+    @classmethod
+    def _fallback_options(
+        cls,
+        context: dict[str, Any],
+        language: str,
+    ) -> dict[str, list[dict[str, str]]]:
+        topic = str(context.get("topic") or "").strip()
+        lang = language if language in {"ru", "en", "kk"} else "ru"
+
+        def options_from(values: list[Any]) -> list[dict[str, str]]:
+            result: list[dict[str, str]] = []
+            seen: set[str] = set()
+            for value in values:
+                text = str(value).strip()
+                if not text or text.casefold() in seen:
+                    continue
+                seen.add(text.casefold())
+                result.append({"label": text[:60], "value": text})
+                if len(result) >= 6:
+                    break
+            return result
+
+        def templated(items: list[str]) -> list[dict[str, str]]:
+            result: list[dict[str, str]] = []
+            for raw_item in items:
+                text = raw_item.replace("{topic}", topic or _NICHE_WORD[lang])
+                result.append({"label": text[:60], "value": text})
+            return result
+
+        offers = options_from(context.get("repeated_offers") or [])
+        ctas = options_from(context.get("repeated_ctas") or [])
+        return {
+            "goals": templated(_FALLBACK_GOALS[lang]),
+            "audiences": templated(_FALLBACK_AUDIENCES[lang]),
+            "offers": offers or templated(_FALLBACK_OFFERS[lang]),
+            "channels": cls._default_channels(),
+            "content_types": templated(_FALLBACK_CONTENT_TYPES[lang]),
+            "ctas": ctas or templated(_FALLBACK_CTAS[lang]),
+        }
+
+    @staticmethod
+    def _default_channels() -> list[dict[str, str]]:
+        return [
+            {"label": "Instagram", "value": "instagram"},
+            {"label": "Telegram", "value": "telegram"},
+            {"label": "WhatsApp", "value": "whatsapp"},
+        ]
 
     async def latest_market_context(
         self,

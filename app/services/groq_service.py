@@ -284,6 +284,16 @@ class GroqService:
             "competitor_report.md", context, temperature=0.2, max_tokens=4500
         )
 
+    async def generate_content_plan_options(self, context: dict[str, Any]) -> str:
+        return await self.generate_text(
+            "content_plan_options.md", context, temperature=0.3, max_tokens=2000
+        )
+
+    async def answer_report_question(self, context: dict[str, Any]) -> str:
+        return await self.generate_text(
+            "report_chat.md", context, temperature=0.3, max_tokens=1600
+        )
+
     async def analyze_market_search(self, context: dict[str, Any]) -> str:
         return await self.generate_text(
             "market_search_analysis.md", context, temperature=0.1, max_tokens=6000

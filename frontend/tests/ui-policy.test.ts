@@ -47,4 +47,11 @@ describe("Growly UI policy", () => {
     expect(clientSource).not.toMatch(/2024-\d{2}-\d{2}|September 2024/);
     expect(clientSource).not.toContain("Скачайте нашу брошюру");
   });
+
+  it("does not hardcode unrelated niche examples in the interface", () => {
+    const clientSource = sourceFiles
+      .map((path) => readFileSync(path, "utf8"))
+      .join("\n");
+    expect(clientSource).not.toMatch(/прокладк|женск/i);
+  });
 });

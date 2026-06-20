@@ -6,21 +6,24 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Icon, type IconName } from "@/components/icons";
+import { ReportPicker } from "@/components/report-picker";
+import { SelectedReportCard } from "@/components/selected-report-card";
 import { PageHeader } from "@/components/ui";
-import { apiRequest, formatDate } from "@/lib/api";
-import { activeContextTopic, chatPlaceholderSource } from "@/lib/active-context";
-import { useActiveContext } from "@/lib/active-context-provider";
+import { apiRequest } from "@/lib/api";
 import {
-  contentPlanPathFromGeneratedResponse,
-  extractGeneratedContentPlanId,
-  extractGeneratedDraftId,
-  reportPathFromGeneratedResponse,
-} from "@/lib/generated-navigation";
+  activeContextTopic,
+  CHAT_PLACEHOLDER_NO_CONTEXT,
+  chatPlaceholderSource,
+} from "@/lib/active-context";
+import { useActiveContext } from "@/lib/active-context-provider";
+import { reportPathFromGeneratedResponse } from "@/lib/generated-navigation";
 import { useLanguage } from "@/lib/i18n";
+import type { Report } from "@/lib/types";
 
 type Action =
   | "market_scan"
@@ -30,7 +33,9 @@ type Action =
   | "drafts"
   | "reports"
   | "sources"
-  | "notion_sync";
+  | "notion_sync"
+  | "ideas"
+  | "ask";
 
 type Message = {
   id: number;
@@ -39,64 +44,17 @@ type Message = {
   meta?: string;
 };
 
-const actions: {
+const nicheActions: {
   id: Action;
   label: string;
   icon: IconName;
   placeholder: string;
 }[] = [
-  {
-    id: "market_scan",
-    label: "Анализ рынка",
-    icon: "market",
-    placeholder: "Опишите нишу, продукт и регион",
-  },
-  {
-    id: "competitors",
-    label: "Конкуренты",
-    icon: "search",
-    placeholder: "Укажите рынок или тему отчёта",
-  },
-  {
-    id: "content_plan",
-    label: "Контент-план",
-    icon: "book",
-    placeholder: "Опишите цель на неделю",
-  },
-  {
-    id: "create_post",
-    label: "Создать пост",
-    icon: "draft",
-    placeholder: "Передайте подробный бриф, канал и желаемый призыв",
-  },
-  {
-    id: "drafts",
-    label: "Черновики",
-    icon: "draft",
-    placeholder: "Показать последние черновики",
-  },
-  {
-    id: "reports",
-    label: "Отчёты",
-    icon: "report",
-    placeholder: "Показать последние отчёты",
-  },
-  {
-    id: "sources",
-    label: "Источники",
-    icon: "source",
-    placeholder: "Показать сохранённые источники",
-  },
-  {
-    id: "notion_sync",
-    label: "Сохранить в Notion",
-    icon: "notion",
-    placeholder: "Синхронизировать последние данные",
-  },
+  { id: "market_scan", label: "Анализ рынка", icon: "market", placeholder: "Опишите нишу, продукт и регион" },
+  { id: "competitors", label: "Конкуренты", icon: "search", placeholder: "Укажите рынок или тему отчёта" },
+  { id: "content_plan", label: "Контент-план", icon: "book", placeholder: "Опишите цель на неделю" },
+  { id: "create_post", label: "Создать пост", icon: "draft", placeholder: "Передайте подробный бриф, канал и желаемый призыв" },
 ];
-
-const INTRO_NO_CONTEXT =
-  "Выберите действие слева и опишите задачу. Growly вызовет тот же сервисный слой, который используется Telegram-ботом.";
 
 export default function ChatPage() {
   return (
@@ -109,48 +67,45 @@ export default function ChatPage() {
 function ChatContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const requestedAction = searchParams.get("action") as Action | null;
-  const [action, setAction] = useState<Action>(
-    actions.some((item) => item.id === requestedAction)
-      ? requestedAction!
-      : "market_scan",
-  );
+  const reportIdParam = searchParams.get("reportId");
+  const { locale, t } = useLanguage();
+  const { active, setActiveReport, clearActive } = useActiveContext();
+  const activeTopic = activeContextTopic(active);
+
+  const [skipReport, setSkipReport] = useState(false);
+  const [pickingId, setPickingId] = useState<number | null>(null);
+  const [nicheAction, setNicheAction] = useState<Action>("market_scan");
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
-  const { locale, t } = useLanguage();
-  const { active } = useActiveContext();
-  const activeTopic = activeContextTopic(active);
-  const [messages, setMessages] = useState<Message[]>([
-    { id: 1, role: "assistant", text: t(INTRO_NO_CONTEXT) },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  const hydratedParam = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!reportIdParam || !/^\d+$/.test(reportIdParam)) return;
+    if (hydratedParam.current === reportIdParam) return;
+    if (active && active.report_id === Number(reportIdParam)) {
+      hydratedParam.current = reportIdParam;
+      return;
+    }
+    hydratedParam.current = reportIdParam;
+    void setActiveReport(Number(reportIdParam));
+  }, [reportIdParam, active, setActiveReport]);
 
   useEffect(() => {
     const intro = active
       ? t(
-          "Последний анализ: {topic}. Источников: {count}. Что хотите сделать дальше?",
-          {
-            topic: activeTopic || t("анализ рынка"),
-            count: active.sources_count,
-          },
+          "Чат работает с отчётом «{topic}». Задайте вопрос или выберите действие.",
+          { topic: activeTopic || t("отчёт") },
         )
-      : t(INTRO_NO_CONTEXT);
-    setMessages((current) =>
-      current.map((message) =>
-        message.id === 1 ? { ...message, text: intro } : message,
-      ),
-    );
+      : t("Опишите нишу, продукт и регион — или вернитесь и выберите отчёт.");
+    setMessages([{ id: 1, role: "assistant", text: intro }]);
   }, [active, activeTopic, t]);
 
-  const selected = useMemo(
-    () => actions.find((item) => item.id === action)!,
-    [action],
+  const selectedNiche = useMemo(
+    () => nicheActions.find((item) => item.id === nicheAction) || nicheActions[0],
+    [nicheAction],
   );
-
-  useEffect(() => {
-    if (actions.some((item) => item.id === requestedAction)) {
-      setAction(requestedAction!);
-    }
-  }, [requestedAction]);
 
   const runChat = useCallback(
     async (
@@ -169,10 +124,10 @@ function ChatContent() {
           message: string;
           status: string;
           result?: {
+            answer?: string;
             report?: { id?: number; title?: string };
             items?: unknown[];
             draft?: { id?: number; title?: string };
-            counts?: Record<string, number>;
           };
         }>("/chat", {
           method: "POST",
@@ -180,6 +135,7 @@ function ChatContent() {
             action: actionId,
             message,
             context,
+            report_id: active?.report_id,
             language: locale,
           }),
         });
@@ -192,9 +148,9 @@ function ChatContent() {
             meta: response.status,
           },
         ]);
-        const target = generatedNavigationTarget(actionId, response.result);
-        if (target) {
-          router.push(target);
+        if (actionId === "competitors") {
+          const target = reportPathFromGeneratedResponse(response.result);
+          if (target) router.push(target);
         }
       } catch (value) {
         setMessages((current) => [
@@ -213,27 +169,15 @@ function ChatContent() {
         setLoading(false);
       }
     },
-    [locale, router, t],
+    [active, locale, router, t],
   );
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const message = text.trim() || t(selected.placeholder);
-    setText("");
-    void runChat(action, message, contextForAction(action, message, locale), t(selected.label));
-  }
 
   async function saveActiveReportToNotion() {
     if (!active) return;
     setLoading(true);
     setMessages((current) => [
       ...current,
-      {
-        id: Date.now(),
-        role: "user",
-        text: t("Сохранить в Notion"),
-        meta: t("Сохранить в Notion"),
-      },
+      { id: Date.now(), role: "user", text: t("Сохранить в Notion"), meta: t("Сохранить в Notion") },
     ]);
     try {
       await apiRequest("/notion/sync", {
@@ -242,12 +186,7 @@ function ChatContent() {
       });
       setMessages((current) => [
         ...current,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          text: t("Сохранено в Notion"),
-          meta: "completed",
-        },
+        { id: Date.now() + 1, role: "assistant", text: t("Сохранено в Notion"), meta: "completed" },
       ]);
     } catch (value) {
       setMessages((current) => [
@@ -264,55 +203,61 @@ function ChatContent() {
     }
   }
 
+  async function handleSelect(report: Report) {
+    setPickingId(report.id);
+    try {
+      await setActiveReport(report.id);
+      setSkipReport(false);
+      router.replace(`/chat?reportId=${report.id}`);
+    } finally {
+      setPickingId(null);
+    }
+  }
+
+  async function changeReport() {
+    await clearActive();
+    setSkipReport(false);
+    hydratedParam.current = null;
+    router.replace("/chat");
+  }
+
+  function submitWithReport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const message = text.trim();
+    if (!message) return;
+    setText("");
+    void runChat("ask", message, {}, t("Вопрос по отчёту"));
+  }
+
+  function submitNiche(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const message = text.trim() || t(selectedNiche.placeholder);
+    setText("");
+    void runChat(
+      nicheAction,
+      message,
+      contextForAction(nicheAction, message, locale),
+      t(selectedNiche.label),
+    );
+  }
+
+  const placeholder = t(
+    chatPlaceholderSource(active, CHAT_PLACEHOLDER_NO_CONTEXT),
+  );
+
   const quickActions: { id: string; label: string; icon: IconName; run: () => void }[] =
     active
       ? [
-          {
-            id: "content_plan",
-            label: "Создать контент-план",
-            icon: "book",
-            run: () => router.push("/content-plan"),
-          },
-          {
-            id: "create_post",
-            label: "Создать пост",
-            icon: "draft",
-            run: () => router.push("/create-post"),
-          },
-          {
-            id: "ideas",
-            label: "Показать идеи",
-            icon: "report",
-            run: () => router.push(`/reports/${active.report_id}`),
-          },
-          {
-            id: "competitors",
-            label: "Сформировать конкурентный отчёт",
-            icon: "search",
-            run: () =>
-              void runChat(
-                "competitors",
-                activeTopic || t("последний анализ рынка"),
-                { query: activeTopic || "" },
-                t("Конкуренты"),
-              ),
-          },
-          {
-            id: "notion",
-            label: "Сохранить в Notion",
-            icon: "notion",
-            run: () => void saveActiveReportToNotion(),
-          },
-          {
-            id: "open",
-            label: "Открыть отчёт",
-            icon: "arrow",
-            run: () => router.push(`/reports/${active.report_id}`),
-          },
+          { id: "plan", label: "Создать контент-план", icon: "book", run: () => router.push(`/content-plan?reportId=${active.report_id}`) },
+          { id: "ideas", label: "Показать идеи постов", icon: "report", run: () => void runChat("ideas", t("Показать идеи постов"), {}, t("Идеи постов")) },
+          { id: "competitors", label: "Сформировать конкурентный вывод", icon: "search", run: () => void runChat("competitors", activeTopic || t("последний анализ рынка"), { query: activeTopic || "" }, t("Конкуренты")) },
+          { id: "post", label: "Создать пост", icon: "draft", run: () => router.push(`/create-post?reportId=${active.report_id}`) },
+          { id: "notion", label: "Сохранить в Notion", icon: "notion", run: () => void saveActiveReportToNotion() },
+          { id: "change", label: "Изменить отчёт", icon: "arrow", run: () => void changeReport() },
         ]
       : [];
 
-  const placeholder = t(chatPlaceholderSource(active, selected.placeholder));
+  const showPicker = !active && !skipReport;
 
   return (
     <div className="workspace-page">
@@ -321,35 +266,36 @@ function ChatContent() {
         title={t("Чат")}
         description={t("Быстрый доступ к основным действиям Growly без дублирования бизнес-логики.")}
       />
-      <div className="chat-layout">
-        <aside className="chat-actions">
-          <h2>{t("Действия")}</h2>
-          {actions.map((item) => (
-            <button
-              className={action === item.id ? "active" : ""}
-              key={item.id}
-              onClick={() => setAction(item.id)}
-              type="button"
-            >
-              <Icon name={item.icon} />
-              {t(item.label)}
-            </button>
-          ))}
-        </aside>
-        <section className="chat-panel">
-          {active ? (
-            <div className="chat-context">
-              <div className="chat-context-head">
-                <p className="eyebrow">{t("Последний анализ")}</p>
-                <h2>{activeTopic || t("Анализ рынка")}</h2>
-                <p className="chat-context-meta">
-                  {t("{count} источников", { count: active.sources_count })}
-                  {active.created_at
-                    ? ` · ${formatDate(active.created_at, locale)}`
-                    : ""}
-                </p>
-              </div>
-              <div className="chat-quick-actions">
+
+      {showPicker ? (
+        <ReportPicker
+          title={t("Выберите отчёт, с которым будет работать чат")}
+          manualLabel={t("Продолжить без отчёта")}
+          onManual={() => setSkipReport(true)}
+          onSelect={handleSelect}
+          selectingId={pickingId}
+        />
+      ) : (
+        <div className="chat-layout">
+          {!active ? (
+            <aside className="chat-actions">
+              <h2>{t("Действия")}</h2>
+              {nicheActions.map((item) => (
+                <button
+                  className={nicheAction === item.id ? "active" : ""}
+                  key={item.id}
+                  onClick={() => setNicheAction(item.id)}
+                  type="button"
+                >
+                  <Icon name={item.icon} />
+                  {t(item.label)}
+                </button>
+              ))}
+            </aside>
+          ) : null}
+          <section className="chat-panel">
+            {active ? (
+              <SelectedReportCard active={active} heading={t("Чат работает с отчётом")}>
                 {quickActions.map((item) => (
                   <button
                     className="button button-secondary button-small"
@@ -362,40 +308,40 @@ function ChatContent() {
                     {t(item.label)}
                   </button>
                 ))}
-              </div>
-            </div>
-          ) : null}
-          <div className="chat-messages" aria-live="polite">
-            {messages.map((message) => (
-              <article
-                className={`message message-${message.role}`}
-                key={message.id}
-              >
-                <p>{message.text}</p>
-                {message.meta ? <small>{message.meta}</small> : null}
-              </article>
-            ))}
-            {loading ? (
-              <article className="message message-assistant">
-                <p>{t("Задача выполняется на сервере.")}</p>
-                <small>{t("Длительные операции могут занять несколько минут.")}</small>
-              </article>
+              </SelectedReportCard>
             ) : null}
-          </div>
-          <form className="chat-composer" onSubmit={submit}>
-            <textarea
-              aria-label={t("Сообщение")}
-              onChange={(event) => setText(event.target.value)}
-              placeholder={placeholder}
-              value={text}
-            />
-            <button className="button button-primary" disabled={loading}>
-              <Icon name="arrow" />
-              {t("Отправить")}
-            </button>
-          </form>
-        </section>
-      </div>
+            <div className="chat-messages" aria-live="polite">
+              {messages.map((message) => (
+                <article className={`message message-${message.role}`} key={message.id}>
+                  <p>{message.text}</p>
+                  {message.meta ? <small>{message.meta}</small> : null}
+                </article>
+              ))}
+              {loading ? (
+                <article className="message message-assistant">
+                  <p>{t("Задача выполняется на сервере.")}</p>
+                  <small>{t("Длительные операции могут занять несколько минут.")}</small>
+                </article>
+              ) : null}
+            </div>
+            <form
+              className="chat-composer"
+              onSubmit={active ? submitWithReport : submitNiche}
+            >
+              <textarea
+                aria-label={t("Сообщение")}
+                onChange={(event) => setText(event.target.value)}
+                placeholder={placeholder}
+                value={text}
+              />
+              <button className="button button-primary" disabled={loading}>
+                <Icon name="arrow" />
+                {t("Отправить")}
+              </button>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -421,66 +367,33 @@ function contextForAction(
   return {};
 }
 
-function generatedNavigationTarget(
-  action: Action,
-  result:
-    | {
-        report?: { id?: number; title?: string };
-        items?: unknown[];
-        draft?: { id?: number; title?: string };
-      }
-    | undefined,
-): string | null {
-  if (!result) return null;
-  if (action === "market_scan" || action === "competitors") {
-    return reportPathFromGeneratedResponse(result);
-  }
-  if (action === "content_plan" && extractGeneratedContentPlanId(result)) {
-    return contentPlanPathFromGeneratedResponse(result) || "/content-plan";
-  }
-  if (action === "create_post" && extractGeneratedDraftId(result)) {
-    return "/drafts";
-  }
-  return null;
-}
-
 function describeResult(
   result:
     | {
+        answer?: string;
         report?: { id?: number; title?: string };
         items?: unknown[];
         draft?: { id?: number; title?: string };
-        counts?: Record<string, number>;
       }
     | undefined,
   t: (source: string, variables?: Record<string, string | number>) => string,
 ): string {
   if (!result) return t("Задача выполнена.");
+  if (typeof result.answer === "string" && result.answer.trim()) {
+    return result.answer;
+  }
   if (result.report) {
-    return t(
-      "Отчёт готов: {name}. Откройте раздел «Отчёты» для просмотра.",
-      { name: result.report.title || `ID ${result.report.id}` },
-    );
+    return t("Отчёт готов: {name}. Откройте раздел «Отчёты» для просмотра.", {
+      name: result.report.title || `ID ${result.report.id}`,
+    });
   }
   if (result.draft) {
-    return t(
-      "Черновик создан: {name}. Он доступен в разделе «Черновики».",
-      { name: result.draft.title || `ID ${result.draft.id}` },
-    );
+    return t("Черновик создан: {name}. Он доступен в разделе «Черновики».", {
+      name: result.draft.title || `ID ${result.draft.id}`,
+    });
   }
   if (Array.isArray(result.items)) {
-    return t("Готово. Получено элементов: {count}.", {
-      count: result.items.length,
-    });
-  }
-  if (result.counts) {
-    const total = Object.values(result.counts).reduce(
-      (sum, value) => sum + value,
-      0,
-    );
-    return t("Синхронизация Notion завершена. Обработано объектов: {count}.", {
-      count: total,
-    });
+    return t("Готово. Получено элементов: {count}.", { count: result.items.length });
   }
   return t("Задача выполнена.");
 }

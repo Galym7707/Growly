@@ -1,8 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  FormEvent,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/ui";
 import { apiRequest } from "@/lib/api";
@@ -14,9 +21,19 @@ import type { ContentPlanResponse, Draft } from "@/lib/types";
 type Mode = "analysis" | "manual";
 
 export default function CreatePostPage() {
+  return (
+    <Suspense fallback={<div className="workspace-page" />}>
+      <CreatePostContent />
+    </Suspense>
+  );
+}
+
+function CreatePostContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const reportIdParam = searchParams.get("reportId");
   const { locale, t } = useLanguage();
-  const { active } = useActiveContext();
+  const { active, setActiveReport } = useActiveContext();
   const activeTopic = activeContextTopic(active);
 
   const [hasPlan, setHasPlan] = useState(false);
@@ -25,6 +42,19 @@ export default function CreatePostPage() {
   const [channel, setChannel] = useState("Telegram");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
+
+  const hydratedParam = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!reportIdParam || !/^\d+$/.test(reportIdParam)) return;
+    if (hydratedParam.current === reportIdParam) return;
+    if (active && active.report_id === Number(reportIdParam)) {
+      hydratedParam.current = reportIdParam;
+      return;
+    }
+    hydratedParam.current = reportIdParam;
+    void setActiveReport(Number(reportIdParam));
+  }, [reportIdParam, active, setActiveReport]);
 
   const loadPlan = useCallback(async () => {
     try {

@@ -55,15 +55,15 @@ describe("active workspace context", () => {
   it("does not ask for the niche again when context is active", () => {
     expect(hasActiveContext(sample)).toBe(true);
     expect(
-      chatPlaceholderSource(sample, "Опишите нишу, продукт и регион"),
-    ).toBe("Спросите по последнему анализу или выберите действие");
+      chatPlaceholderSource(sample, "Сначала выберите отчёт или опишите нишу, продукт и регион"),
+    ).toBe("Спросите по выбранному отчёту или выберите действие");
   });
 
   it("falls back to the niche prompt without active context", () => {
     expect(hasActiveContext(null)).toBe(false);
     expect(
-      chatPlaceholderSource(null, "Опишите нишу, продукт и регион"),
-    ).toBe("Опишите нишу, продукт и регион");
+      chatPlaceholderSource(null, "Сначала выберите отчёт или опишите нишу, продукт и регион"),
+    ).toBe("Сначала выберите отчёт или опишите нишу, продукт и регион");
   });
 
   it("exposes the active topic for context banners", () => {
@@ -72,14 +72,21 @@ describe("active workspace context", () => {
   });
 
   it("pins the content plan to the active report by default", () => {
-    const body = contentPlanRequestBody(sample, "Trust", "ru");
-    expect(body.business.market_context).toEqual({ report_id: 23 });
+    const body = contentPlanRequestBody(sample, "Trust", "ru") as Record<
+      string,
+      unknown
+    >;
+    expect(body.report_id).toBe(23);
+    expect(body.business).toEqual({ language: "ru" });
     expect(body.weekly_objective).toBe("Trust");
   });
 
-  it("omits the market context when no analysis is active", () => {
-    const body = contentPlanRequestBody(null, "Trust", "en");
+  it("omits the report id when no analysis is active", () => {
+    const body = contentPlanRequestBody(null, "Trust", "en") as Record<
+      string,
+      unknown
+    >;
     expect(body.business).toEqual({ language: "en" });
-    expect(body.business.market_context).toBeUndefined();
+    expect(body.report_id).toBeUndefined();
   });
 });

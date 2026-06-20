@@ -85,6 +85,20 @@ export type ContentPlanResponse = {
   source?: ContentPlanSource | null;
 };
 
+export type ContentPlanOption = {
+  label: string;
+  value: string;
+};
+
+export type ContentPlanOptions = {
+  goals: ContentPlanOption[];
+  audiences: ContentPlanOption[];
+  offers: ContentPlanOption[];
+  channels: ContentPlanOption[];
+  content_types: ContentPlanOption[];
+  ctas: ContentPlanOption[];
+};
+
 export type DashboardData = {
   workspace_mode: "single";
   latest_market_scan: Report | null;

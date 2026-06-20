@@ -108,27 +108,21 @@ function ReportCard({ report }: { report: Report }) {
   const router = useRouter();
   const { locale, t } = useLanguage();
   const { setActiveReport } = useActiveContext();
-  const [busy, setBusy] = useState<null | "plan" | "post" | "notion">(null);
+  const [busy, setBusy] = useState<null | "plan" | "chat" | "post" | "notion">(null);
   const [notice, setNotice] = useState("");
 
-  async function useForContentPlan() {
-    setBusy("plan");
+  async function openWith(target: "plan" | "chat" | "post") {
+    setBusy(target);
     setNotice("");
     try {
       await setActiveReport(report.id);
-      router.push("/content-plan");
-    } catch (value) {
-      setNotice(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
-      setBusy(null);
-    }
-  }
-
-  async function useForPost() {
-    setBusy("post");
-    setNotice("");
-    try {
-      await setActiveReport(report.id);
-      router.push("/create-post");
+      const route =
+        target === "plan"
+          ? `/content-plan?reportId=${report.id}`
+          : target === "chat"
+            ? `/chat?reportId=${report.id}`
+            : `/create-post?reportId=${report.id}`;
+      router.push(route);
     } catch (value) {
       setNotice(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
       setBusy(null);
@@ -177,15 +171,23 @@ function ReportCard({ report }: { report: Report }) {
         <button
           className="button button-secondary button-small"
           disabled={busy !== null}
-          onClick={useForContentPlan}
+          onClick={() => openWith("plan")}
           type="button"
         >
-          {busy === "plan" ? t("Открываем") : t("Создать контент-план")}
+          {busy === "plan" ? t("Открываем") : t("Использовать для контент-плана")}
         </button>
         <button
           className="button button-secondary button-small"
           disabled={busy !== null}
-          onClick={useForPost}
+          onClick={() => openWith("chat")}
+          type="button"
+        >
+          {busy === "chat" ? t("Открываем") : t("Использовать в чате")}
+        </button>
+        <button
+          className="button button-secondary button-small"
+          disabled={busy !== null}
+          onClick={() => openWith("post")}
           type="button"
         >
           {busy === "post" ? t("Открываем") : t("Создать пост")}
