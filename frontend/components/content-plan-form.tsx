@@ -31,6 +31,7 @@ const EMPTY_OPTIONS: ContentPlanOptions = {
 const CHANNEL_DEFAULTS: ContentPlanOption[] = [
   { label: "Telegram", value: "telegram" },
   { label: "Instagram", value: "instagram" },
+  { label: "Threads", value: "threads" },
   { label: "WhatsApp", value: "whatsapp" },
   { label: "Сайт", value: "website" },
 ];

@@ -126,6 +126,7 @@ function ContentPlanContent() {
   }
 
   const mode = contentPlanMode(active, manual);
+  const latestPlanPath = contentPlanPathFromGeneratedResponse(data);
 
   async function createDraft(itemId: number) {
     setDraftingId(itemId);
@@ -140,7 +141,7 @@ function ContentPlanContent() {
           name: response.draft.title || response.draft.id,
         }),
       );
-      router.push("/drafts");
+      router.push(`/drafts/${response.draft.id}`);
     } finally {
       setDraftingId(null);
     }
@@ -157,6 +158,23 @@ function ContentPlanContent() {
       />
 
       {feedback ? <div className="feedback feedback-success">{feedback}</div> : null}
+
+      {!loadingList && latestPlanPath && mode !== "picker" ? (
+        <div className="active-source">
+          <div>
+            <p className="eyebrow">{t("Сохранённый контент-план")}</p>
+            <p className="active-source-topic">
+              {t("Тем в последнем плане: {count}", {
+                count: data.items.length,
+              })}
+            </p>
+          </div>
+          <Link className="button button-secondary button-small" href={latestPlanPath}>
+            {t("Открыть контент-план")}
+            <Icon name="arrow" />
+          </Link>
+        </div>
+      ) : null}
 
       {selectError ? (
         <div className="feedback feedback-error" role="alert">

@@ -62,6 +62,22 @@ export function contentPlanPathFromResponse(value: unknown): string | null {
   return null;
 }
 
+export function latestContentPlanPath(
+  items: Pick<ContentPlanItem, "id" | "created_at">[],
+): string | null {
+  if (!items.length) return null;
+  const latest = [...items].sort((left, right) => {
+    const dateDifference =
+      Date.parse(right.created_at) - Date.parse(left.created_at);
+    return Number.isFinite(dateDifference) && dateDifference !== 0
+      ? dateDifference
+      : right.id - left.id;
+  })[0];
+  const batch = items.filter((item) => item.created_at === latest.created_at);
+  const anchorId = Math.min(...batch.map((item) => item.id));
+  return `/content-plan/${anchorId}`;
+}
+
 export function sourceDisplay(
   value: string | null | undefined,
   locale: Locale,

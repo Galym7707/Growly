@@ -327,6 +327,7 @@ export function fallbackContentPlanOptions(
     offers: tmpl(FALLBACK_OFFERS[lang]),
     channels: [
       { label: "Instagram", value: "instagram" },
+      { label: "Threads", value: "threads" },
       { label: "Telegram", value: "telegram" },
       { label: "WhatsApp", value: "whatsapp" },
       { label: "Сайт", value: "website" },

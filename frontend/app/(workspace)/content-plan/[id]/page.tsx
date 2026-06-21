@@ -72,7 +72,7 @@ export default function ContentPlanDetailPage() {
         { method: "POST", body: JSON.stringify({ language: locale }) },
       );
       if (response.draft.id) {
-        router.push("/drafts");
+        router.push(`/drafts/${response.draft.id}`);
       }
     } catch (value) {
       setActionErrorDebug(apiErrorDebugInfo(value));

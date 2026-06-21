@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -229,3 +230,52 @@ def test_content_plans_detail_uses_real_backend_response(monkeypatch) -> None:
     assert payload["plan_id"] == 45
     assert payload["items"][0]["topic"] == "Real item"
     assert payload["source"]["report_id"] == 7
+
+
+def test_content_plan_list_and_detail_keep_the_latest_batch_together(
+    monkeypatch,
+) -> None:
+    from app.web_api import (
+        _content_plan_detail_response,
+        _list_content_plan_response,
+    )
+
+    created_at = datetime.now(UTC)
+    first = SimpleNamespace(id=21, created_at=created_at)
+    last = SimpleNamespace(id=22, created_at=created_at)
+
+    class FakeSession:
+        def scalar(self, statement):
+            del statement
+            return last
+
+        def scalars(self, statement):
+            del statement
+            return [first, last]
+
+        def get(self, model, item_id):
+            del model, item_id
+            return last
+
+    @contextmanager
+    def fake_session_scope():
+        yield FakeSession()
+
+    monkeypatch.setattr("app.web_api.session_scope", fake_session_scope)
+    monkeypatch.setattr(
+        "app.web_api._content_plan_payload",
+        lambda item: {"id": item.id},
+    )
+    monkeypatch.setattr(
+        "app.web_api._content_plan_source_payload",
+        lambda session: None,
+    )
+
+    latest = _list_content_plan_response(40)
+    detail = _content_plan_detail_response(22)
+
+    assert latest["plan_id"] == 21
+    assert latest["content_plan_id"] == 21
+    assert [item["id"] for item in latest["items"]] == [21, 22]
+    assert detail["plan_id"] == 21
+    assert [item["id"] for item in detail["items"]] == [21, 22]

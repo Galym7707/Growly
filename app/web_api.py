@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
@@ -384,17 +384,45 @@ def _content_plan_source_payload(session: Any) -> dict[str, Any] | None:
 
 def _list_content_plan_response(limit: int) -> dict[str, Any]:
     with session_scope() as session:
-        rows = list(
-            session.scalars(
-                select(ContentPlan)
-                .order_by(desc(ContentPlan.publish_date), desc(ContentPlan.id))
-                .limit(limit)
-            )
+        anchor = session.scalar(
+            select(ContentPlan)
+            .order_by(desc(ContentPlan.created_at), desc(ContentPlan.id))
+            .limit(1)
         )
+        if anchor is None:
+            return {
+                "plan_id": None,
+                "content_plan_id": None,
+                "items": [],
+                "source": _content_plan_source_payload(session),
+            }
+        rows = _content_plan_batch_rows(session, anchor, limit=limit)
+        plan_id = min(row.id for row in rows)
         return {
+            "plan_id": plan_id,
+            "content_plan_id": plan_id,
             "items": [_content_plan_payload(row) for row in rows],
             "source": _content_plan_source_payload(session),
         }
+
+
+def _content_plan_batch_rows(
+    session: Any,
+    anchor: ContentPlan,
+    *,
+    limit: int | None = None,
+) -> list[ContentPlan]:
+    if anchor.created_at is None:
+        return [anchor]
+    statement = (
+        select(ContentPlan)
+        .where(ContentPlan.created_at == anchor.created_at)
+        .order_by(ContentPlan.publish_date, ContentPlan.id)
+    )
+    if limit is not None:
+        statement = statement.limit(limit)
+    rows = list(session.scalars(statement))
+    return rows or [anchor]
 
 
 def _content_plan_detail_response(plan_id: int) -> dict[str, Any]:
@@ -402,27 +430,9 @@ def _content_plan_detail_response(plan_id: int) -> dict[str, Any]:
         anchor = session.get(ContentPlan, plan_id)
         if anchor is None:
             raise HTTPException(status_code=404, detail="Контент-план не найден.")
-        rows: list[ContentPlan]
-        if anchor.created_at:
-            rows = list(
-                session.scalars(
-                    select(ContentPlan)
-                    .where(
-                        ContentPlan.id >= anchor.id,
-                        ContentPlan.created_at
-                        >= anchor.created_at - timedelta(seconds=30),
-                        ContentPlan.created_at
-                        <= anchor.created_at + timedelta(seconds=30),
-                    )
-                    .order_by(ContentPlan.publish_date, ContentPlan.id)
-                )
-            )
-        else:
-            rows = [anchor]
-        if not rows:
-            rows = [anchor]
+        rows = _content_plan_batch_rows(session, anchor)
         return {
-            "plan_id": plan_id,
+            "plan_id": min(row.id for row in rows),
             "items": [_content_plan_payload(row) for row in rows],
             "source": _content_plan_source_payload(session),
         }

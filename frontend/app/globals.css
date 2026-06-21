@@ -2358,6 +2358,22 @@ input:disabled {
   margin-bottom: 24px;
 }
 
+.post-channel-field {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(120px, 180px) minmax(220px, 360px);
+  margin-bottom: 18px;
+}
+
+.post-channel-field > span {
+  font-weight: 700;
+}
+
+.post-channel-field select {
+  min-height: 46px;
+}
+
 .post-option {
   align-items: center;
   background: var(--surface);
@@ -3030,6 +3046,9 @@ input:disabled {
 }
 
 @media (max-width: 900px) {
+  .post-channel-field {
+    grid-template-columns: 1fr;
+  }
   .draft-detail {
     grid-template-columns: 1fr;
   }

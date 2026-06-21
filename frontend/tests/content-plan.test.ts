@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatContentStatus,
   formatContentType,
+  latestContentPlanPath,
   sourceDisplay,
 } from "../lib/content-plan";
 import { contentPlanCopy } from "../lib/content-plan-copy";
@@ -40,5 +41,19 @@ describe("content plan presentation", () => {
       "сервер временно недоступен",
       "endpoint backend не найден",
     ]);
+  });
+
+  it("opens the complete latest saved plan from any list order", () => {
+    const item = (id: number, createdAt: string) => ({
+      id,
+      created_at: createdAt,
+    });
+    const path = latestContentPlanPath([
+      item(11, "2026-06-20T10:00:00Z"),
+      item(22, "2026-06-21T10:00:00Z"),
+      item(21, "2026-06-21T10:00:00Z"),
+    ]);
+
+    expect(path).toBe("/content-plan/21");
   });
 });

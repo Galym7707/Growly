@@ -59,7 +59,13 @@ describe("selection flow", () => {
     expect(audiences.join(" ")).not.toContain("Клиенты ниши");
     expect(audiences).toContain("Владельцы интернет-магазинов");
     const channels = options.channels.map((option) => option.value);
-    expect(channels).toEqual(["instagram", "telegram", "whatsapp", "website"]);
+    expect(channels).toEqual([
+      "instagram",
+      "threads",
+      "telegram",
+      "whatsapp",
+      "website",
+    ]);
     expect(options.goals.length).toBeGreaterThan(0);
     expect(options.ctas.length).toBeGreaterThan(0);
     const all = JSON.stringify(options).toLowerCase();

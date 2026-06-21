@@ -15,7 +15,12 @@ import { PageHeader } from "@/components/ui";
 import { apiRequest } from "@/lib/api";
 import { activeContextTopic } from "@/lib/active-context";
 import { useActiveContext } from "@/lib/active-context-provider";
+import {
+  contentPlanPathFromResponse,
+  latestContentPlanPath,
+} from "@/lib/content-plan";
 import { useLanguage } from "@/lib/i18n";
+import { PUBLISH_PLATFORMS } from "@/lib/integrations";
 import type { ContentPlanResponse, Draft } from "@/lib/types";
 
 type Mode = "analysis" | "manual";
@@ -36,10 +41,10 @@ function CreatePostContent() {
   const { active, loadActiveReport } = useActiveContext();
   const activeTopic = activeContextTopic(active);
 
-  const [hasPlan, setHasPlan] = useState(false);
+  const [latestPlanPath, setLatestPlanPath] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode | null>(null);
   const [brief, setBrief] = useState("");
-  const [channel, setChannel] = useState("Telegram");
+  const [channel, setChannel] = useState("telegram");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
 
@@ -59,15 +64,23 @@ function CreatePostContent() {
   const loadPlan = useCallback(async () => {
     try {
       const response = await apiRequest<ContentPlanResponse>("/content-plans");
-      setHasPlan(response.items.length > 0);
+      setLatestPlanPath(
+        contentPlanPathFromResponse(response) ||
+          latestContentPlanPath(response.items),
+      );
     } catch {
-      setHasPlan(false);
+      setLatestPlanPath(null);
     }
   }, []);
 
   useEffect(() => {
     void loadPlan();
   }, [loadPlan]);
+
+  const selectedChannel =
+    PUBLISH_PLATFORMS.find((platform) => platform.slug === channel)?.label ||
+    channel;
+  const hasPlan = Boolean(latestPlanPath);
 
   async function generate(text: string) {
     const cleaned = text.trim();
@@ -82,12 +95,11 @@ function CreatePostContent() {
         method: "POST",
         body: JSON.stringify({
           brief: cleaned,
-          channel: channel.trim() || "Telegram",
+          channel: selectedChannel,
           language: locale,
         }),
       });
-      void response;
-      router.push("/drafts");
+      router.push(`/drafts/${response.draft.id}`);
     } catch (value) {
       setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
       setGenerating(false);
@@ -100,7 +112,7 @@ function CreatePostContent() {
     const region = active.region ? `, регион: ${active.region}` : "";
     const composed = t(
       "Создай продающий пост для канала {channel} на основе последнего анализа рынка. Ниша: {topic}{region}. Используй боли клиентов и офферы из анализа, добавь конкретный призыв к действию.",
-      { channel: channel.trim() || "Telegram", topic, region },
+      { channel: selectedChannel, topic, region },
     );
     void generate(composed);
   }
@@ -117,6 +129,20 @@ function CreatePostContent() {
         title={t("Создать пост")}
         description={t("Подготовьте пост на основе анализа, контент-плана или вручную.")}
       />
+
+      <label className="post-channel-field">
+        <span>{t("Канал")}</span>
+        <select
+          onChange={(event) => setChannel(event.target.value)}
+          value={channel}
+        >
+          {PUBLISH_PLATFORMS.map((platform) => (
+            <option key={platform.slug} value={platform.slug}>
+              {platform.label}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <div className="post-options">
         <button
@@ -140,7 +166,7 @@ function CreatePostContent() {
         <Link
           aria-disabled={!hasPlan}
           className={`post-option${hasPlan ? "" : " post-option-disabled"}`}
-          href={hasPlan ? "/content-plan" : "/create-post"}
+          href={latestPlanPath || "/create-post"}
         >
           <Icon name="book" />
           <div>
@@ -179,13 +205,6 @@ function CreatePostContent() {
                 placeholder={t("Передайте подробный бриф, канал и желаемый призыв")}
                 required
                 value={brief}
-              />
-            </label>
-            <label>
-              <span>{t("Канал")}</span>
-              <input
-                onChange={(event) => setChannel(event.target.value)}
-                value={channel}
               />
             </label>
           </div>
