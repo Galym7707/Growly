@@ -227,6 +227,21 @@ class BlotatoService:
         ]
         return [account for account in accounts if account["id"]]
 
+    def config_status(self) -> dict[str, Any]:
+        """Lightweight config check (no network): is a key present?"""
+        return {
+            "api_key_configured": self.api_key_configured(),
+            "base_url": self._base_url(),
+        }
+
+    async def validate_config(self) -> dict[str, Any]:
+        """Verify the configured key works by listing accounts."""
+        if not self.api_key_configured():
+            raise BlotatoServiceError(
+                "BLOTATO_API_KEY не настроен на сервере.",
+            )
+        return await self.validate_api_key()
+
     async def validate_api_key(self) -> dict[str, Any]:
         """Verify the current key against Blotato by listing accounts.
 

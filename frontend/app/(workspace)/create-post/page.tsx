@@ -20,7 +20,7 @@ import {
   latestContentPlanPath,
 } from "@/lib/content-plan";
 import { useLanguage } from "@/lib/i18n";
-import { PUBLISH_PLATFORMS, type IntegrationsStatus } from "@/lib/integrations";
+import { PUBLISH_PLATFORMS, type SocialStatus } from "@/lib/integrations";
 import type { ContentPlanResponse, Draft } from "@/lib/types";
 
 type Mode = "analysis" | "manual";
@@ -42,9 +42,7 @@ function CreatePostContent() {
   const activeTopic = activeContextTopic(active);
 
   const [latestPlanPath, setLatestPlanPath] = useState<string | null>(null);
-  const [integrations, setIntegrations] = useState<IntegrationsStatus | null>(
-    null,
-  );
+  const [social, setSocial] = useState<SocialStatus | null>(null);
   const [mode, setMode] = useState<Mode | null>(null);
   const [brief, setBrief] = useState("");
   const [channel, setChannel] = useState("telegram");
@@ -82,12 +80,14 @@ function CreatePostContent() {
 
   useEffect(() => {
     let active = true;
-    void apiRequest<IntegrationsStatus>("/integrations/status")
+    void apiRequest<SocialStatus>(
+      "/integrations/social/status?platform=instagram",
+    )
       .then((status) => {
-        if (active) setIntegrations(status);
+        if (active) setSocial(status);
       })
       .catch(() => {
-        if (active) setIntegrations(null);
+        if (active) setSocial(null);
       });
     return () => {
       active = false;
@@ -95,9 +95,7 @@ function CreatePostContent() {
   }, []);
 
   const instagramSelected = channel === "instagram";
-  const instagramConnected = Boolean(
-    integrations?.blotato.instagram?.selected,
-  );
+  const instagramState = social?.state ?? "not_connected";
 
   const selectedChannel =
     PUBLISH_PLATFORMS.find((platform) => platform.slug === channel)?.label ||
@@ -166,14 +164,24 @@ function CreatePostContent() {
         </select>
       </label>
 
-      {instagramSelected && !instagramConnected ? (
+      {instagramSelected && instagramState === "not_connected" ? (
         <div className="feedback feedback-warning create-post-warning">
           <span>
-            {t("Instagram выбран, но автопостинг ещё не подключён. Подключите Instagram через Blotato в Интеграциях.")}
+            {t("Instagram автопостинг не подключен. Отправьте заявку на подключение в Интеграциях.")}
           </span>
           <Link className="button button-secondary button-small" href="/settings/integrations">
-            {t("Подключить Instagram")}
+            {t("Перейти в Интеграции")}
           </Link>
+        </div>
+      ) : null}
+      {instagramSelected && (instagramState === "pending" || instagramState === "in_progress") ? (
+        <div className="feedback feedback-warning">
+          {t("Заявка на подключение Instagram уже отправлена. После подключения вы сможете публиковать посты автоматически.")}
+        </div>
+      ) : null}
+      {instagramSelected && instagramState === "connected" ? (
+        <div className="feedback feedback-success">
+          {t("Instagram подключен. Пост можно опубликовать или запланировать.")}
         </div>
       ) : null}
 

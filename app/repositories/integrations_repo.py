@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import desc, select
@@ -12,6 +12,7 @@ from app.models import (
     Publication,
     PublicationTarget,
     SocialAccount,
+    SocialConnectionRequest,
 )
 
 
@@ -123,6 +124,143 @@ class IntegrationsRepository:
             rows.append(row)
         self.session.flush()
         return rows
+
+    def connected_account(
+        self, workspace_id: str | None, platform: str, provider: str = "blotato"
+    ) -> SocialAccount | None:
+        return self.session.scalar(
+            select(SocialAccount)
+            .where(
+                SocialAccount.workspace_id == workspace_id,
+                SocialAccount.provider == provider,
+                SocialAccount.platform == platform.strip().lower(),
+                SocialAccount.status == "connected",
+            )
+            .order_by(desc(SocialAccount.id))
+        )
+
+    def link_account(
+        self,
+        *,
+        workspace_id: str | None,
+        platform: str,
+        external_account_id: str,
+        username: str | None,
+        display_name: str | None,
+        connection_request_id: int | None = None,
+        provider: str = "blotato",
+    ) -> SocialAccount:
+        """Create or update the connected account for a workspace+platform."""
+        slug = platform.strip().lower()
+        account = self.session.scalar(
+            select(SocialAccount).where(
+                SocialAccount.workspace_id == workspace_id,
+                SocialAccount.provider == provider,
+                SocialAccount.platform == slug,
+            )
+        )
+        if account is None:
+            account = SocialAccount(
+                workspace_id=workspace_id, provider=provider, platform=slug
+            )
+            self.session.add(account)
+        account.external_account_id = external_account_id
+        account.username = username
+        account.display_name = display_name
+        account.status = "connected"
+        account.connection_request_id = connection_request_id
+        account.connected_at = datetime.now(UTC)
+        account.last_checked_at = datetime.now(UTC)
+        self.session.flush()
+        return account
+
+    def unlink_account(
+        self, workspace_id: str | None, platform: str, provider: str = "blotato"
+    ) -> SocialAccount | None:
+        account = self.session.scalar(
+            select(SocialAccount).where(
+                SocialAccount.workspace_id == workspace_id,
+                SocialAccount.provider == provider,
+                SocialAccount.platform == platform.strip().lower(),
+            )
+        )
+        if account is not None:
+            account.status = "disconnected"
+            self.session.flush()
+        return account
+
+    def mark_account_checked(self, account: SocialAccount) -> SocialAccount:
+        account.last_checked_at = datetime.now(UTC)
+        self.session.flush()
+        return account
+
+    # -- social connection requests ---------------------------------------
+
+    def create_request(
+        self,
+        *,
+        workspace_id: str | None,
+        user_email: str | None,
+        platform: str,
+        requested_username: str | None,
+        user_note: str | None = None,
+    ) -> SocialConnectionRequest:
+        request = SocialConnectionRequest(
+            workspace_id=workspace_id,
+            user_email=user_email,
+            platform=platform.strip().lower(),
+            requested_username=requested_username,
+            user_note=user_note,
+            status="pending",
+        )
+        self.session.add(request)
+        self.session.flush()
+        return request
+
+    def get_request(self, request_id: int) -> SocialConnectionRequest | None:
+        return self.session.get(SocialConnectionRequest, request_id)
+
+    def latest_request(
+        self, workspace_id: str | None, platform: str
+    ) -> SocialConnectionRequest | None:
+        return self.session.scalar(
+            select(SocialConnectionRequest)
+            .where(
+                SocialConnectionRequest.workspace_id == workspace_id,
+                SocialConnectionRequest.platform == platform.strip().lower(),
+            )
+            .order_by(desc(SocialConnectionRequest.created_at))
+        )
+
+    def list_requests(
+        self, status: str | None = None
+    ) -> list[SocialConnectionRequest]:
+        statement = select(SocialConnectionRequest).order_by(
+            desc(SocialConnectionRequest.created_at)
+        )
+        if status:
+            statement = statement.where(
+                SocialConnectionRequest.status == status
+            )
+        return list(self.session.scalars(statement))
+
+    def update_request_status(
+        self,
+        request_id: int,
+        status: str,
+        *,
+        admin_note: str | None = None,
+    ) -> SocialConnectionRequest | None:
+        request = self.get_request(request_id)
+        if request is None:
+            return None
+        request.status = status
+        if admin_note is not None:
+            request.admin_note = admin_note
+        if status in {"connected", "cancelled", "failed"}:
+            request.resolved_at = datetime.now(UTC)
+        self.session.flush()
+        return request
 
     # -- publication targets (platform -> account mappings) ----------------
 

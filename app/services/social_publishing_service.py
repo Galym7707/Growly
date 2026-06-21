@@ -457,7 +457,11 @@ class SocialPublishingService:
                     }
                 )
                 continue
-            mapping = blotato.map_platform_to_account(workspace, slug)
+            # Security: the account id is taken ONLY from this workspace's
+            # connected social_accounts — never from the request or env.
+            mapping = await asyncio.to_thread(
+                self._resolve_account, workspace, slug
+            )
             if not mapping or not mapping.get("account_id"):
                 pub_id = await asyncio.to_thread(
                     self._record_publication,
@@ -470,7 +474,7 @@ class SocialPublishingService:
                     None,
                     None,
                     None,
-                    "Для выбранной платформы не выбран аккаунт публикации.",
+                    "Аккаунт не подключён. Отправьте заявку на подключение в Интеграциях.",
                 )
                 publication_ids.append(pub_id)
                 submissions.append(
@@ -478,7 +482,7 @@ class SocialPublishingService:
                         "platform": slug,
                         "post_submission_id": None,
                         "status": "failed",
-                        "error": "Для выбранной платформы не выбран аккаунт публикации.",
+                        "error": "Аккаунт не подключён. Отправьте заявку на подключение в Интеграциях.",
                     }
                 )
                 continue
@@ -544,6 +548,21 @@ class SocialPublishingService:
             "publication_ids": publication_ids,
             "blotato_submissions": submissions,
         }
+
+    @staticmethod
+    def _resolve_account(workspace: str, platform: str) -> dict[str, str | None] | None:
+        """Resolve the publish account for a platform from the workspace's
+        connected social_accounts only (admin-linked). No env/request fallback."""
+        with session_scope() as session:
+            account = IntegrationsRepository(session).connected_account(
+                workspace, platform
+            )
+            if account and account.external_account_id:
+                return {
+                    "account_id": account.external_account_id,
+                    "page_id": None,
+                }
+            return None
 
     @staticmethod
     def _load_draft(draft_id: int) -> Draft | None:

@@ -10,7 +10,7 @@ import { LoadingState, PageHeader } from "@/components/ui";
 import { apiErrorDebugInfo, apiRequest, type ApiDebugInfo } from "@/lib/api";
 import { contentPlanCopy } from "@/lib/content-plan-copy";
 import { useLanguage } from "@/lib/i18n";
-import type { IntegrationsStatus } from "@/lib/integrations";
+import type { SocialStatus } from "@/lib/integrations";
 import type { ContentPlanItem, ContentPlanResponse, Draft } from "@/lib/types";
 
 export default function ContentPlanDetailPage() {
@@ -20,12 +20,12 @@ export default function ContentPlanDetailPage() {
     items: [],
     source: null,
   });
-  const [integrations, setIntegrations] = useState<IntegrationsStatus | null>(
-    null,
-  );
+  const [social, setSocial] = useState<SocialStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [draftingId, setDraftingId] = useState<number | null>(null);
-  const [igModal, setIgModal] = useState(false);
+  const [igModal, setIgModal] = useState<"none" | "not_connected" | "pending">(
+    "none",
+  );
   const [error, setError] = useState("");
   const [loadErrorDebug, setLoadErrorDebug] = useState<ApiDebugInfo | null>(
     null,
@@ -61,14 +61,14 @@ export default function ContentPlanDetailPage() {
     } finally {
       setLoading(false);
     }
-    // Integrations status is best-effort; failure should not block the plan.
+    // Social status is best-effort; failure should not block the plan.
     try {
-      const status = await apiRequest<IntegrationsStatus>(
-        "/integrations/status",
+      const status = await apiRequest<SocialStatus>(
+        "/integrations/social/status?platform=instagram",
       );
-      setIntegrations(status);
+      setSocial(status);
     } catch {
-      setIntegrations(null);
+      setSocial(null);
     }
   }, [params.id]);
 
@@ -78,10 +78,6 @@ export default function ContentPlanDetailPage() {
 
   function targetsInstagram(item: ContentPlanItem): boolean {
     return (item.channel || "").toLowerCase().includes("instagram");
-  }
-
-  function instagramConnected(): boolean {
-    return Boolean(integrations?.blotato.instagram?.selected);
   }
 
   async function createDraft(itemId: number) {
@@ -109,9 +105,16 @@ export default function ContentPlanDetailPage() {
   }
 
   function goToDraftWithIntent(item: ContentPlanItem, intent: "publish" | "schedule") {
-    if (targetsInstagram(item) && !instagramConnected()) {
-      setIgModal(true);
-      return;
+    if (targetsInstagram(item)) {
+      const state = social?.state ?? "not_connected";
+      if (state === "pending" || state === "in_progress") {
+        setIgModal("pending");
+        return;
+      }
+      if (state !== "connected") {
+        setIgModal("not_connected");
+        return;
+      }
     }
     if (item.draft_id) {
       router.push(`/drafts/${item.draft_id}?intent=${intent}`);
@@ -187,30 +190,50 @@ export default function ContentPlanDetailPage() {
         />
       ) : null}
 
-      {igModal ? (
-        <div className="modal-backdrop" onClick={() => setIgModal(false)}>
+      {igModal !== "none" ? (
+        <div className="modal-backdrop" onClick={() => setIgModal("none")}>
           <div
             className="modal-card"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
-            <h2>{t("Instagram не подключён")}</h2>
-            <p className="muted">
-              {t("Чтобы публиковать посты автоматически, подключите Instagram через Blotato.")}
-            </p>
-            <div className="form-actions">
-              <Link className="button button-primary" href="/settings/integrations">
-                {t("Перейти в Интеграции")}
-              </Link>
-              <button
-                className="button button-secondary"
-                onClick={() => setIgModal(false)}
-                type="button"
-              >
-                {t("Закрыть")}
-              </button>
-            </div>
+            {igModal === "pending" ? (
+              <>
+                <h2>{t("Заявка уже отправлена")}</h2>
+                <p className="muted">
+                  {t("Администратор подключит ваш Instagram через безопасный OAuth-flow. После подключения публикация станет доступна.")}
+                </p>
+                <div className="form-actions">
+                  <button
+                    className="button button-secondary"
+                    onClick={() => setIgModal("none")}
+                    type="button"
+                  >
+                    {t("Закрыть")}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2>{t("Instagram не подключен")}</h2>
+                <p className="muted">
+                  {t("Чтобы Growly мог автоматически публиковать посты, отправьте заявку на подключение Instagram. Пароль не нужен: подключение проходит через официальный OAuth.")}
+                </p>
+                <div className="form-actions">
+                  <Link className="button button-primary" href="/settings/integrations">
+                    {t("Перейти в Интеграции")}
+                  </Link>
+                  <button
+                    className="button button-secondary"
+                    onClick={() => setIgModal("none")}
+                    type="button"
+                  >
+                    {t("Отмена")}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       ) : null}

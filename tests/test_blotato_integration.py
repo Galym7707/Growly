@@ -165,9 +165,7 @@ def _publish_service(monkeypatch, *, mapping, publish_result=None, raises=None):
     )
     monkeypatch.setattr(service.blotato, "is_enabled", lambda: True)
     monkeypatch.setattr(service.blotato, "validate_platform", lambda p: True)
-    monkeypatch.setattr(
-        service.blotato, "map_platform_to_account", lambda w, p: mapping
-    )
+    monkeypatch.setattr(service, "_resolve_account", lambda w, p: mapping)
 
     async def fake_publish(**kwargs):
         if raises is not None:
@@ -274,7 +272,7 @@ async def test_workspace_without_mapping_cannot_publish(monkeypatch) -> None:
         language="ru",
     )
     assert result["blotato_submissions"][0]["status"] == "failed"
-    assert "не выбран аккаунт" in result["blotato_submissions"][0]["error"]
+    assert "не подключён" in result["blotato_submissions"][0]["error"].lower()
     assert recorded[0]["status"] == "failed"
 
 

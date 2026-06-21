@@ -2910,6 +2910,17 @@ input:disabled {
   gap: 12px;
 }
 
+.integration-scheme {
+  background: var(--surface-soft);
+  border-radius: var(--radius-sm);
+  color: var(--ink, inherit);
+  display: inline-block;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 8px 14px;
+  width: fit-content;
+}
+
 .integration-block h3 {
   font-size: 16px;
   margin: 0;

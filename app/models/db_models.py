@@ -387,8 +387,41 @@ class SocialAccount(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(
         Text, server_default="connected", nullable=False
     )
+    connection_request_id: Mapped[int | None] = mapped_column(BigInteger)
+    connected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    last_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     metadata_json: Mapped[dict[str, Any]] = mapped_column(
         JSONB, server_default=text("'{}'::jsonb"), nullable=False
+    )
+
+
+class SocialConnectionRequest(Base, TimestampMixin):
+    """A user's request to have the Growly admin connect a social account.
+
+    The admin completes the OAuth connection inside Blotato manually, then links
+    the resulting Blotato account to this request. No passwords are ever stored.
+    """
+
+    __tablename__ = "social_connection_requests"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text)
+    user_email: Mapped[str | None] = mapped_column(Text)
+    platform: Mapped[str] = mapped_column(
+        Text, server_default="instagram", nullable=False
+    )
+    requested_username: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        Text, server_default="pending", nullable=False
+    )
+    admin_note: Mapped[str | None] = mapped_column(Text)
+    user_note: Mapped[str | None] = mapped_column(Text)
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
     )
 
 

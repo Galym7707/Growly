@@ -22,6 +22,7 @@ from app.services.draft_service import DraftService
 from app.services.market_intelligence import MarketIntelligenceService
 from app.services.notion_service import NotionService
 from app.services.report_service import ReportService
+from app.services.social_connection_service import SocialConnectionService
 from app.services.social_publishing_service import SocialPublishingService
 from app.services.source_analysis_service import SourceAnalysisService
 from app.services.source_discovery_service import SourceDiscoveryService
@@ -74,7 +75,42 @@ def get_workspace_id(
     return (x_growly_workspace_id or "").strip() or "default"
 
 
+def get_user_email(
+    x_growly_user_email: str | None = Header(default=None),
+) -> str | None:
+    return (x_growly_user_email or "").strip() or None
+
+
+def require_admin(
+    x_growly_user_email: str | None = Header(default=None),
+    x_growly_admin_secret: str | None = Header(default=None),
+) -> str:
+    """Gate admin endpoints. Admins are identified by ADMIN_EMAILS (matched
+    against the session email injected by the proxy) or a shared ADMIN_SECRET.
+    Public by default is disallowed: with neither configured, access is denied.
+    """
+    settings = get_settings()
+    admin_emails = settings.admin_email_set()
+    email = (x_growly_user_email or "").strip().lower()
+    if admin_emails and email in admin_emails:
+        return email
+    secret = settings.admin_secret_value()
+    if (
+        secret
+        and x_growly_admin_secret
+        and hmac.compare_digest(secret, x_growly_admin_secret.strip())
+    ):
+        return email or "admin"
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Доступ только для администратора.",
+    )
+
+
 secured_router = APIRouter(dependencies=[Depends(require_web_api_key)])
+admin_router = APIRouter(
+    prefix="/admin", dependencies=[Depends(require_web_api_key)]
+)
 
 
 class MarketScanRequest(BaseModel):
@@ -176,13 +212,29 @@ class BlotatoMappingsRequest(BaseModel):
     mappings: list[BlotatoMappingItem] = Field(default_factory=list, max_length=40)
 
 
-class BlotatoConnectRequest(BaseModel):
-    api_key: str = Field(min_length=8, max_length=400)
+class SocialConnectionRequestBody(BaseModel):
+    platform: Literal["instagram", "threads", "tiktok", "youtube", "facebook", "linkedin", "x"] = "instagram"
+    username: str | None = Field(default=None, max_length=120)
 
 
-class BlotatoSelectAccountRequest(BaseModel):
+class SocialDisconnectRequest(BaseModel):
     platform: str = Field(default="instagram", min_length=1, max_length=50)
-    account_id: str | None = Field(default=None, max_length=200)
+
+
+class AdminRequestStatusBody(BaseModel):
+    status: Literal["pending", "in_progress", "connected", "cancelled", "failed"]
+    admin_note: str | None = Field(default=None, max_length=2000)
+
+
+class AdminLinkAccountBody(BaseModel):
+    external_account_id: str = Field(min_length=1, max_length=200)
+    request_id: int | None = Field(default=None, ge=1)
+    workspace_id: str | None = Field(default=None, max_length=200)
+
+
+class AdminUnlinkAccountBody(BaseModel):
+    workspace_id: str = Field(min_length=1, max_length=200)
+    platform: str = Field(default="instagram", min_length=1, max_length=50)
 
 
 class PublishBlotatoRequest(BaseModel):
@@ -1102,36 +1154,51 @@ async def blotato_accounts(
     return {"accounts": accounts}
 
 
-@secured_router.post("/integrations/blotato/connect")
-async def blotato_connect(
-    payload: BlotatoConnectRequest,
+# -- user-facing social connection (admin-assisted manual MVP) ------------
+
+
+@secured_router.get("/integrations/social/status")
+async def social_status(
+    platform: str = Query(default="instagram", max_length=50),
     workspace_id: str = Depends(get_workspace_id),
 ) -> dict[str, Any]:
-    """Validate and store the Blotato API key (backend only, never returned)."""
+    return await SocialConnectionService().status(workspace_id, platform)
+
+
+@secured_router.post("/integrations/social/request")
+async def social_request(
+    payload: SocialConnectionRequestBody,
+    workspace_id: str = Depends(get_workspace_id),
+    user_email: str | None = Depends(get_user_email),
+) -> dict[str, Any]:
     try:
-        return await SocialPublishingService().save_api_key(
-            workspace_id, payload.api_key
+        return await SocialConnectionService().create_request(
+            workspace_id, user_email, payload.platform, payload.username
         )
-    except BlotatoServiceError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except GrowlyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@secured_router.post("/integrations/blotato/disconnect")
-async def blotato_disconnect(
+@secured_router.delete("/integrations/social/request/{request_id}")
+async def social_cancel_request(
+    request_id: int,
     workspace_id: str = Depends(get_workspace_id),
 ) -> dict[str, Any]:
-    return await SocialPublishingService().disconnect(workspace_id)
+    try:
+        return await SocialConnectionService().cancel_request(
+            workspace_id, request_id
+        )
+    except GrowlyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@secured_router.post("/integrations/blotato/select-account")
-async def blotato_select_account(
-    payload: BlotatoSelectAccountRequest,
+@secured_router.post("/integrations/social/disconnect")
+async def social_disconnect(
+    payload: SocialDisconnectRequest,
     workspace_id: str = Depends(get_workspace_id),
 ) -> dict[str, Any]:
-    return await SocialPublishingService().select_account(
-        workspace_id, payload.platform, payload.account_id
+    return await SocialConnectionService().disconnect(
+        workspace_id, payload.platform
     )
 
 
@@ -1251,4 +1318,77 @@ async def publication_status(publication_id: int) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+# -- admin: Blotato + social connection management ------------------------
+
+
+@admin_router.get("/blotato/status")
+async def admin_blotato_status(
+    _: str = Depends(require_admin),
+) -> dict[str, Any]:
+    return await SocialConnectionService().admin_blotato_status()
+
+
+@admin_router.get("/blotato/accounts")
+async def admin_blotato_accounts(
+    _: str = Depends(require_admin),
+) -> dict[str, Any]:
+    try:
+        accounts = await SocialConnectionService().admin_list_accounts()
+    except BlotatoServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"accounts": accounts}
+
+
+@admin_router.get("/social-connection-requests")
+async def admin_list_requests(
+    status_filter: str | None = Query(default=None, alias="status", max_length=30),
+    _: str = Depends(require_admin),
+) -> dict[str, Any]:
+    requests = await SocialConnectionService().admin_list_requests(status_filter)
+    return {"requests": requests}
+
+
+@admin_router.post("/social-connection-requests/{request_id}/status")
+async def admin_set_request_status(
+    request_id: int,
+    payload: AdminRequestStatusBody,
+    _: str = Depends(require_admin),
+) -> dict[str, Any]:
+    try:
+        return await SocialConnectionService().admin_set_request_status(
+            request_id, payload.status, payload.admin_note
+        )
+    except GrowlyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@admin_router.post("/social-accounts/link")
+async def admin_link_account(
+    payload: AdminLinkAccountBody,
+    _: str = Depends(require_admin),
+) -> dict[str, Any]:
+    try:
+        account = await SocialConnectionService().admin_link_account(
+            external_account_id=payload.external_account_id,
+            request_id=payload.request_id,
+            workspace_id=payload.workspace_id,
+        )
+    except BlotatoServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except GrowlyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "account": account}
+
+
+@admin_router.post("/social-accounts/unlink")
+async def admin_unlink_account(
+    payload: AdminUnlinkAccountBody,
+    _: str = Depends(require_admin),
+) -> dict[str, Any]:
+    return await SocialConnectionService().admin_unlink_account(
+        payload.workspace_id, payload.platform
+    )
+
+
 router.include_router(secured_router)
+router.include_router(admin_router)

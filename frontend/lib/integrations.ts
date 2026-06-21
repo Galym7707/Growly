@@ -31,6 +31,46 @@ export type BlotatoAccount = {
   name: string;
   display_name: string;
   connected: boolean;
+  linked_workspace_id?: string | null;
+  linked_status?: string | null;
+};
+
+export type SocialAccountInfo = {
+  platform: string;
+  provider: string;
+  external_account_id: string | null;
+  username: string | null;
+  display_name: string | null;
+  status: string;
+  connected_at: string | null;
+  last_checked_at: string | null;
+};
+
+export type SocialConnectionRequestInfo = {
+  id: number;
+  workspace_id?: string | null;
+  user_email?: string | null;
+  platform: string;
+  requested_username: string | null;
+  status: string;
+  admin_note: string | null;
+  user_note: string | null;
+  created_at: string | null;
+  resolved_at: string | null;
+};
+
+export type SocialConnectionState =
+  | "not_connected"
+  | "pending"
+  | "in_progress"
+  | "connected"
+  | "failed";
+
+export type SocialStatus = {
+  platform: string;
+  state: SocialConnectionState;
+  account: SocialAccountInfo | null;
+  request: SocialConnectionRequestInfo | null;
 };
 
 export type BlotatoMapping = {

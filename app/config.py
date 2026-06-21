@@ -83,6 +83,8 @@ class Settings(BaseSettings):
     secrets_encryption_key: SecretStr | None = Field(
         default=None, alias="SECRETS_ENCRYPTION_KEY"
     )
+    admin_emails: str = Field(default="", alias="ADMIN_EMAILS")
+    admin_secret: SecretStr | None = Field(default=None, alias="ADMIN_SECRET")
     web_allowed_origins: str = Field(
         default="http://localhost:3000",
         alias="WEB_ALLOWED_ORIGINS",
@@ -192,6 +194,18 @@ class Settings(BaseSettings):
 
     def notion_token(self) -> str:
         return self.require_secret("notion_api_key", "NOTION_API_KEY")
+
+    def admin_email_set(self) -> set[str]:
+        return {
+            email.strip().lower()
+            for email in self.admin_emails.split(",")
+            if email.strip()
+        }
+
+    def admin_secret_value(self) -> str | None:
+        if self.admin_secret and self.admin_secret.get_secret_value().strip():
+            return self.admin_secret.get_secret_value().strip()
+        return None
 
     def blotato_api_key_configured(self) -> bool:
         return bool(
