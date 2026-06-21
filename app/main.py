@@ -54,6 +54,11 @@ from app.api.bitrix_webhook import router as bitrix_router
 app.include_router(bitrix_router)
 
 
+@app.get("/", include_in_schema=False)
+async def root_health() -> dict[str, str]:
+    return {"status": "ok", "app": settings.app_name}
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {

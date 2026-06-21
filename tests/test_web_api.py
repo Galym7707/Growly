@@ -10,6 +10,13 @@ from app.config import get_settings
 from app.main import app
 
 
+def test_root_health_is_available_for_container_readiness() -> None:
+    response = TestClient(app).get("/")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
 def test_web_health_is_available_without_key_when_unconfigured(monkeypatch) -> None:
     settings = get_settings()
     monkeypatch.setattr(settings, "growly_web_api_key", None)
