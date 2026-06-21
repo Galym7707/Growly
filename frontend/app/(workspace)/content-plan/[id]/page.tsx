@@ -10,7 +10,8 @@ import { LoadingState, PageHeader } from "@/components/ui";
 import { apiErrorDebugInfo, apiRequest, type ApiDebugInfo } from "@/lib/api";
 import { contentPlanCopy } from "@/lib/content-plan-copy";
 import { useLanguage } from "@/lib/i18n";
-import type { ContentPlanResponse, Draft } from "@/lib/types";
+import type { IntegrationsStatus } from "@/lib/integrations";
+import type { ContentPlanItem, ContentPlanResponse, Draft } from "@/lib/types";
 
 export default function ContentPlanDetailPage() {
   const params = useParams<{ id: string }>();
@@ -19,8 +20,12 @@ export default function ContentPlanDetailPage() {
     items: [],
     source: null,
   });
+  const [integrations, setIntegrations] = useState<IntegrationsStatus | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [draftingId, setDraftingId] = useState<number | null>(null);
+  const [igModal, setIgModal] = useState(false);
   const [error, setError] = useState("");
   const [loadErrorDebug, setLoadErrorDebug] = useState<ApiDebugInfo | null>(
     null,
@@ -56,11 +61,28 @@ export default function ContentPlanDetailPage() {
     } finally {
       setLoading(false);
     }
+    // Integrations status is best-effort; failure should not block the plan.
+    try {
+      const status = await apiRequest<IntegrationsStatus>(
+        "/integrations/status",
+      );
+      setIntegrations(status);
+    } catch {
+      setIntegrations(null);
+    }
   }, [params.id]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  function targetsInstagram(item: ContentPlanItem): boolean {
+    return (item.channel || "").toLowerCase().includes("instagram");
+  }
+
+  function instagramConnected(): boolean {
+    return Boolean(integrations?.blotato.instagram?.selected);
+  }
 
   async function createDraft(itemId: number) {
     setDraftingId(itemId);
@@ -82,6 +104,20 @@ export default function ContentPlanDetailPage() {
     }
   }
 
+  function openDraft(item: ContentPlanItem) {
+    if (item.draft_id) router.push(`/drafts/${item.draft_id}`);
+  }
+
+  function goToDraftWithIntent(item: ContentPlanItem, intent: "publish" | "schedule") {
+    if (targetsInstagram(item) && !instagramConnected()) {
+      setIgModal(true);
+      return;
+    }
+    if (item.draft_id) {
+      router.push(`/drafts/${item.draft_id}?intent=${intent}`);
+    }
+  }
+
   return (
     <div className="workspace-page">
       <PageHeader
@@ -95,6 +131,18 @@ export default function ContentPlanDetailPage() {
           </Link>
         }
       />
+
+      {!loading && !loadErrorDebug ? (
+        <div className="plan-instruction">
+          <Icon name="book" />
+          <p>
+            {t(
+              "Выберите тему из плана и нажмите «Создать черновик», «Опубликовать» или «Запланировать». Для автопостинга в Instagram сначала подключите Blotato в разделе «Интеграции».",
+            )}
+          </p>
+        </div>
+      ) : null}
+
       {loading ? <LoadingState /> : null}
       {!loading && loadErrorDebug ? (
         <ContentPlanErrorPanel
@@ -132,8 +180,39 @@ export default function ContentPlanDetailPage() {
           draftingId={draftingId}
           items={data.items}
           onCreateDraft={createDraft}
+          onOpenDraft={openDraft}
+          onPublish={(item) => goToDraftWithIntent(item, "publish")}
+          onSchedule={(item) => goToDraftWithIntent(item, "schedule")}
           source={data.source}
         />
+      ) : null}
+
+      {igModal ? (
+        <div className="modal-backdrop" onClick={() => setIgModal(false)}>
+          <div
+            className="modal-card"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <h2>{t("Instagram не подключён")}</h2>
+            <p className="muted">
+              {t("Чтобы публиковать посты автоматически, подключите Instagram через Blotato.")}
+            </p>
+            <div className="form-actions">
+              <Link className="button button-primary" href="/settings/integrations">
+                {t("Перейти в Интеграции")}
+              </Link>
+              <button
+                className="button button-secondary"
+                onClick={() => setIgModal(false)}
+                type="button"
+              >
+                {t("Закрыть")}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

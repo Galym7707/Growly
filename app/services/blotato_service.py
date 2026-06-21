@@ -51,16 +51,35 @@ PAGE_PLATFORMS = {"facebook", "linkedin"}
 
 
 class BlotatoService:
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        api_key: str | None = None,
+    ) -> None:
         self.settings = settings or get_settings()
+        # A workspace-level key (stored by the user in the UI) takes priority
+        # over the env-level key; either makes the integration usable.
+        self._api_key_override = (api_key or "").strip() or None
 
     # -- configuration -----------------------------------------------------
 
+    def _effective_key(self) -> str | None:
+        # A workspace-level key (set by the user in the UI) always wins. The
+        # env-level key is only used when BLOTATO_ENABLED is on, preserving the
+        # legacy single-tenant behaviour.
+        if self._api_key_override:
+            return self._api_key_override
+        if self.settings.blotato_enabled and self.settings.blotato_api_key_configured():
+            return self.settings.blotato_key()
+        return None
+
     def api_key_configured(self) -> bool:
-        return self.settings.blotato_api_key_configured()
+        return self._effective_key() is not None
 
     def is_enabled(self) -> bool:
-        return bool(self.settings.blotato_enabled and self.api_key_configured())
+        # Enabled whenever a usable key exists (workspace override or the env
+        # key gated by BLOTATO_ENABLED).
+        return self.api_key_configured()
 
     def validate_platform(self, platform: str) -> bool:
         slug = (platform or "").strip().lower()
@@ -75,14 +94,17 @@ class BlotatoService:
         return self.settings.blotato_base_url.rstrip("/")
 
     def _headers(self) -> dict[str, str]:
+        key = self._effective_key()
+        if not key:
+            raise ConfigurationError("Blotato API key is not configured.")
         return {
-            BLOTATO_API_KEY_HEADER: self.settings.blotato_key(),
+            BLOTATO_API_KEY_HEADER: key,
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
 
     def _require_enabled(self) -> None:
-        if not self.settings.blotato_enabled:
+        if not self._api_key_override and not self.settings.blotato_enabled:
             raise BlotatoServiceError(
                 "Blotato не подключён. Автопубликация в соцсети временно недоступна."
             )
@@ -204,6 +226,16 @@ class BlotatoService:
             self._normalize_account(row) for row in self._account_rows(payload)
         ]
         return [account for account in accounts if account["id"]]
+
+    async def validate_api_key(self) -> dict[str, Any]:
+        """Verify the current key against Blotato by listing accounts.
+
+        Raises ``BlotatoServiceError`` on any provider/transport failure so the
+        caller can surface a friendly message without leaking the key.
+        """
+
+        accounts = await self.list_accounts()
+        return {"ok": True, "accounts_count": len(accounts), "accounts": accounts}
 
     async def get_account(self, account_id: str) -> dict[str, Any] | None:
         for account in await self.list_accounts():

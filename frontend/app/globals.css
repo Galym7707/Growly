@@ -1394,6 +1394,19 @@ input:disabled {
   color: var(--red);
 }
 
+.feedback-warning {
+  background: #fdf4e3;
+  color: #8a5a00;
+}
+
+.create-post-warning {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
 .feedback-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2805,6 +2818,56 @@ input:disabled {
   text-decoration: underline;
 }
 
+.plan-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.modal-backdrop {
+  align-items: center;
+  background: rgba(20, 20, 16, 0.45);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 50;
+}
+
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 14px;
+  max-width: 440px;
+  padding: 24px;
+  width: 100%;
+}
+
+.modal-card h2 {
+  font-size: 20px;
+  margin: 0;
+}
+
+.plan-instruction {
+  align-items: flex-start;
+  background: var(--green-soft, var(--surface-soft));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  color: var(--ink, inherit);
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+}
+
+.plan-instruction .icon {
+  color: var(--green);
+  flex-shrink: 0;
+}
+
 .chip {
   align-items: center;
   display: inline-flex;
@@ -2840,6 +2903,38 @@ input:disabled {
 
 .integration-card-wide {
   grid-column: 1 / -1;
+}
+
+.integration-block {
+  display: grid;
+  gap: 12px;
+}
+
+.integration-block h3 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.integration-block label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.integration-block label span {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.integration-block input,
+.integration-block select {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  width: 100%;
 }
 
 .integration-card-head {

@@ -1,7 +1,19 @@
+export type PlatformAccountStatus = {
+  selected: boolean;
+  account_id: string | null;
+  account_name: string | null;
+  available_count: number;
+};
+
 export type IntegrationsStatus = {
   telegram: { connected: boolean; channel_id?: string | null };
   notion: { connected: boolean; root_configured?: boolean };
-  blotato: { enabled: boolean; connected: boolean; accounts_count: number };
+  blotato: {
+    enabled: boolean;
+    connected: boolean;
+    accounts_count: number;
+    instagram?: PlatformAccountStatus | null;
+  };
 };
 
 export type BlotatoStatus = {
@@ -10,6 +22,7 @@ export type BlotatoStatus = {
   connected: boolean;
   accounts_count: number;
   last_checked_at: string | null;
+  instagram?: PlatformAccountStatus | null;
 };
 
 export type BlotatoAccount = {
@@ -95,6 +108,13 @@ export function platformConnected(
   return accounts.some(
     (account) => account.platform === slug && account.connected,
   );
+}
+
+export function accountsForPlatform(
+  accounts: BlotatoAccount[],
+  slug: string,
+): BlotatoAccount[] {
+  return accounts.filter((account) => account.platform === slug);
 }
 
 export type PublishRequestBody = {

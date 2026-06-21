@@ -52,6 +52,31 @@ class DraftsRepository:
         )
         return list(self.session.scalars(statement))
 
+    def latest_for_plan(self, content_plan_id: int) -> Draft | None:
+        return self.session.scalar(
+            select(Draft)
+            .where(Draft.content_plan_id == content_plan_id)
+            .order_by(desc(Draft.created_at))
+            .limit(1)
+        )
+
+    def latest_ids_for_plans(
+        self, content_plan_ids: list[int]
+    ) -> dict[int, int]:
+        """Map each content_plan_id to its most recent draft id (one query)."""
+        if not content_plan_ids:
+            return {}
+        rows = self.session.execute(
+            select(Draft.content_plan_id, Draft.id, Draft.status)
+            .where(Draft.content_plan_id.in_(content_plan_ids))
+            .order_by(desc(Draft.created_at))
+        ).all()
+        latest: dict[int, int] = {}
+        for plan_id, draft_id, _status in rows:
+            if plan_id is not None and plan_id not in latest:
+                latest[plan_id] = draft_id
+        return latest
+
     def list_recent(self, limit: int = 50) -> list[Draft]:
         return list(
             self.session.scalars(

@@ -15,6 +15,60 @@ type Variables = Record<string, string | number>;
 const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
   en: {
     "Язык": "Language",
+    "Instagram через Blotato": "Instagram via Blotato",
+    "Instagram подключён": "Instagram connected",
+    "Выберите аккаунт": "Choose an account",
+    "Подключите Blotato для автопостинга": "Connect Blotato for auto-posting",
+    "Growly будет отправлять готовые посты в Blotato, а Blotato опубликует их в Instagram.":
+      "Growly sends ready-made posts to Blotato, and Blotato publishes them to Instagram.",
+    "API-ключ Blotato": "Blotato API key",
+    "Вставьте BLOTATO_API_KEY": "Paste your BLOTATO_API_KEY",
+    "Ключ хранится только на сервере в зашифрованном виде и никогда не возвращается в браузер.":
+      "The key is stored encrypted on the server only and is never returned to the browser.",
+    "Сохранить API ключ": "Save API key",
+    "Blotato подключён. Выберите Instagram аккаунт для автопостинга.":
+      "Blotato connected. Choose an Instagram account for auto-posting.",
+    "Instagram аккаунты не найдены. Сначала подключите Instagram в кабинете Blotato, затем вернитесь сюда и нажмите «Обновить аккаунты».":
+      "No Instagram accounts found. Connect Instagram in your Blotato dashboard first, then come back and click “Refresh accounts”.",
+    "Instagram аккаунт": "Instagram account",
+    "Сохранить аккаунт": "Save account",
+    "Открыть кабинет Blotato": "Open Blotato dashboard",
+    "Аккаунт": "Account",
+    "Аккаунтов в Blotato": "Accounts in Blotato",
+    "Сменить аккаунт": "Change account",
+    "Отключить": "Disconnect",
+    "Отключаем": "Disconnecting",
+    "Другие соцсети": "Other social networks",
+    "Threads, TikTok, YouTube, Facebook, LinkedIn и X публикуются через Blotato.":
+      "Threads, TikTok, YouTube, Facebook, LinkedIn and X publish via Blotato.",
+    "Введите корректный API-ключ Blotato.": "Enter a valid Blotato API key.",
+    "Blotato подключён. Найдено аккаунтов: {count}.":
+      "Blotato connected. Accounts found: {count}.",
+    "Выберите Instagram аккаунт из списка.":
+      "Choose an Instagram account from the list.",
+    "Instagram аккаунт сохранён.": "Instagram account saved.",
+    "Выберите другой Instagram аккаунт.": "Choose a different Instagram account.",
+    "Blotato отключён.": "Blotato disconnected.",
+    "Опубликовать": "Publish",
+    "Создать черновик": "Create draft",
+    "Открыть черновик": "Open draft",
+    "Посмотреть": "View",
+    "Закрыть": "Close",
+    "Запланирован": "Scheduled",
+    "Выберите тему из плана и нажмите «Создать черновик», «Опубликовать» или «Запланировать». Для автопостинга в Instagram сначала подключите Blotato в разделе «Интеграции».":
+      "Pick a topic from the plan and click “Create draft”, “Publish” or “Schedule”. To auto-post to Instagram, connect Blotato in “Integrations” first.",
+    "Instagram не подключён": "Instagram not connected",
+    "Чтобы публиковать посты автоматически, подключите Instagram через Blotato.":
+      "To publish posts automatically, connect Instagram via Blotato.",
+    "Перейти в Интеграции": "Go to Integrations",
+    "Ссылка на изображение или видео": "Image or video URL",
+    "Для публикации в Instagram добавьте изображение или видео.":
+      "To publish to Instagram, add an image or video.",
+    "Instagram выбран, но автопостинг ещё не подключён. Подключите Instagram через Blotato в Интеграциях.":
+      "Instagram is selected, but auto-posting is not connected yet. Connect Instagram via Blotato in Integrations.",
+    "Подключить Instagram": "Connect Instagram",
+    "Сохраните API-ключ Blotato на странице «Интеграции»":
+      "Save the Blotato API key on the Integrations page",
     "Рабочее пространство": "Workspace",
     "Основная навигация": "Main navigation",
     "Обзор": "Overview",
@@ -602,6 +656,60 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
   },
   kk: {
     "Язык": "Тіл",
+    "Instagram через Blotato": "Blotato арқылы Instagram",
+    "Instagram подключён": "Instagram қосылды",
+    "Выберите аккаунт": "Аккаунтты таңдаңыз",
+    "Подключите Blotato для автопостинга": "Автопостинг үшін Blotato қосыңыз",
+    "Growly будет отправлять готовые посты в Blotato, а Blotato опубликует их в Instagram.":
+      "Growly дайын посттарды Blotato-ға жібереді, ал Blotato оларды Instagram-ға жариялайды.",
+    "API-ключ Blotato": "Blotato API кілті",
+    "Вставьте BLOTATO_API_KEY": "BLOTATO_API_KEY кілтін қойыңыз",
+    "Ключ хранится только на сервере в зашифрованном виде и никогда не возвращается в браузер.":
+      "Кілт тек серверде шифрланған түрде сақталады және браузерге ешқашан қайтарылмайды.",
+    "Сохранить API ключ": "API кілтін сақтау",
+    "Blotato подключён. Выберите Instagram аккаунт для автопостинга.":
+      "Blotato қосылды. Автопостинг үшін Instagram аккаунтын таңдаңыз.",
+    "Instagram аккаунты не найдены. Сначала подключите Instagram в кабинете Blotato, затем вернитесь сюда и нажмите «Обновить аккаунты».":
+      "Instagram аккаунттары табылмады. Алдымен Blotato кабинетінде Instagram-ды қосыңыз, содан кейін осында оралып «Аккаунттарды жаңарту» түймесін басыңыз.",
+    "Instagram аккаунт": "Instagram аккаунты",
+    "Сохранить аккаунт": "Аккаунтты сақтау",
+    "Открыть кабинет Blotato": "Blotato кабинетін ашу",
+    "Аккаунт": "Аккаунт",
+    "Аккаунтов в Blotato": "Blotato-дағы аккаунттар",
+    "Сменить аккаунт": "Аккаунтты ауыстыру",
+    "Отключить": "Ажырату",
+    "Отключаем": "Ажыратудамыз",
+    "Другие соцсети": "Басқа әлеуметтік желілер",
+    "Threads, TikTok, YouTube, Facebook, LinkedIn и X публикуются через Blotato.":
+      "Threads, TikTok, YouTube, Facebook, LinkedIn және X Blotato арқылы жарияланады.",
+    "Введите корректный API-ключ Blotato.": "Дұрыс Blotato API кілтін енгізіңіз.",
+    "Blotato подключён. Найдено аккаунтов: {count}.":
+      "Blotato қосылды. Табылған аккаунттар: {count}.",
+    "Выберите Instagram аккаунт из списка.":
+      "Тізімнен Instagram аккаунтын таңдаңыз.",
+    "Instagram аккаунт сохранён.": "Instagram аккаунты сақталды.",
+    "Выберите другой Instagram аккаунт.": "Басқа Instagram аккаунтын таңдаңыз.",
+    "Blotato отключён.": "Blotato ажыратылды.",
+    "Опубликовать": "Жариялау",
+    "Создать черновик": "Черновик жасау",
+    "Открыть черновик": "Черновикті ашу",
+    "Посмотреть": "Қарау",
+    "Закрыть": "Жабу",
+    "Запланирован": "Жоспарланған",
+    "Выберите тему из плана и нажмите «Создать черновик», «Опубликовать» или «Запланировать». Для автопостинга в Instagram сначала подключите Blotato в разделе «Интеграции».":
+      "Жоспардан тақырып таңдап, «Черновик жасау», «Жариялау» немесе «Жоспарлау» түймесін басыңыз. Instagram-ға автопостинг үшін алдымен «Интеграциялар» бөлімінде Blotato қосыңыз.",
+    "Instagram не подключён": "Instagram қосылмаған",
+    "Чтобы публиковать посты автоматически, подключите Instagram через Blotato.":
+      "Посттарды автоматты түрде жариялау үшін Blotato арқылы Instagram қосыңыз.",
+    "Перейти в Интеграции": "Интеграцияларға өту",
+    "Ссылка на изображение или видео": "Сурет немесе бейне сілтемесі",
+    "Для публикации в Instagram добавьте изображение или видео.":
+      "Instagram-ға жариялау үшін сурет немесе бейне қосыңыз.",
+    "Instagram выбран, но автопостинг ещё не подключён. Подключите Instagram через Blotato в Интеграциях.":
+      "Instagram таңдалды, бірақ автопостинг әлі қосылмаған. «Интеграциялар» бөлімінде Blotato арқылы Instagram қосыңыз.",
+    "Подключить Instagram": "Instagram қосу",
+    "Сохраните API-ключ Blotato на странице «Интеграции»":
+      "«Интеграциялар» бетінде Blotato API кілтін сақтаңыз",
     "Рабочее пространство": "Жұмыс кеңістігі",
     "Основная навигация": "Негізгі навигация",
     "Обзор": "Шолу",

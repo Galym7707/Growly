@@ -63,6 +63,7 @@ export type ContentPlanItem = {
   source_idea: string | null;
   why_recommended: string | null;
   status: string;
+  draft_id?: number | null;
   notion_synced: boolean;
   created_at: string;
   updated_at: string;

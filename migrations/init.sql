@@ -593,6 +593,7 @@ CREATE TABLE IF NOT EXISTS integrations (
     provider text NOT NULL,
     enabled boolean NOT NULL DEFAULT false,
     status text,
+    api_key_encrypted text,
     metadata_json jsonb NOT NULL DEFAULT '{}'::jsonb,
     last_checked_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -653,6 +654,7 @@ ALTER TABLE integrations ADD COLUMN IF NOT EXISTS workspace_id text;
 ALTER TABLE integrations ADD COLUMN IF NOT EXISTS provider text;
 ALTER TABLE integrations ADD COLUMN IF NOT EXISTS enabled boolean DEFAULT false;
 ALTER TABLE integrations ADD COLUMN IF NOT EXISTS status text;
+ALTER TABLE integrations ADD COLUMN IF NOT EXISTS api_key_encrypted text;
 ALTER TABLE integrations ADD COLUMN IF NOT EXISTS metadata_json jsonb DEFAULT '{}'::jsonb;
 ALTER TABLE integrations ADD COLUMN IF NOT EXISTS last_checked_at timestamptz;
 ALTER TABLE integrations ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();

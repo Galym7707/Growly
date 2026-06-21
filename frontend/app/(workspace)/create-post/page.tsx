@@ -20,7 +20,7 @@ import {
   latestContentPlanPath,
 } from "@/lib/content-plan";
 import { useLanguage } from "@/lib/i18n";
-import { PUBLISH_PLATFORMS } from "@/lib/integrations";
+import { PUBLISH_PLATFORMS, type IntegrationsStatus } from "@/lib/integrations";
 import type { ContentPlanResponse, Draft } from "@/lib/types";
 
 type Mode = "analysis" | "manual";
@@ -42,6 +42,9 @@ function CreatePostContent() {
   const activeTopic = activeContextTopic(active);
 
   const [latestPlanPath, setLatestPlanPath] = useState<string | null>(null);
+  const [integrations, setIntegrations] = useState<IntegrationsStatus | null>(
+    null,
+  );
   const [mode, setMode] = useState<Mode | null>(null);
   const [brief, setBrief] = useState("");
   const [channel, setChannel] = useState("telegram");
@@ -76,6 +79,25 @@ function CreatePostContent() {
   useEffect(() => {
     void loadPlan();
   }, [loadPlan]);
+
+  useEffect(() => {
+    let active = true;
+    void apiRequest<IntegrationsStatus>("/integrations/status")
+      .then((status) => {
+        if (active) setIntegrations(status);
+      })
+      .catch(() => {
+        if (active) setIntegrations(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const instagramSelected = channel === "instagram";
+  const instagramConnected = Boolean(
+    integrations?.blotato.instagram?.selected,
+  );
 
   const selectedChannel =
     PUBLISH_PLATFORMS.find((platform) => platform.slug === channel)?.label ||
@@ -143,6 +165,17 @@ function CreatePostContent() {
           ))}
         </select>
       </label>
+
+      {instagramSelected && !instagramConnected ? (
+        <div className="feedback feedback-warning create-post-warning">
+          <span>
+            {t("Instagram выбран, но автопостинг ещё не подключён. Подключите Instagram через Blotato в Интеграциях.")}
+          </span>
+          <Link className="button button-secondary button-small" href="/settings/integrations">
+            {t("Подключить Instagram")}
+          </Link>
+        </div>
+      ) : null}
 
       <div className="post-options">
         <button

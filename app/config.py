@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     growly_web_api_key: SecretStr | None = Field(
         default=None, alias="GROWLY_WEB_API_KEY"
     )
+    secrets_encryption_key: SecretStr | None = Field(
+        default=None, alias="SECRETS_ENCRYPTION_KEY"
+    )
     web_allowed_origins: str = Field(
         default="http://localhost:3000",
         alias="WEB_ALLOWED_ORIGINS",

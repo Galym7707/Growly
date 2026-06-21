@@ -25,7 +25,7 @@ from app.services.report_service import ReportService
 from app.services.social_publishing_service import SocialPublishingService
 from app.services.source_analysis_service import SourceAnalysisService
 from app.services.source_discovery_service import SourceDiscoveryService
-from app.utils.errors import GrowlyError
+from app.utils.errors import BlotatoServiceError, GrowlyError
 
 router = APIRouter(prefix="/api", tags=["web"])
 logger = logging.getLogger(__name__)
@@ -174,6 +174,15 @@ class BlotatoMappingItem(BaseModel):
 class BlotatoMappingsRequest(BaseModel):
     workspace_id: str | None = Field(default=None, max_length=200)
     mappings: list[BlotatoMappingItem] = Field(default_factory=list, max_length=40)
+
+
+class BlotatoConnectRequest(BaseModel):
+    api_key: str = Field(min_length=8, max_length=400)
+
+
+class BlotatoSelectAccountRequest(BaseModel):
+    platform: str = Field(default="instagram", min_length=1, max_length=50)
+    account_id: str | None = Field(default=None, max_length=200)
 
 
 class PublishBlotatoRequest(BaseModel):
@@ -431,9 +440,20 @@ def _content_plan_detail_response(plan_id: int) -> dict[str, Any]:
         if anchor is None:
             raise HTTPException(status_code=404, detail="Контент-план не найден.")
         rows = _content_plan_batch_rows(session, anchor)
+        try:
+            draft_ids = DraftsRepository(session).latest_ids_for_plans(
+                [row.id for row in rows]
+            )
+        except Exception:  # noqa: BLE001 - draft links are best-effort
+            draft_ids = {}
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            payload = _content_plan_payload(row)
+            payload["draft_id"] = draft_ids.get(row.id)
+            items.append(payload)
         return {
             "plan_id": min(row.id for row in rows),
-            "items": [_content_plan_payload(row) for row in rows],
+            "items": items,
             "source": _content_plan_source_payload(session),
         }
 
@@ -1080,6 +1100,39 @@ async def blotato_accounts(
 ) -> dict[str, Any]:
     accounts = await SocialPublishingService().list_accounts(workspace_id)
     return {"accounts": accounts}
+
+
+@secured_router.post("/integrations/blotato/connect")
+async def blotato_connect(
+    payload: BlotatoConnectRequest,
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    """Validate and store the Blotato API key (backend only, never returned)."""
+    try:
+        return await SocialPublishingService().save_api_key(
+            workspace_id, payload.api_key
+        )
+    except BlotatoServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except GrowlyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@secured_router.post("/integrations/blotato/disconnect")
+async def blotato_disconnect(
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    return await SocialPublishingService().disconnect(workspace_id)
+
+
+@secured_router.post("/integrations/blotato/select-account")
+async def blotato_select_account(
+    payload: BlotatoSelectAccountRequest,
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    return await SocialPublishingService().select_account(
+        workspace_id, payload.platform, payload.account_id
+    )
 
 
 @secured_router.post("/integrations/blotato/test")

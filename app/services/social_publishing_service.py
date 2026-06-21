@@ -18,6 +18,7 @@ from app.database import session_scope
 from app.models import Draft, ManualPublishPackage, Publication, SocialAccount
 from app.repositories.integrations_repo import IntegrationsRepository
 from app.services.blotato_service import BlotatoService
+from app.utils.crypto import decrypt_secret, encrypt_secret
 from app.utils.errors import BlotatoServiceError, GrowlyError
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,38 @@ class SocialPublishingService:
         blotato: BlotatoService | None = None,
     ) -> None:
         self.settings = settings or get_settings()
+        self._injected_blotato = blotato
         self.blotato = blotato or BlotatoService(self.settings)
+
+    # -- per-workspace Blotato client --------------------------------------
+
+    @staticmethod
+    def _stored_api_key(workspace: str) -> str | None:
+        try:
+            with session_scope() as session:
+                ref = IntegrationsRepository(session).get_api_key_ref(
+                    workspace, "blotato"
+                )
+        except Exception:  # noqa: BLE001 - missing DB must not block env fallback
+            logger.warning("Could not load stored Blotato key; using env fallback.")
+            return None
+        return decrypt_secret(ref) if ref else None
+
+    async def _blotato(self, workspace_id: str | None) -> BlotatoService:
+        """Resolve the Blotato client for a workspace.
+
+        Priority: an injected client (tests) → a workspace key stored via the UI
+        → the shared env-configured client. Returning ``self.blotato`` when there
+        is no stored key keeps the env path (and test monkeypatching) intact.
+        """
+
+        if self._injected_blotato is not None:
+            return self._injected_blotato
+        workspace = normalize_workspace(workspace_id)
+        stored_key = await asyncio.to_thread(self._stored_api_key, workspace)
+        if stored_key:
+            return BlotatoService(self.settings, api_key=stored_key)
+        return self.blotato
 
     # -- status ------------------------------------------------------------
 
@@ -78,25 +110,29 @@ class SocialPublishingService:
                 ),
             },
             "blotato": {
-                "enabled": bool(self.settings.blotato_enabled),
+                "enabled": blotato["enabled"],
                 "connected": blotato["connected"],
                 "accounts_count": blotato["accounts_count"],
+                "instagram": blotato.get("instagram"),
             },
         }
 
     async def blotato_status(self, workspace_id: str | None) -> dict[str, Any]:
         workspace = normalize_workspace(workspace_id)
-        configured = self.blotato.api_key_configured()
-        enabled = bool(self.settings.blotato_enabled)
+        blotato = await self._blotato(workspace_id)
+        configured = blotato.api_key_configured()
+        # "enabled" mirrors whether a usable key exists (UI- or env-supplied).
+        enabled = configured
         connected = False
         accounts_count = 0
+        accounts: list[dict[str, Any]] = []
         last_checked_at: str | None = None
-        if self.blotato.is_enabled():
+        if blotato.is_enabled():
             try:
-                accounts = await self.blotato.list_accounts()
+                accounts = await blotato.list_accounts()
                 accounts_count = len(accounts)
                 connected = True
-            except (BlotatoServiceError, Exception):  # noqa: BLE001 - status only
+            except Exception:  # noqa: BLE001 - status check only
                 connected = False
             last_checked_at = datetime.now(UTC).isoformat()
             await asyncio.to_thread(
@@ -106,16 +142,50 @@ class SocialPublishingService:
                 connected,
                 accounts_count,
             )
-        else:
-            accounts_count = await asyncio.to_thread(
-                self._stored_accounts_count, workspace
-            )
+            if connected:
+                await asyncio.to_thread(self._store_accounts, workspace, accounts)
+        if not accounts:
+            rows = await asyncio.to_thread(self._load_accounts, workspace)
+            accounts = [self._account_to_dict(row) for row in rows]
+            if not connected:
+                accounts_count = len(accounts)
+        instagram = await asyncio.to_thread(
+            self._platform_status, workspace, "instagram", accounts
+        )
         return {
             "enabled": enabled,
             "api_key_configured": configured,
             "connected": connected,
             "accounts_count": accounts_count,
             "last_checked_at": last_checked_at,
+            "instagram": instagram,
+        }
+
+    @staticmethod
+    def _platform_status(
+        workspace: str,
+        platform: str,
+        accounts: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        with session_scope() as session:
+            target = IntegrationsRepository(session).get_target(workspace, platform)
+            account_id = target.account_id if target else None
+        account = None
+        if account_id:
+            account = next(
+                (a for a in accounts if str(a.get("id")) == str(account_id)), None
+            )
+        return {
+            "selected": bool(account_id),
+            "account_id": account_id,
+            "account_name": (
+                (account.get("display_name") or account.get("name"))
+                if account
+                else None
+            ),
+            "available_count": sum(
+                1 for a in accounts if a.get("platform") == platform
+            ),
         }
 
     @staticmethod
@@ -145,12 +215,13 @@ class SocialPublishingService:
     # -- accounts ----------------------------------------------------------
 
     async def refresh_accounts(self, workspace_id: str | None) -> list[dict[str, Any]]:
-        if not self.blotato.is_enabled():
+        blotato = await self._blotato(workspace_id)
+        if not blotato.is_enabled():
             raise BlotatoServiceError(
                 "Blotato не подключён. Автопубликация в соцсети временно недоступна."
             )
         workspace = normalize_workspace(workspace_id)
-        accounts = await self.blotato.list_accounts()
+        accounts = await blotato.list_accounts()
         await asyncio.to_thread(self._store_accounts, workspace, accounts)
         return accounts
 
@@ -165,9 +236,10 @@ class SocialPublishingService:
 
     async def list_accounts(self, workspace_id: str | None) -> list[dict[str, Any]]:
         workspace = normalize_workspace(workspace_id)
-        if self.blotato.is_enabled():
+        blotato = await self._blotato(workspace_id)
+        if blotato.is_enabled():
             try:
-                accounts = await self.blotato.list_accounts()
+                accounts = await blotato.list_accounts()
                 await asyncio.to_thread(self._store_accounts, workspace, accounts)
                 return accounts
             except BlotatoServiceError:
@@ -191,11 +263,12 @@ class SocialPublishingService:
         }
 
     async def test_connection(self, workspace_id: str | None) -> dict[str, Any]:
-        if not self.settings.blotato_enabled:
+        blotato = await self._blotato(workspace_id)
+        if not blotato.is_enabled():
             raise BlotatoServiceError(
                 "Blotato не подключён. Автопубликация в соцсети временно недоступна."
             )
-        result = await self.blotato.test_connection()
+        result = await blotato.test_connection()
         await asyncio.to_thread(
             self._record_integration_status,
             normalize_workspace(workspace_id),
@@ -204,6 +277,81 @@ class SocialPublishingService:
             int(result.get("accounts_count") or 0),
         )
         return result
+
+    # -- connect / disconnect ---------------------------------------------
+
+    async def save_api_key(
+        self, workspace_id: str | None, api_key: str
+    ) -> dict[str, Any]:
+        """Validate the key against Blotato, then store it encrypted (backend
+        only). The key is never returned to the caller."""
+
+        cleaned = (api_key or "").strip()
+        if not cleaned:
+            raise GrowlyError("Введите API-ключ Blotato.")
+        probe = BlotatoService(self.settings, api_key=cleaned)
+        result = await probe.validate_api_key()
+        accounts = result.get("accounts") or []
+        workspace = normalize_workspace(workspace_id)
+        encrypted = encrypt_secret(cleaned)
+        await asyncio.to_thread(
+            self._persist_api_key, workspace, encrypted, accounts
+        )
+        return {
+            "ok": True,
+            "connected": True,
+            "accounts_count": len(accounts),
+        }
+
+    @staticmethod
+    def _persist_api_key(
+        workspace: str,
+        encrypted: str,
+        accounts: list[dict[str, Any]],
+    ) -> None:
+        with session_scope() as session:
+            repo = IntegrationsRepository(session)
+            repo.set_api_key(
+                workspace_id=workspace,
+                provider="blotato",
+                api_key_encrypted=encrypted,
+                status="connected",
+                enabled=True,
+            )
+            repo.replace_accounts(
+                workspace_id=workspace, provider="blotato", accounts=accounts
+            )
+
+    async def disconnect(self, workspace_id: str | None) -> dict[str, Any]:
+        workspace = normalize_workspace(workspace_id)
+        await asyncio.to_thread(self._clear_integration, workspace)
+        return {"ok": True, "connected": False}
+
+    @staticmethod
+    def _clear_integration(workspace: str) -> None:
+        with session_scope() as session:
+            repo = IntegrationsRepository(session)
+            repo.set_api_key(
+                workspace_id=workspace,
+                provider="blotato",
+                api_key_encrypted=None,
+                status="disconnected",
+                enabled=False,
+            )
+            repo.replace_accounts(
+                workspace_id=workspace, provider="blotato", accounts=[]
+            )
+
+    async def select_account(
+        self, workspace_id: str | None, platform: str, account_id: str | None
+    ) -> dict[str, Any]:
+        """Save (or clear) the chosen account for a platform (e.g. Instagram)."""
+
+        workspace = normalize_workspace(workspace_id)
+        saved = await self.save_mappings(
+            workspace, [{"platform": platform, "account_id": account_id}]
+        )
+        return {"ok": True, "mappings": saved}
 
     # -- mappings ----------------------------------------------------------
 
@@ -278,7 +426,8 @@ class SocialPublishingService:
         text = (draft.draft_text or "").strip()
         if not text:
             raise GrowlyError("Черновик пуст; публикация невозможна.")
-        if not self.blotato.is_enabled():
+        blotato = await self._blotato(workspace_id)
+        if not blotato.is_enabled():
             raise BlotatoServiceError(
                 "Blotato не подключён. Автопубликация в соцсети временно недоступна."
             )
@@ -298,7 +447,7 @@ class SocialPublishingService:
                     }
                 )
                 continue
-            if not self.blotato.validate_platform(slug):
+            if not blotato.validate_platform(slug):
                 submissions.append(
                     {
                         "platform": slug,
@@ -308,7 +457,7 @@ class SocialPublishingService:
                     }
                 )
                 continue
-            mapping = self.blotato.map_platform_to_account(workspace, slug)
+            mapping = blotato.map_platform_to_account(workspace, slug)
             if not mapping or not mapping.get("account_id"):
                 pub_id = await asyncio.to_thread(
                     self._record_publication,
@@ -334,7 +483,7 @@ class SocialPublishingService:
                 )
                 continue
             try:
-                result = await self.blotato.publish_post(
+                result = await blotato.publish_post(
                     platform=slug,
                     account_id=str(mapping["account_id"]),
                     text=text,
@@ -472,13 +621,14 @@ class SocialPublishingService:
                 else None
             ),
         }
+        blotato = await self._blotato(publication.workspace_id)
         if (
             publication.provider == "blotato"
             and publication.external_submission_id
-            and self.blotato.is_enabled()
+            and blotato.is_enabled()
         ):
             try:
-                provider_status = await self.blotato.get_post_status(
+                provider_status = await blotato.get_post_status(
                     publication.external_submission_id
                 )
                 payload["provider_status"] = provider_status.get("status")

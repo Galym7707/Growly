@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { FriendlyError } from "@/components/friendly-error";
@@ -34,6 +34,8 @@ type Mode = "now" | "schedule" | "manual";
 
 export default function DraftDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const intent = searchParams.get("intent");
   const draftId = Number(params.id);
   const { locale, t } = useLanguage();
 
@@ -45,8 +47,11 @@ export default function DraftDetailPage() {
   const [errorDebug, setErrorDebug] = useState<ApiDebugInfo | null>(null);
 
   const [selected, setSelected] = useState<string[]>([]);
-  const [mode, setMode] = useState<Mode>("now");
+  const [mode, setMode] = useState<Mode>(
+    intent === "schedule" ? "schedule" : "now",
+  );
   const [scheduledTime, setScheduledTime] = useState("");
+  const [mediaUrl, setMediaUrl] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [result, setResult] = useState<PublishResult | null>(null);
   const [packages, setPackages] = useState<ManualPackage[]>([]);
@@ -76,6 +81,18 @@ export default function DraftDetailPage() {
     void load();
   }, [load]);
 
+  // When opened from the content plan (with an intent), preselect the platform
+  // that matches the draft's channel so the user lands ready to publish.
+  useEffect(() => {
+    if (!draft || !intent || selected.length) return;
+    const channel = (draft.channel || "").toLowerCase();
+    const match = PUBLISH_PLATFORMS.find((platform) =>
+      channel.includes(platform.slug),
+    );
+    if (match) setSelected([match.slug]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, intent]);
+
   function toggle(slug: string) {
     setSelected((current) =>
       current.includes(slug)
@@ -85,17 +102,21 @@ export default function DraftDetailPage() {
   }
 
   const draftEmpty = !draft || !draft.text || !draft.text.trim();
+  const mediaUrls = mediaUrl.trim() ? [mediaUrl.trim()] : [];
+  // Instagram requires at least one image or video to publish.
+  const instagramNeedsMedia =
+    selected.includes("instagram") && mediaUrls.length === 0;
 
   async function publish() {
-    if (draftEmpty || !selected.length) return;
+    if (draftEmpty || !selected.length || instagramNeedsMedia) return;
     setPublishing(true);
     setActionError("");
     setResult(null);
     try {
       const body =
         mode === "schedule"
-          ? scheduleRequestBody(selected, scheduledTime, [], locale)
-          : publishRequestBody(selected, true, null, [], locale);
+          ? scheduleRequestBody(selected, scheduledTime, mediaUrls, locale)
+          : publishRequestBody(selected, true, null, mediaUrls, locale);
       const endpoint =
         mode === "schedule"
           ? `/drafts/${draftId}/schedule-blotato`
@@ -237,6 +258,18 @@ export default function DraftDetailPage() {
             </label>
           ) : null}
 
+          {mode !== "manual" ? (
+            <label className="schedule-input">
+              <span>{t("Ссылка на изображение или видео")}</span>
+              <input
+                onChange={(event) => setMediaUrl(event.target.value)}
+                placeholder="https://..."
+                type="url"
+                value={mediaUrl}
+              />
+            </label>
+          ) : null}
+
           {draftEmpty ? (
             <p className="plan-note plan-note-muted">
               {t("Черновик пуст — публикация недоступна.")}
@@ -262,6 +295,7 @@ export default function DraftDetailPage() {
                   publishing ||
                   draftEmpty ||
                   !selected.length ||
+                  instagramNeedsMedia ||
                   (mode === "schedule" && !scheduledTime)
                 }
                 onClick={publish}
@@ -276,6 +310,11 @@ export default function DraftDetailPage() {
               </button>
             )}
           </div>
+          {instagramNeedsMedia && mode !== "manual" ? (
+            <p className="plan-note plan-note-muted">
+              {t("Для публикации в Instagram добавьте изображение или видео.")}
+            </p>
+          ) : null}
 
           {result ? (
             <div className="publish-results">

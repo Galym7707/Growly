@@ -54,6 +54,33 @@ class IntegrationsRepository:
         self.session.flush()
         return integration
 
+    def set_api_key(
+        self,
+        *,
+        workspace_id: str | None,
+        provider: str,
+        api_key_encrypted: str | None,
+        status: str | None = None,
+        enabled: bool | None = None,
+    ) -> Integration:
+        integration = self.get_integration(workspace_id, provider)
+        if integration is None:
+            integration = Integration(workspace_id=workspace_id, provider=provider)
+            self.session.add(integration)
+        integration.api_key_encrypted = api_key_encrypted
+        if status is not None:
+            integration.status = status
+        if enabled is not None:
+            integration.enabled = enabled
+        self.session.flush()
+        return integration
+
+    def get_api_key_ref(
+        self, workspace_id: str | None, provider: str
+    ) -> str | None:
+        integration = self.get_integration(workspace_id, provider)
+        return integration.api_key_encrypted if integration else None
+
     # -- social accounts ---------------------------------------------------
 
     def list_accounts(

@@ -14,7 +14,7 @@ import {
 import { useLanguage } from "@/lib/i18n";
 
 const CHECKLIST = [
-  "Добавьте BLOTATO_API_KEY в секреты бэкенда",
+  "Сохраните API-ключ Blotato на странице «Интеграции»",
   "Подключите аккаунты в Blotato",
   "Обновите аккаунты в Growly",
   "Сопоставьте аккаунты с платформами",

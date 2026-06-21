@@ -1,4 +1,5 @@
 APScheduler>=3.11,<4
+cryptography>=42,<46
 fastapi>=0.115,<1
 httpx>=0.27,<1
 openai>=1.0,<3

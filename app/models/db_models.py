@@ -365,6 +365,7 @@ class Integration(Base, TimestampMixin):
         Boolean, server_default=text("false"), nullable=False
     )
     status: Mapped[str | None] = mapped_column(Text)
+    api_key_encrypted: Mapped[str | None] = mapped_column(Text)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(
         JSONB, server_default=text("'{}'::jsonb"), nullable=False
     )

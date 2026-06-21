@@ -6,7 +6,6 @@ import { Status } from "@/components/ui";
 import { formatDate } from "@/lib/api";
 import {
   contentPlanSourceText,
-  formatContentStatus,
   formatContentType,
   sourceDisplay,
 } from "@/lib/content-plan";
@@ -14,21 +13,65 @@ import { contentPlanCopy } from "@/lib/content-plan-copy";
 import { useLanguage } from "@/lib/i18n";
 import type { ContentPlanItem, ContentPlanSource } from "@/lib/types";
 
+type PlanItemState =
+  | "not_created"
+  | "draft"
+  | "scheduled"
+  | "published"
+  | "error";
+
 type Props = {
   draftingId?: number | null;
   items: ContentPlanItem[];
   onCreateDraft?: (itemId: number) => void;
+  onOpenDraft?: (item: ContentPlanItem) => void;
+  onPublish?: (item: ContentPlanItem) => void;
+  onSchedule?: (item: ContentPlanItem) => void;
   source?: ContentPlanSource | null;
 };
+
+function itemState(item: ContentPlanItem): PlanItemState {
+  const status = (item.status || "").toLowerCase();
+  if (status === "published") return "published";
+  if (status === "scheduled") return "scheduled";
+  if (status === "error" || status === "failed") return "error";
+  if (item.draft_id || status === "drafted" || status === "draft") {
+    // A plan item starts as "draft" in the DB but only has a real draft once
+    // generated. Treat it as a draft only when a draft actually exists.
+    return item.draft_id ? "draft" : "not_created";
+  }
+  return "not_created";
+}
 
 export function ContentPlanView({
   draftingId = null,
   items,
   onCreateDraft,
+  onOpenDraft,
+  onPublish,
+  onSchedule,
   source = null,
 }: Props) {
-  const { locale } = useLanguage();
+  const { locale, t } = useLanguage();
   const copy = contentPlanCopy(locale);
+  const hasActions = Boolean(
+    onCreateDraft || onOpenDraft || onPublish || onSchedule,
+  );
+
+  const stateLabels: Record<PlanItemState, string> = {
+    not_created: "Не создан",
+    draft: "Черновик",
+    scheduled: "Запланирован",
+    published: "Опубликован",
+    error: "Ошибка",
+  };
+  const stateBadge: Record<PlanItemState, string> = {
+    not_created: "pending",
+    draft: "draft",
+    scheduled: "scheduled",
+    published: "active",
+    error: "failed",
+  };
 
   return (
     <section className="workspace-section content-plan-results">
@@ -57,13 +100,14 @@ export function ContentPlanView({
                 <th>{copy.table.cta}</th>
                 <th>{copy.table.source}</th>
                 <th>{copy.table.status}</th>
-                {onCreateDraft ? <th /> : null}
+                {hasActions ? <th>{t("Действия")}</th> : null}
               </tr>
             </thead>
             <tbody>
               {items.map((item) => {
-                const source = sourceDisplay(item.source_idea, locale);
-                const statusLabel = formatContentStatus(item.status, locale);
+                const itemSource = sourceDisplay(item.source_idea, locale);
+                const state = itemState(item);
+                const busy = draftingId === item.id;
                 return (
                   <tr key={item.id}>
                     <td>{formatDate(item.publish_date, locale)}</td>
@@ -79,47 +123,98 @@ export function ContentPlanView({
                     </td>
                     <td>{item.cta || copy.unknown}</td>
                     <td>
-                      {source.url ? (
+                      {itemSource.url ? (
                         <a
                           className="source-label"
-                          href={source.url}
+                          href={itemSource.url}
                           rel="noreferrer"
                           target="_blank"
-                          title={item.source_idea || source.url}
+                          title={item.source_idea || itemSource.url}
                         >
-                          {source.label}
+                          {itemSource.label}
                           <Icon name="external" />
                         </a>
                       ) : (
                         <span
                           className="source-label source-label-static"
-                          title={item.source_idea || source.label}
+                          title={item.source_idea || itemSource.label}
                         >
-                          {source.label}
+                          {itemSource.label}
                         </span>
                       )}
                     </td>
                     <td>
-                      <Status value={item.status}>
-                        {statusLabel || item.status}
+                      <Status value={stateBadge[state]}>
+                        {stateLabels[state]}
                       </Status>
                     </td>
-                    {onCreateDraft ? (
+                    {hasActions ? (
                       <td>
-                        <button
-                          className="button button-secondary button-small"
-                          disabled={
-                            draftingId === item.id || item.status === "drafted"
-                          }
-                          onClick={() => onCreateDraft(item.id)}
-                          type="button"
-                        >
-                          {draftingId === item.id
-                            ? copy.creating
-                            : item.status === "drafted"
-                              ? copy.created
-                              : copy.createDraft}
-                        </button>
+                        <div className="plan-row-actions">
+                          {state === "not_created" ? (
+                            <button
+                              className="button button-primary button-small"
+                              disabled={busy || !onCreateDraft}
+                              onClick={() => onCreateDraft?.(item.id)}
+                              type="button"
+                            >
+                              {busy ? copy.creating : t("Создать черновик")}
+                            </button>
+                          ) : null}
+
+                          {state === "draft" ? (
+                            <>
+                              <button
+                                className="button button-secondary button-small"
+                                disabled={busy}
+                                onClick={() => onOpenDraft?.(item)}
+                                type="button"
+                              >
+                                {t("Открыть черновик")}
+                              </button>
+                              <button
+                                className="button button-primary button-small"
+                                disabled={busy}
+                                onClick={() => onPublish?.(item)}
+                                type="button"
+                              >
+                                {t("Опубликовать")}
+                              </button>
+                              <button
+                                className="button button-secondary button-small"
+                                disabled={busy}
+                                onClick={() => onSchedule?.(item)}
+                                type="button"
+                              >
+                                {t("Запланировать")}
+                              </button>
+                            </>
+                          ) : null}
+
+                          {state === "scheduled" || state === "published" ? (
+                            <button
+                              className="button button-secondary button-small"
+                              disabled={busy}
+                              onClick={() => onOpenDraft?.(item)}
+                              type="button"
+                            >
+                              {state === "published"
+                                ? t("Посмотреть")
+                                : t("Открыть")}
+                            </button>
+                          ) : null}
+
+                          {state === "error" ? (
+                            <button
+                              className="button button-primary button-small"
+                              disabled={busy}
+                              onClick={() => onPublish?.(item)}
+                              type="button"
+                            >
+                              {t("Повторить")}
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
                     ) : null}
                   </tr>
