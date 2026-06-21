@@ -129,6 +129,8 @@ export type ContentPlanSelections = {
 };
 
 export type ContentPlanSubmitBody = {
+  weekly_objective: string;
+  business: Record<string, unknown>;
   report_id: number | null;
   goal: string;
   audience: string;
@@ -149,15 +151,35 @@ export function contentPlanSubmitBody(
   selections: ContentPlanSelections,
   locale: string,
 ): ContentPlanSubmitBody {
+  const goal = selections.goal.trim();
+  const audience = selections.audience.trim();
+  const offer = selections.offer.trim();
+  const cta = selections.cta.trim();
+  const customInstruction = selections.customInstruction.trim();
+  const weeklyObjective = [goal, audience, offer, cta, customInstruction]
+    .filter(Boolean)
+    .join("; ");
+
   return {
+    weekly_objective: weeklyObjective,
+    business: {
+      language: locale,
+      goal,
+      target_audience: audience,
+      offer,
+      preferred_channels: selections.channels,
+      content_types: selections.contentTypes,
+      cta,
+      custom_instruction: customInstruction,
+    },
     report_id: reportId,
-    goal: selections.goal.trim(),
-    audience: selections.audience.trim(),
-    offer: selections.offer.trim(),
+    goal,
+    audience,
+    offer,
     channels: selections.channels,
     content_types: selections.contentTypes,
-    cta: selections.cta.trim(),
-    custom_instruction: selections.customInstruction.trim(),
+    cta,
+    custom_instruction: customInstruction,
     language: locale,
   };
 }

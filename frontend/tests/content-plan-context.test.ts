@@ -47,6 +47,13 @@ describe("content plan report context", () => {
     );
     expect(body.report_id).toBe(23);
     expect(body.goal).toBe("Получить заявки на доставку");
+    expect(body.weekly_objective).toContain("Получить заявки на доставку");
+    expect(body.weekly_objective).toContain("спокойный тон");
+    expect(body.business).toMatchObject({
+      language: "ru",
+      target_audience: "владельцы интернет-магазинов",
+      preferred_channels: ["telegram", "instagram"],
+    });
     expect(body.channels).toEqual(["telegram", "instagram"]);
     expect(body.content_types).toEqual(["post"]);
     expect(body.cta).toBe("Оставить заявку");
@@ -69,6 +76,7 @@ describe("content plan report context", () => {
       "en",
     );
     expect(body.report_id).toBeNull();
+    expect(body.weekly_objective).toBe("Просто несколько постов");
     expect(body.custom_instruction).toBe("Просто несколько постов");
   });
 });
