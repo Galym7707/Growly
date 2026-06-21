@@ -99,7 +99,7 @@ async def test_list_accounts_calls_provider_with_header(monkeypatch) -> None:
     accounts = await BlotatoService(get_settings()).list_accounts()
 
     assert FakeClient.captured["method"] == "GET"
-    assert FakeClient.captured["url"].endswith("/accounts")
+    assert FakeClient.captured["url"].endswith("/users/me/accounts")
     assert FakeClient.captured["headers"].get("blotato-api-key") == "abc123"
     assert accounts[0]["platform"] == "instagram"
     assert accounts[0]["display_name"] == "Brand IG"

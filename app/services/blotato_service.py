@@ -199,7 +199,7 @@ class BlotatoService:
         }
 
     async def list_accounts(self) -> list[dict[str, Any]]:
-        payload = await self._request("GET", "/accounts")
+        payload = await self._request("GET", "/users/me/accounts")
         accounts = [
             self._normalize_account(row) for row in self._account_rows(payload)
         ]
