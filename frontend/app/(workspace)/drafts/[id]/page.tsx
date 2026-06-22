@@ -83,6 +83,14 @@ export default function DraftDetailPage() {
   const [generating, setGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState("");
   const mediaInputRef = useRef<HTMLInputElement>(null);
+  // Tracks the active generation so the user can abort a stuck Blotato poll
+  // instead of waiting out the full timeout with the UI locked.
+  const generationRef = useRef<{
+    cancelled: boolean;
+    timer: number | null;
+    resolveSleep: (() => void) | null;
+    controller: AbortController;
+  } | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [result, setResult] = useState<PublishResult | null>(null);
   const [packages, setPackages] = useState<ManualPackage[]>([]);
@@ -115,6 +123,20 @@ export default function DraftDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Abort any in-flight visual generation if the user leaves the page so the
+  // poll loop doesn't keep running (and updating state) after unmount.
+  useEffect(() => {
+    return () => {
+      const token = generationRef.current;
+      if (token) {
+        token.cancelled = true;
+        if (token.timer !== null) window.clearTimeout(token.timer);
+        token.resolveSleep?.();
+        token.controller.abort();
+      }
+    };
+  }, []);
 
   // When opened from the content plan (with an intent), preselect the platform
   // that matches the draft's channel so the user lands ready to publish.
@@ -208,6 +230,13 @@ export default function DraftDetailPage() {
   async function generateVisual() {
     const prompt = visualPrompt.trim();
     if (!prompt || generating) return;
+    const token = {
+      cancelled: false,
+      timer: null as number | null,
+      resolveSleep: null as (() => void) | null,
+      controller: new AbortController(),
+    };
+    generationRef.current = token;
     setGenerating(true);
     setGenerationStatus(t("В очереди"));
     setActionError("");
@@ -221,6 +250,7 @@ export default function DraftDetailPage() {
             prompt,
             title: draft?.title || null,
           }),
+          signal: token.controller.signal,
         },
       );
       if (!visual.id) {
@@ -228,6 +258,7 @@ export default function DraftDetailPage() {
       }
       const visualId = visual.id;
       for (let attempt = 0; attempt < VISUAL_POLL_ATTEMPTS; attempt += 1) {
+        if (token.cancelled) return;
         setGenerationStatus(t(visualStatusLabel(visual.status)));
         if (visual.status === "done") {
           if (!visual.media_urls.length) {
@@ -249,17 +280,25 @@ export default function DraftDetailPage() {
         if (visual.status === "creation-from-template-failed") {
           throw new Error(t("Blotato не удалось сгенерировать медиа."));
         }
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, VISUAL_POLL_INTERVAL_MS),
-        );
+        // Cancellable wait: the cancel button clears this timer to abort early
+        // instead of leaving the user stuck for the full poll interval.
+        await new Promise<void>((resolve) => {
+          token.resolveSleep = resolve;
+          token.timer = window.setTimeout(resolve, VISUAL_POLL_INTERVAL_MS);
+        });
+        if (token.cancelled) return;
         visual = await apiRequest<VisualResult>(
           `/integrations/blotato/visuals/${encodeURIComponent(visualId)}`,
+          { signal: token.controller.signal },
         );
       }
       throw new Error(
         t("Генерация заняла слишком много времени. Проверьте результат в Blotato."),
       );
     } catch (value) {
+      // A user-triggered cancel aborts the in-flight request; that is expected,
+      // so don't surface it as an error.
+      if (token.cancelled) return;
       setGenerationStatus("");
       setActionError(
         value instanceof Error
@@ -267,8 +306,22 @@ export default function DraftDetailPage() {
           : t("Blotato не удалось сгенерировать медиа."),
       );
     } finally {
-      setGenerating(false);
+      if (generationRef.current === token) generationRef.current = null;
+      if (!token.cancelled) setGenerating(false);
     }
+  }
+
+  function cancelGeneration() {
+    const token = generationRef.current;
+    if (token) {
+      token.cancelled = true;
+      if (token.timer !== null) window.clearTimeout(token.timer);
+      token.resolveSleep?.();
+      token.controller.abort();
+      generationRef.current = null;
+    }
+    setGenerating(false);
+    setGenerationStatus("");
   }
 
   async function publish() {
@@ -523,6 +576,16 @@ export default function DraftDetailPage() {
                   <p className="media-generation-status">
                     <Icon name={generating ? "sync" : "check"} />
                     {generationStatus}
+                    {generating ? (
+                      <button
+                        className="button button-secondary button-small"
+                        onClick={cancelGeneration}
+                        type="button"
+                      >
+                        <Icon name="close" />
+                        {t("Отменить")}
+                      </button>
+                    ) : null}
                   </p>
                 ) : null}
               </div>
