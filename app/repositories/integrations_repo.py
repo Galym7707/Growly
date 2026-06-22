@@ -105,23 +105,40 @@ class IntegrationsRepository:
         provider: str,
         accounts: list[dict[str, Any]],
     ) -> list[SocialAccount]:
-        for existing in self.list_accounts(workspace_id, provider):
-            self.session.delete(existing)
-        self.session.flush()
+        existing_rows = self.list_accounts(workspace_id, provider)
+        by_external_id = {
+            row.external_account_id: row
+            for row in existing_rows
+            if row.external_account_id
+        }
         rows: list[SocialAccount] = []
+        seen_ids: set[str] = set()
         for account in accounts:
-            row = SocialAccount(
-                workspace_id=workspace_id,
-                provider=provider,
-                platform=str(account.get("platform") or "").strip().lower() or None,
-                external_account_id=str(account.get("id") or "") or None,
-                display_name=account.get("display_name"),
-                username=account.get("name"),
-                status="connected" if account.get("connected", True) else "error",
-                metadata_json={},
+            external_id = str(account.get("id") or "").strip()
+            if not external_id:
+                continue
+            seen_ids.add(external_id)
+            row = by_external_id.get(external_id)
+            if row is None:
+                row = SocialAccount(
+                    workspace_id=workspace_id,
+                    provider=provider,
+                    external_account_id=external_id,
+                    metadata_json={},
+                )
+                self.session.add(row)
+            row.platform = (
+                str(account.get("platform") or "").strip().lower() or None
             )
-            self.session.add(row)
+            row.display_name = account.get("display_name")
+            row.username = account.get("name")
+            row.status = "connected" if account.get("connected", True) else "error"
+            row.last_checked_at = datetime.now(UTC)
             rows.append(row)
+        for row in existing_rows:
+            if row.external_account_id and row.external_account_id not in seen_ids:
+                row.status = "disconnected"
+                row.last_checked_at = datetime.now(UTC)
         self.session.flush()
         return rows
 

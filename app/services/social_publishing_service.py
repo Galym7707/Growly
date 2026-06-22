@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
+from threading import Lock
 from typing import Any
 
 from app.config import Settings, get_settings
@@ -39,6 +40,7 @@ PUBLISHABLE_PLATFORMS = [
 ]
 
 VIDEO_PLATFORMS = {"tiktok", "youtube"}
+_ACCOUNT_SYNC_LOCK = Lock()
 
 
 def normalize_workspace(workspace_id: str | None) -> str:
@@ -227,12 +229,36 @@ class SocialPublishingService:
 
     @staticmethod
     def _store_accounts(workspace: str, accounts: list[dict[str, Any]]) -> None:
-        with session_scope() as session:
-            IntegrationsRepository(session).replace_accounts(
-                workspace_id=workspace,
-                provider="blotato",
-                accounts=accounts,
-            )
+        with _ACCOUNT_SYNC_LOCK:
+            with session_scope() as session:
+                IntegrationsRepository(session).replace_accounts(
+                    workspace_id=workspace,
+                    provider="blotato",
+                    accounts=accounts,
+                )
+
+    async def create_media_upload(
+        self, workspace_id: str | None, filename: str
+    ) -> dict[str, str]:
+        blotato = await self._blotato(workspace_id)
+        return await blotato.create_media_upload(filename)
+
+    async def create_visual(
+        self,
+        workspace_id: str | None,
+        *,
+        kind: str,
+        prompt: str,
+        title: str | None,
+    ) -> dict[str, Any]:
+        blotato = await self._blotato(workspace_id)
+        return await blotato.create_visual(kind=kind, prompt=prompt, title=title)
+
+    async def visual_status(
+        self, workspace_id: str | None, visual_id: str
+    ) -> dict[str, Any]:
+        blotato = await self._blotato(workspace_id)
+        return await blotato.get_visual_status(visual_id)
 
     async def list_accounts(self, workspace_id: str | None) -> list[dict[str, Any]]:
         workspace = normalize_workspace(workspace_id)
@@ -519,6 +545,10 @@ class SocialPublishingService:
                     }
                 )
             except BlotatoServiceError as exc:
+                provider_message = (exc.provider_message or "").strip()
+                error_message = str(exc)
+                if provider_message and provider_message != error_message:
+                    error_message = f"{error_message} Blotato: {provider_message}"
                 pub_id = await asyncio.to_thread(
                     self._record_publication,
                     workspace,
@@ -530,7 +560,7 @@ class SocialPublishingService:
                     None,
                     None,
                     None,
-                    str(exc),
+                    error_message,
                 )
                 publication_ids.append(pub_id)
                 submissions.append(
@@ -538,10 +568,13 @@ class SocialPublishingService:
                         "platform": slug,
                         "post_submission_id": None,
                         "status": "failed",
-                        "error": str(exc),
+                        "error": error_message,
                     }
                 )
-        if publication_ids and draft.status != "published":
+        if (
+            any(item.get("status") == "submitted" for item in submissions)
+            and draft.status != "published"
+        ):
             await asyncio.to_thread(self._mark_draft_published, draft_id)
         return {
             "status": "submitted" if publication_ids else "no_targets",

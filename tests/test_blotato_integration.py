@@ -128,8 +128,89 @@ async def test_publish_post_builds_blotato_body(monkeypatch) -> None:
     assert captured["json"]["post"]["accountId"] == "acc-1"
     assert captured["json"]["post"]["target"]["targetType"] == "twitter"
     assert captured["json"]["post"]["content"]["text"] == "hello"
+    assert captured["json"]["post"]["content"]["platform"] == "twitter"
     assert result["post_submission_id"] == "sub-1"
     assert result["url"] == "https://x/p"
+
+
+@pytest.mark.asyncio
+async def test_threads_payload_matches_provider_contract(monkeypatch) -> None:
+    _enable_blotato(monkeypatch)
+    captured: dict = {}
+
+    async def fake_request(self, method, path, *, json=None):
+        captured["json"] = json
+        return {"submissionId": "threads-1", "status": "submitted"}
+
+    monkeypatch.setattr(BlotatoService, "_request", fake_request)
+    await BlotatoService(get_settings()).publish_post(
+        platform="threads", account_id="7520", text="hello", media_urls=[]
+    )
+
+    post = captured["json"]["post"]
+    assert post["content"]["platform"] == "threads"
+    assert post["target"]["targetType"] == "threads"
+
+
+@pytest.mark.asyncio
+async def test_create_media_upload_returns_presigned_and_public_urls(monkeypatch) -> None:
+    _enable_blotato(monkeypatch)
+    captured: dict = {}
+
+    async def fake_request(self, method, path, *, json=None):
+        captured.update({"method": method, "path": path, "json": json})
+        return {
+            "presignedUrl": "https://upload.example/signed",
+            "publicUrl": "https://cdn.example/photo.jpg",
+        }
+
+    monkeypatch.setattr(BlotatoService, "_request", fake_request)
+    result = await BlotatoService(get_settings()).create_media_upload("photo.jpg")
+
+    assert captured == {
+        "method": "POST",
+        "path": "/media/uploads",
+        "json": {"filename": "photo.jpg"},
+    }
+    assert result["public_url"] == "https://cdn.example/photo.jpg"
+
+
+@pytest.mark.asyncio
+async def test_create_visual_uses_supported_template(monkeypatch) -> None:
+    _enable_blotato(monkeypatch)
+    captured: dict = {}
+
+    async def fake_request(self, method, path, *, json=None):
+        captured.update({"method": method, "path": path, "json": json})
+        return {"item": {"id": "visual-1", "status": "queueing"}}
+
+    monkeypatch.setattr(BlotatoService, "_request", fake_request)
+    result = await BlotatoService(get_settings()).create_visual(
+        kind="video", prompt="Create a short product video", title="Post visual"
+    )
+
+    assert captured["path"] == "/videos/from-templates"
+    assert captured["json"]["templateId"] == "5903fe43-514d-40ee-a060-0d6628c5f8fd"
+    assert captured["json"]["render"] is True
+    assert result == {"id": "visual-1", "status": "queueing", "media_urls": []}
+
+
+def test_visual_status_normalizes_generated_media() -> None:
+    result = BlotatoService._normalize_visual(
+        {
+            "item": {
+                "id": "visual-1",
+                "status": "done",
+                "mediaUrl": "https://cdn.example/video.mp4",
+                "imageUrls": ["https://cdn.example/slide.jpg"],
+            }
+        }
+    )
+    assert result["status"] == "done"
+    assert result["media_urls"] == [
+        "https://cdn.example/slide.jpg",
+        "https://cdn.example/video.mp4",
+    ]
 
 
 def test_map_platform_to_account_uses_env_fallback(monkeypatch) -> None:
@@ -241,6 +322,12 @@ async def test_provider_error_is_saved_safely(monkeypatch) -> None:
         mapping={"account_id": "acc-1", "page_id": None},
         raises=BlotatoServiceError("Не удалось отправить публикацию.", status=500, provider_message="boom"),
     )
+    marked_published: list[int] = []
+    monkeypatch.setattr(
+        service,
+        "_mark_draft_published",
+        lambda draft_id: marked_published.append(draft_id),
+    )
     result = await service.publish_draft(
         workspace_id="default",
         draft_id=7,
@@ -252,6 +339,8 @@ async def test_provider_error_is_saved_safely(monkeypatch) -> None:
     )
     assert result["blotato_submissions"][0]["status"] == "failed"
     assert recorded[0]["status"] == "failed"
+    assert "Blotato: boom" in result["blotato_submissions"][0]["error"]
+    assert marked_published == []
     # The recorded error message must not contain the API key.
     assert "test-secret-key" not in str(recorded[0]["error_message"])
 

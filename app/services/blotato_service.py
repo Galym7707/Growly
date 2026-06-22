@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -48,6 +49,22 @@ PLATFORM_TARGET = {
 
 # Platforms that publish to a page/organization in addition to an account.
 PAGE_PLATFORMS = {"facebook", "linkedin"}
+
+VISUAL_TEMPLATE_IDS = {
+    "image": "53cfec04-2500-41cf-8cc1-ba670d2c341a",
+    "video": "5903fe43-514d-40ee-a060-0d6628c5f8fd",
+}
+
+MEDIA_EXTENSIONS = {
+    ".gif",
+    ".jpeg",
+    ".jpg",
+    ".mov",
+    ".mp4",
+    ".png",
+    ".webm",
+    ".webp",
+}
 
 
 class BlotatoService:
@@ -316,10 +333,15 @@ class BlotatoService:
         page_id: str | None = None,
         scheduled_time: str | None = None,
     ) -> dict[str, Any]:
+        target_type = self.target_type(platform)
         post: dict[str, Any] = {
             "accountId": str(account_id),
-            "target": {"targetType": self.target_type(platform)},
-            "content": {"text": text, "mediaUrls": media_urls or []},
+            "target": {"targetType": target_type},
+            "content": {
+                "text": text,
+                "mediaUrls": media_urls or [],
+                "platform": target_type,
+            },
         }
         if page_id and platform.strip().lower() in PAGE_PLATFORMS:
             post["target"]["pageId"] = str(page_id)
@@ -328,6 +350,59 @@ class BlotatoService:
             body["scheduledTime"] = scheduled_time
         payload = await self._request("POST", "/posts", json=body)
         return self._normalize_submission(payload)
+
+    async def create_media_upload(self, filename: str) -> dict[str, str]:
+        safe_name = Path((filename or "").strip()).name
+        extension = Path(safe_name).suffix.lower()
+        if not safe_name or extension not in MEDIA_EXTENSIONS:
+            raise BlotatoServiceError(
+                "Поддерживаются изображения JPG, PNG, WEBP, GIF и видео MP4, MOV, WEBM."
+            )
+        payload = await self._request(
+            "POST",
+            "/media/uploads",
+            json={"filename": safe_name[:240]},
+        )
+        data = payload if isinstance(payload, dict) else {}
+        presigned_url = data.get("presignedUrl") or data.get("presigned_url")
+        public_url = data.get("publicUrl") or data.get("public_url")
+        if not presigned_url or not public_url:
+            raise BlotatoServiceError(
+                "Blotato не вернул ссылку для загрузки файла."
+            )
+        return {
+            "presigned_url": str(presigned_url),
+            "public_url": str(public_url),
+        }
+
+    async def create_visual(
+        self,
+        *,
+        kind: str,
+        prompt: str,
+        title: str | None = None,
+    ) -> dict[str, Any]:
+        template_id = VISUAL_TEMPLATE_IDS.get((kind or "").strip().lower())
+        if not template_id:
+            raise BlotatoServiceError("Неизвестный тип медиа для генерации.")
+        body: dict[str, Any] = {
+            "templateId": template_id,
+            "inputs": {},
+            "prompt": prompt.strip(),
+            "render": True,
+        }
+        if title and title.strip():
+            body["title"] = title.strip()[:200]
+        payload = await self._request(
+            "POST", "/videos/from-templates", json=body
+        )
+        return self._normalize_visual(payload)
+
+    async def get_visual_status(self, visual_id: str) -> dict[str, Any]:
+        payload = await self._request(
+            "GET", f"/videos/creations/{visual_id.strip()}"
+        )
+        return self._normalize_visual(payload)
 
     async def schedule_post(
         self,
@@ -375,4 +450,20 @@ class BlotatoService:
             "status": status,
             "url": str(url) if url else None,
             "checked_at": datetime.now(UTC).isoformat(),
+        }
+
+    @staticmethod
+    def _normalize_visual(payload: Any) -> dict[str, Any]:
+        data = payload if isinstance(payload, dict) else {}
+        item = data.get("item") if isinstance(data.get("item"), dict) else data
+        visual_id = item.get("id") or item.get("creationId")
+        media_url = item.get("mediaUrl") or item.get("media_url")
+        image_urls = item.get("imageUrls") or item.get("image_urls") or []
+        urls = [str(url) for url in image_urls if isinstance(url, str) and url]
+        if isinstance(media_url, str) and media_url:
+            urls.append(media_url)
+        return {
+            "id": str(visual_id) if visual_id is not None else None,
+            "status": str(item.get("status") or "queueing").strip().lower(),
+            "media_urls": list(dict.fromkeys(urls)),
         }

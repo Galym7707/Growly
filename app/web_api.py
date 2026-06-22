@@ -257,6 +257,16 @@ class ManualPackageRequest(BaseModel):
     language: Literal["ru", "en", "kk"] = "ru"
 
 
+class BlotatoMediaUploadRequest(BaseModel):
+    filename: str = Field(min_length=1, max_length=240)
+
+
+class BlotatoVisualRequest(BaseModel):
+    kind: Literal["image", "video"]
+    prompt: str = Field(min_length=5, max_length=6000)
+    title: str | None = Field(default=None, max_length=200)
+
+
 class WorkspaceSettingsRequest(BaseModel):
     business_name: str | None = Field(default=None, max_length=300)
     business_niche: str | None = Field(default=None, max_length=500)
@@ -1152,6 +1162,63 @@ async def blotato_accounts(
 ) -> dict[str, Any]:
     accounts = await SocialPublishingService().list_accounts(workspace_id)
     return {"accounts": accounts}
+
+
+def _safe_blotato_detail(exc: BlotatoServiceError) -> str:
+    provider_message = (exc.provider_message or "").strip()
+    if provider_message and provider_message != str(exc):
+        return f"{exc} Blotato: {provider_message}"
+    return str(exc)
+
+
+@secured_router.post("/integrations/blotato/media-upload")
+async def blotato_media_upload(
+    payload: BlotatoMediaUploadRequest,
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, str]:
+    try:
+        return await SocialPublishingService().create_media_upload(
+            workspace_id, payload.filename
+        )
+    except BlotatoServiceError as exc:
+        raise HTTPException(
+            status_code=502, detail=_safe_blotato_detail(exc)
+        ) from exc
+
+
+@secured_router.post("/integrations/blotato/visuals")
+async def blotato_create_visual(
+    payload: BlotatoVisualRequest,
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    try:
+        return await SocialPublishingService().create_visual(
+            workspace_id,
+            kind=payload.kind,
+            prompt=payload.prompt,
+            title=payload.title,
+        )
+    except BlotatoServiceError as exc:
+        raise HTTPException(
+            status_code=502, detail=_safe_blotato_detail(exc)
+        ) from exc
+
+
+@secured_router.get("/integrations/blotato/visuals/{visual_id}")
+async def blotato_visual_status(
+    visual_id: str,
+    workspace_id: str = Depends(get_workspace_id),
+) -> dict[str, Any]:
+    if not visual_id.strip() or len(visual_id) > 200:
+        raise HTTPException(status_code=400, detail="Некорректный ID медиа.")
+    try:
+        return await SocialPublishingService().visual_status(
+            workspace_id, visual_id
+        )
+    except BlotatoServiceError as exc:
+        raise HTTPException(
+            status_code=502, detail=_safe_blotato_detail(exc)
+        ) from exc
 
 
 # -- user-facing social connection (admin-assisted manual MVP) ------------
