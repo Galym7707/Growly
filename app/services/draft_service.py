@@ -140,7 +140,9 @@ class DraftService:
         context = {
             "content_plan": {
                 "id": item.id,
-                "publish_date": item.publish_date,
+                "publish_date": (
+                    item.publish_date.isoformat() if item.publish_date else None
+                ),
                 "channel": item.channel,
                 "content_type": item.content_type,
                 "topic": item.topic,

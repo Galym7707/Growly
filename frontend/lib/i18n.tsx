@@ -369,6 +369,8 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Нет данных": "No data",
     "Не синхронизировалось": "Not synced",
     "Сервис временно недоступен.": "The service is temporarily unavailable.",
+    "Не удалось создать черновик. Сервис временно недоступен.":
+      "Could not create the draft. The service is temporarily unavailable.",
     "Активен": "Active",
     "Ожидает анализа": "Awaiting analysis",
     "Согласован": "Approved",
@@ -1072,6 +1074,8 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Нет данных": "Дерек жоқ",
     "Не синхронизировалось": "Синхрондалмаған",
     "Сервис временно недоступен.": "Сервис уақытша қолжетімсіз.",
+    "Не удалось создать черновик. Сервис временно недоступен.":
+      "Черновик жасау мүмкін болмады. Сервис уақытша қолжетімсіз.",
     "Активен": "Белсенді",
     "Ожидает анализа": "Талдауды күтуде",
     "Согласован": "Бекітілген",

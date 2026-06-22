@@ -42,6 +42,9 @@ export default function ContentPlanDetailPage() {
       debugInfo?.status === 404 ||
       debugInfo?.message.trim().toLowerCase() === "not found";
     if (isNotFound) return copy.loadErrorReasons[2];
+    if (debugInfo && debugInfo.status >= 500) {
+      return t("Не удалось создать черновик. Сервис временно недоступен.");
+    }
     return value instanceof Error ? t(value.message) : t("Неизвестная ошибка");
   }
 
