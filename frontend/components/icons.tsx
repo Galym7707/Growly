@@ -23,7 +23,8 @@ export type IconName =
   | "sparkles"
   | "source"
   | "sync"
-  | "upload";
+  | "upload"
+  | "users";
 
 const paths: Record<IconName, React.ReactNode> = {
   arrow: <path d="M5 12h14m-5-5 5 5-5 5" />,
@@ -103,6 +104,13 @@ const paths: Record<IconName, React.ReactNode> = {
     <>
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <path d="M12 3v13M7 8l5-5 5 5" />
+    </>
+  ),
+  users: (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11" />
     </>
   ),
   report: (

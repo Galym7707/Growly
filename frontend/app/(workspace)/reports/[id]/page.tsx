@@ -6,6 +6,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { ReportView } from "@/components/report-view";
 import {
+  CopyShareLinkButton,
+  ShareWithTeamButton,
+} from "@/components/team/share-controls";
+import {
   ErrorState,
   LoadingState,
   PageHeader,
@@ -88,15 +92,24 @@ export default function ReportPage() {
             title={formatReportTitle(report.title, report.type, locale)}
             description={report.query || t("Сформировано Growly")}
             action={
-              <button
-                className="button button-secondary"
-                disabled={syncing}
-                onClick={syncNotion}
-                type="button"
-              >
-                <Icon name="notion" />
-                {t(syncing ? "Сохраняем" : "Сохранить в Notion")}
-              </button>
+              <div className="header-actions">
+                <ShareWithTeamButton />
+                {Number.isFinite(Number(params.id)) ? (
+                  <CopyShareLinkButton
+                    resourceType="report"
+                    resourceId={Number(params.id)}
+                  />
+                ) : null}
+                <button
+                  className="button button-secondary"
+                  disabled={syncing}
+                  onClick={syncNotion}
+                  type="button"
+                >
+                  <Icon name="notion" />
+                  {t(syncing ? "Сохраняем" : "Сохранить в Notion")}
+                </button>
+              </div>
             }
           />
           <div className="report-layout">

@@ -9,6 +9,7 @@ import {
   PageHeader,
   Status,
 } from "@/components/ui";
+import { TasksPanel } from "@/components/tasks/tasks-panel";
 import { apiRequest, formatDate, formatDateTime } from "@/lib/api";
 import { useLanguage } from "@/lib/i18n";
 import type { DashboardData } from "@/lib/types";
@@ -154,6 +155,16 @@ export default function DashboardPage() {
                 }
               />
             </div>
+          </section>
+
+          <section className="workspace-section">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">{t("Команда")}</p>
+                <h2>{t("Что делать дальше")}</h2>
+              </div>
+            </div>
+            <TasksPanel limit={6} />
           </section>
 
           <section className="workspace-section">

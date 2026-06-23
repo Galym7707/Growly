@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ContentPlanErrorPanel } from "@/components/content-plan-error";
 import { ContentPlanView } from "@/components/content-plan-view";
 import { Icon } from "@/components/icons";
+import { CopyShareLinkButton } from "@/components/team/share-controls";
+import { TasksPanel } from "@/components/tasks/tasks-panel";
 import { LoadingState, PageHeader } from "@/components/ui";
 import { apiErrorDebugInfo, apiRequest, type ApiDebugInfo } from "@/lib/api";
 import { contentPlanCopy } from "@/lib/content-plan-copy";
@@ -191,6 +193,30 @@ export default function ContentPlanDetailPage() {
           onSchedule={(item) => goToDraftWithIntent(item, "schedule")}
           source={data.source}
         />
+      ) : null}
+
+      {!loading && !loadErrorDebug && Number.isFinite(Number(params.id)) ? (
+        <>
+          <section className="workspace-section">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">{t("Команда")}</p>
+                <h2>{t("Что делать дальше")}</h2>
+              </div>
+              <CopyShareLinkButton
+                className="button button-secondary button-small"
+                resourceType="content_plan"
+                resourceId={Number(params.id)}
+              />
+            </div>
+            <TasksPanel
+              source={{
+                source_type: "content_plan",
+                source_id: Number(params.id),
+              }}
+            />
+          </section>
+        </>
       ) : null}
 
       {igModal !== "none" ? (

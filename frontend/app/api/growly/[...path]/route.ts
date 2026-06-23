@@ -6,8 +6,19 @@ type WorkspaceHeaders =
   | { headers: Headers }
   | { response: NextResponse };
 
+// Public, view-only endpoints reachable without a session: resolving a share
+// link (GET /share-links/{token}) and reading invitation details
+// (GET /invitations/{token}). Everything else requires authentication.
+function isPublicPath(path: string[], method: string): boolean {
+  if (method !== "GET") return false;
+  if (path.length === 2 && path[0] === "share-links") return true;
+  if (path.length === 2 && path[0] === "invitations") return true;
+  return false;
+}
+
 async function resolveWorkspaceHeaders(
   request: NextRequest,
+  allowAnonymous = false,
 ): Promise<WorkspaceHeaders> {
   const headers = new Headers();
   const authRequired = isAuthRequired();
@@ -18,6 +29,7 @@ async function resolveWorkspaceHeaders(
     return { headers };
   }
   if (!supabaseUrl || !supabaseKey) {
+    if (allowAnonymous) return { headers };
     return {
       response: NextResponse.json(
         { detail: "Требуется вход в Growly." },
@@ -38,6 +50,7 @@ async function resolveWorkspaceHeaders(
   });
   const { data } = await supabase.auth.getUser();
   if (!data.user) {
+    if (allowAnonymous) return { headers };
     return {
       response: NextResponse.json(
         { detail: "Требуется вход в Growly." },
@@ -70,7 +83,10 @@ async function forward(
   headers.set("Accept", "application/json");
   const apiKey = process.env.GROWLY_API_KEY;
   if (apiKey) headers.set("X-Growly-API-Key", apiKey);
-  const workspace = await resolveWorkspaceHeaders(request);
+  const workspace = await resolveWorkspaceHeaders(
+    request,
+    isPublicPath(path, request.method),
+  );
   if ("response" in workspace) return workspace.response;
   workspace.headers.forEach((value, key) => {
     headers.set(key, value);

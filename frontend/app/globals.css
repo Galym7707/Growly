@@ -3827,3 +3827,302 @@ input:disabled {
     max-width: none;
   }
 }
+/* ============================================================
+   Team / invitations / share / tasks (phase 2)
+   ============================================================ */
+
+.header-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.modal-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.modal-head h2 {
+  margin: 0;
+}
+
+.copy-row {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.copy-row input {
+  flex: 1 1 auto;
+}
+
+.invite-created .feedback-success {
+  margin-bottom: 12px;
+}
+
+.invite-summary {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+  margin: 18px 0;
+}
+
+.invite-summary span {
+  display: block;
+  font-size: 12px;
+}
+
+.invite-summary strong {
+  font-size: 15px;
+}
+
+.invite-auth-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.invite-panel .eyebrow {
+  margin-bottom: 4px;
+}
+
+/* Team table */
+.team-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.team-row {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) auto minmax(0, 1fr) auto;
+  padding: 12px 0;
+}
+
+.team-row-head {
+  border-top: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.team-row-invite {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto auto;
+}
+
+.team-email {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Tasks */
+.tasks-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tasks-panel h2 {
+  margin: 0;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.task-item {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  padding: 10px 12px;
+}
+
+.task-item.task-done .task-title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.task-check {
+  align-items: center;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.task-item.task-done .task-check {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: var(--green-dark);
+}
+
+.task-check svg {
+  height: 16px;
+  width: 16px;
+}
+
+.task-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.task-title {
+  font-weight: 600;
+}
+
+.task-meta {
+  font-size: 12px;
+}
+
+.task-add {
+  align-items: center;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) auto auto auto;
+  padding: 10px 12px;
+}
+
+.task-add input,
+.task-add select {
+  min-height: 40px;
+}
+
+/* Public share page */
+.share-page {
+  margin: 0 auto;
+  max-width: 760px;
+  padding: 24px 20px 64px;
+}
+
+.share-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.share-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 28px;
+}
+
+.share-card h1 {
+  font-size: clamp(26px, 3vw, 36px);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 4px 0 16px;
+}
+
+.share-summary {
+  font-size: 17px;
+  font-weight: 550;
+  margin: 0 0 18px;
+}
+
+.share-text {
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.share-meta {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, 1fr);
+  margin: 0;
+}
+
+.share-meta dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.share-meta dd {
+  font-weight: 600;
+  margin: 2px 0 0;
+}
+
+.share-foot {
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  margin-top: 24px;
+  padding-top: 14px;
+}
+
+.share-password {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  display: grid;
+  gap: 12px;
+  max-width: 380px;
+  padding: 24px;
+}
+
+.share-empty {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+}
+
+@media (max-width: 720px) {
+  .team-row,
+  .team-row-invite {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .team-row-head {
+    display: none;
+  }
+  .team-actions {
+    justify-content: flex-start;
+  }
+  .task-add {
+    grid-template-columns: 1fr;
+  }
+  .task-item {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+  }
+  .task-item .icon-button {
+    grid-column: 2 / -1;
+    justify-self: end;
+  }
+  .invite-summary,
+  .share-meta {
+    grid-template-columns: 1fr;
+  }
+}

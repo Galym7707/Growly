@@ -1820,6 +1820,33 @@ async def accept_invitation(
     return {"status": "accepted", **result}
 
 
+@secured_router.delete("/workspaces/{workspace_id}/invitations/{invitation_id}")
+async def revoke_invitation(
+    workspace_id: str,
+    invitation_id: int,
+    membership: Membership = Depends(require_member),
+) -> dict[str, Any]:
+    if membership.workspace_id != workspace_id:
+        raise WorkspaceAccessError(
+            "У вас нет доступа к этому workspace.", status=404
+        )
+    WorkspaceService.require_can_manage_team(membership)
+
+    def revoke() -> dict[str, Any]:
+        with session_scope() as session:
+            repo = WorkspaceRepository(session)
+            invitation = repo.get_invitation(invitation_id)
+            if invitation is None or invitation.workspace_id != workspace_id:
+                raise HTTPException(
+                    status_code=404, detail="Приглашение не найдено."
+                )
+            repo.set_invitation_status(invitation, "revoked")
+            return {"id": invitation.id, "status": invitation.status}
+
+    result = await asyncio.to_thread(revoke)
+    return {"status": "revoked", "invitation": result}
+
+
 @secured_router.patch("/workspaces/{workspace_id}/members/{member_id}/role")
 async def update_member_role(
     workspace_id: str,
