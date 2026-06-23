@@ -1,15 +1,25 @@
 "use client";
 
-import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { FriendlyError } from "@/components/friendly-error";
+import { Status } from "@/components/ui";
+import { ToastStack, useToasts } from "@/components/toast";
+import { DraftHeader } from "@/components/draft/draft-header";
+import { DraftTextCard } from "@/components/draft/draft-text-card";
+import { DraftPreviewCard } from "@/components/draft/draft-preview-card";
 import {
-  LoadingState,
-  PageHeader,
-  Status,
-} from "@/components/ui";
+  ChannelSelector,
+  type ChannelDescriptor,
+} from "@/components/draft/channel-selector";
+import {
+  PublicationModeSelector,
+  type PublishMode,
+} from "@/components/draft/publication-mode-selector";
+import { MediaGrid } from "@/components/draft/media-grid";
+import { MediaGeneratorPanel } from "@/components/draft/media-generator-panel";
+import { StickyPublishActions } from "@/components/draft/sticky-publish-actions";
 import {
   apiErrorDebugInfo,
   apiRequest,
@@ -38,7 +48,6 @@ import {
 } from "@/lib/media";
 import type { Draft } from "@/lib/types";
 
-type Mode = "now" | "schedule" | "manual";
 type VisualKind = "image" | "video";
 
 type MediaUploadTicket = {
@@ -62,6 +71,7 @@ export default function DraftDetailPage() {
   const intent = searchParams.get("intent");
   const draftId = Number(params.id);
   const { locale, t } = useLanguage();
+  const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [status, setStatus] = useState<IntegrationsStatus | null>(null);
@@ -71,7 +81,7 @@ export default function DraftDetailPage() {
   const [errorDebug, setErrorDebug] = useState<ApiDebugInfo | null>(null);
 
   const [selected, setSelected] = useState<string[]>([]);
-  const [mode, setMode] = useState<Mode>(
+  const [mode, setMode] = useState<PublishMode>(
     intent === "schedule" ? "schedule" : "now",
   );
   const [scheduledTime, setScheduledTime] = useState("");
@@ -158,16 +168,50 @@ export default function DraftDetailPage() {
     );
   }
 
+  function removeMedia(url: string) {
+    setAttachedMedia((current) => current.filter((media) => media.url !== url));
+  }
+
   const draftEmpty = !draft || !draft.text || !draft.text.trim();
-  const mediaUrls = Array.from(
-    new Set([
-      ...attachedMedia.map((item) => item.url),
-      ...(manualMediaUrl.trim() ? [manualMediaUrl.trim()] : []),
-    ]),
+  const mediaUrls = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...attachedMedia.map((item) => item.url),
+          ...(manualMediaUrl.trim() ? [manualMediaUrl.trim()] : []),
+        ]),
+      ),
+    [attachedMedia, manualMediaUrl],
   );
   // Instagram requires at least one image or video to publish.
   const instagramNeedsMedia =
     selected.includes("instagram") && mediaUrls.length === 0;
+  const blotatoEnabled = Boolean(status?.blotato.enabled);
+
+  // Channel descriptors split connected / disconnected for the selector.
+  const channels: ChannelDescriptor[] = useMemo(
+    () =>
+      PUBLISH_PLATFORMS.map((platform) => {
+        const connected =
+          platform.slug === "telegram"
+            ? Boolean(status?.telegram.connected)
+            : platformConnected(accounts, platform.slug);
+        const account = accountForPlatform(accounts, platform.slug);
+        const accountLabel =
+          platform.slug === "telegram"
+            ? t("Через Telegram-бота")
+            : account
+              ? account.display_name || account.name
+              : t("Нет аккаунта");
+        return { slug: platform.slug, label: platform.label, connected, accountLabel };
+      }),
+    [accounts, status, t],
+  );
+
+  const instagramUsername = useMemo(() => {
+    const account = accountForPlatform(accounts, "instagram");
+    return account ? account.display_name || account.name : null;
+  }, [accounts]);
 
   async function uploadFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -275,6 +319,7 @@ export default function DraftDetailPage() {
             ),
           );
           setGenerationStatus(t("Медиа готово и добавлено к публикации."));
+          pushToast("success", t("Медиа готово и добавлено к публикации."));
           return;
         }
         if (visual.status === "creation-from-template-failed") {
@@ -300,11 +345,12 @@ export default function DraftDetailPage() {
       // so don't surface it as an error.
       if (token.cancelled) return;
       setGenerationStatus("");
-      setActionError(
+      const message =
         value instanceof Error
           ? t(value.message)
-          : t("Blotato не удалось сгенерировать медиа."),
-      );
+          : t("Blotato не удалось сгенерировать медиа.");
+      setActionError(message);
+      pushToast("error", message);
     } finally {
       if (generationRef.current === token) generationRef.current = null;
       if (!token.cancelled) setGenerating(false);
@@ -343,10 +389,22 @@ export default function DraftDetailPage() {
         body: JSON.stringify(body),
       });
       setResult(response);
-    } catch (value) {
-      setActionError(
-        value instanceof Error ? t(value.message) : t("Неизвестная ошибка"),
+      const anyFailed = response.blotato_submissions.some(
+        (submission) => submission.status === "failed",
       );
+      if (anyFailed) {
+        pushToast("error", t("Не удалось опубликовать"));
+      } else {
+        pushToast(
+          "success",
+          mode === "schedule" ? t("Пост запланирован") : t("Пост опубликован"),
+        );
+      }
+    } catch (value) {
+      const message =
+        value instanceof Error ? t(value.message) : t("Неизвестная ошибка");
+      setActionError(message);
+      pushToast("error", t("Не удалось опубликовать"));
     } finally {
       setPublishing(false);
     }
@@ -363,10 +421,12 @@ export default function DraftDetailPage() {
         { method: "POST", body: JSON.stringify({ platforms, language: locale }) },
       );
       setPackages(response.packages || []);
+      pushToast("success", t("Пакет готов"));
     } catch (value) {
-      setActionError(
-        value instanceof Error ? t(value.message) : t("Неизвестная ошибка"),
-      );
+      const message =
+        value instanceof Error ? t(value.message) : t("Неизвестная ошибка");
+      setActionError(message);
+      pushToast("error", t("Не удалось подготовить пакет"));
     } finally {
       setPublishing(false);
     }
@@ -374,123 +434,176 @@ export default function DraftDetailPage() {
 
   if (loading) {
     return (
-      <div className="workspace-page">
-        <LoadingState label={t("Загружаем черновик")} />
+      <div className="draft-page">
+        <div className="draft-skeleton">
+          <div className="skeleton skeleton-title" />
+          <div className="draft-grid">
+            <div className="draft-main">
+              <div className="skeleton skeleton-card" />
+              <div className="skeleton skeleton-card" />
+            </div>
+            <div className="skeleton skeleton-panel" />
+          </div>
+        </div>
       </div>
     );
   }
   if (failed || !draft) {
     return (
-      <div className="workspace-page">
-        <FriendlyError debug={errorDebug} onRetry={load} />
+      <div className="draft-page">
+        <FriendlyError
+          debug={errorDebug}
+          message={t("Не удалось загрузить черновик. Попробуйте обновить страницу.")}
+          onRetry={load}
+        />
       </div>
     );
   }
 
-  const blotatoEnabled = Boolean(status?.blotato.enabled);
+  const manualPlatforms = selected.filter((slug) => slug !== "telegram");
+  const disabledReason = computeReason();
+  const primary = primaryAction();
+
+  function computeReason(): string | null {
+    if (draftEmpty) return "Черновик пуст — публикация недоступна.";
+    if (mode === "manual") {
+      if (!manualPlatforms.length) return "Выберите хотя бы один канал.";
+      return null;
+    }
+    if (!selected.length) return "Выберите хотя бы один канал.";
+    if (instagramNeedsMedia) {
+      return "Добавьте изображение или видео для публикации в Instagram.";
+    }
+    if (mode === "schedule" && !scheduledTime) {
+      return "Укажите дату и время публикации.";
+    }
+    return null;
+  }
+
+  function primaryAction() {
+    if (mode === "manual") {
+      return {
+        label: "Подготовить пакет",
+        busyLabel: "Готовим",
+        onPrimary: makeManualPackage,
+        disabled: publishing || draftEmpty || !manualPlatforms.length,
+      };
+    }
+    return {
+      label: mode === "schedule" ? "Запланировать" : "Опубликовать сейчас",
+      busyLabel: "Отправляем",
+      onPrimary: publish,
+      disabled:
+        publishing ||
+        uploading ||
+        generating ||
+        draftEmpty ||
+        !selected.length ||
+        instagramNeedsMedia ||
+        (mode === "schedule" && !scheduledTime),
+    };
+  }
 
   return (
-    <div className="workspace-page">
-      <PageHeader
-        eyebrow={t("Черновик")}
-        title={draft.title || `${t("Черновик")} ${draft.id}`}
-        description={`${draft.channel || t("Канал не указан")} · ${t("версия {version}", { version: draft.version })}`}
-        action={
-          <Link className="button button-secondary" href="/drafts">
-            {t("Все черновики")}
-          </Link>
-        }
-      />
+    <div className="draft-page">
+      <DraftHeader draft={draft} />
 
-      <div className="draft-detail">
-        <article className="draft-detail-text">
-          <div className="item-meta">
-            <Status value={draft.status}>{draft.status}</Status>
-            <span className="muted">{formatDate(draft.updated_at, locale)}</span>
-          </div>
-          <div className="draft-text">{draft.text}</div>
-        </article>
-
-        <section className="publishing-panel">
-          <h2>{t("Публикация")}</h2>
-          {!blotatoEnabled ? (
-            <p className="plan-note plan-note-muted">
-              {t("Blotato не подключён. Автопубликация в соцсети временно недоступна.")}
-            </p>
-          ) : null}
-
-          <div className="platform-list">
-            {PUBLISH_PLATFORMS.map((platform) => {
-              const connected =
-                platform.slug === "telegram"
-                  ? Boolean(status?.telegram.connected)
-                  : platformConnected(accounts, platform.slug);
-              const account = accountForPlatform(accounts, platform.slug);
-              return (
-                <label className="platform-row" key={platform.slug}>
-                  <input
-                    checked={selected.includes(platform.slug)}
-                    onChange={() => toggle(platform.slug)}
-                    type="checkbox"
-                  />
-                  <span className="platform-name">{platform.label}</span>
-                  <Status value={connected ? "active" : "disabled"}>
-                    {connected ? t("Подключено") : t("Не подключено")}
-                  </Status>
-                  <span className="muted platform-account">
-                    {platform.slug === "telegram"
-                      ? t("Через Telegram-бота")
-                      : account
-                        ? account.display_name || account.name
-                        : t("Нет аккаунта")}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-
-          <div className="publish-modes">
-            <label>
-              <input checked={mode === "now"} onChange={() => setMode("now")} name="mode" type="radio" />
-              {t("Опубликовать сейчас")}
-            </label>
-            <label>
-              <input checked={mode === "schedule"} onChange={() => setMode("schedule")} name="mode" type="radio" />
-              {t("Запланировать")}
-            </label>
-            <label>
-              <input checked={mode === "manual"} onChange={() => setMode("manual")} name="mode" type="radio" />
-              {t("Пакет для ручной публикации")}
-            </label>
-          </div>
-
-          {mode === "schedule" ? (
-            <label className="schedule-input">
-              <span>{t("Дата и время публикации")}</span>
-              <input
-                onChange={(event) => setScheduledTime(event.target.value)}
-                type="datetime-local"
-                value={scheduledTime}
-              />
-            </label>
-          ) : null}
-
-          {mode !== "manual" ? (
-            <section className="media-tools" aria-labelledby="media-tools-title">
-              <div className="media-tools-heading">
+      <div className="draft-grid">
+        <div className="draft-main">
+          <DraftTextCard text={draft.text} channel={draft.channel} />
+          <DraftPreviewCard
+            media={attachedMedia}
+            text={draft.text}
+            username={instagramUsername}
+          />
+          <section className="draft-card draft-status-card">
+            <div className="draft-card-head">
+              <h2>{t("История и статус")}</h2>
+            </div>
+            <dl className="draft-meta">
+              <div>
+                <dt>{t("Статус")}</dt>
+                <dd>
+                  <Status value={draft.status}>{draft.status}</Status>
+                </dd>
+              </div>
+              <div>
+                <dt>{t("Обновлён")}</dt>
+                <dd>{formatDate(draft.updated_at, locale)}</dd>
+              </div>
+              <div>
+                <dt>{t("Версия")}</dt>
+                <dd>{draft.version}</dd>
+              </div>
+              {draft.content_plan_id ? (
                 <div>
-                  <h3 id="media-tools-title">{t("Медиа")}</h3>
-                  <span className="muted">
-                    {t("Фото, видео или карусель для публикации")}
-                  </span>
+                  <dt>{t("Источник")}</dt>
+                  <dd>{t("Создан из контент-плана")}</dd>
                 </div>
+              ) : null}
+              <div>
+                <dt>Notion</dt>
+                <dd>
+                  <Status value={draft.notion_synced ? "active" : "disabled"}>
+                    {draft.notion_synced
+                      ? t("Сохранён в Notion")
+                      : t("Не сохранён в Notion")}
+                  </Status>
+                </dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+
+        <aside className="publish-panel">
+          <div className="publish-panel-scroll">
+            <h2 className="publish-panel-title">{t("Публикация")}</h2>
+            {!blotatoEnabled ? (
+              <p className="plan-note plan-note-muted">
+                {t("Blotato не подключён. Автопубликация в соцсети временно недоступна.")}
+              </p>
+            ) : null}
+
+            <ChannelSelector
+              channels={channels}
+              selected={selected}
+              onToggle={toggle}
+            />
+
+            <PublicationModeSelector mode={mode} onChange={setMode} />
+
+            {mode === "schedule" ? (
+              <label className="schedule-input">
+                <span>{t("Дата и время публикации")}</span>
+                <input
+                  onChange={(event) => setScheduledTime(event.target.value)}
+                  type="datetime-local"
+                  value={scheduledTime}
+                />
+                <span className="draft-helper">
+                  {t("Время указывается в вашем часовом поясе.")}
+                </span>
+              </label>
+            ) : null}
+
+            {mode !== "manual" ? (
+              <section className="media-block">
+                <div className="draft-card-head">
+                  <h3 className="publish-subhead">{t("Медиа")}</h3>
+                  <span className="muted">{attachedMedia.length}/10</span>
+                </div>
+
+                <MediaGrid
+                  media={attachedMedia}
+                  onRemove={removeMedia}
+                  disabled={publishing}
+                />
+
                 <label
-                  className={`button button-secondary button-small${uploading || generating ? " is-disabled" : ""}`}
+                  className={`button button-secondary button-small button-wide${uploading || generating ? " is-disabled" : ""}`}
                 >
-                  <Icon name={uploading ? "sync" : "plus"} />
-                  {uploading
-                    ? t("Загружаем медиа")
-                    : t("Загрузить фото или видео")}
+                  <Icon name={uploading ? "sync" : "upload"} />
+                  {uploading ? t("Загружаем медиа") : t("Загрузить фото/видео")}
                   <input
                     accept={MEDIA_ACCEPT}
                     disabled={uploading || generating}
@@ -501,228 +614,109 @@ export default function DraftDetailPage() {
                     type="file"
                   />
                 </label>
-              </div>
 
-              {attachedMedia.length ? (
-                <div className="media-preview-list">
-                  {attachedMedia.map((item) => (
-                    <article className="media-preview" key={item.url}>
-                      <div className="media-preview-asset">
-                        {item.kind === "video" ? (
-                          <video controls={false} muted preload="metadata" src={item.url} />
-                        ) : (
-                          // Remote Blotato hosts are dynamic, so Next Image cannot be preconfigured safely.
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img alt="" src={item.url} />
-                        )}
-                      </div>
-                      <span title={item.name}>{item.name}</span>
-                      <button
-                        aria-label={t("Удалить медиа")}
-                        className="icon-button"
-                        disabled={publishing}
-                        onClick={() =>
-                          setAttachedMedia((current) =>
-                            current.filter((media) => media.url !== item.url),
-                          )
-                        }
-                        title={t("Удалить медиа")}
-                        type="button"
-                      >
-                        <Icon name="close" />
-                      </button>
-                    </article>
-                  ))}
-                </div>
-              ) : null}
+                <MediaGeneratorPanel
+                  visualKind={visualKind}
+                  onVisualKindChange={setVisualKind}
+                  visualPrompt={visualPrompt}
+                  onVisualPromptChange={setVisualPrompt}
+                  generating={generating}
+                  uploading={uploading}
+                  generationStatus={generationStatus}
+                  blotatoEnabled={blotatoEnabled}
+                  onGenerate={() => void generateVisual()}
+                  onCancel={cancelGeneration}
+                />
 
-              <div className="media-generator">
-                <div className="media-generator-controls">
-                  <label>
-                    <span>{t("Генерация в Blotato")}</span>
-                    <select
-                      disabled={generating || uploading}
-                      onChange={(event) =>
-                        setVisualKind(event.target.value as VisualKind)
-                      }
-                      value={visualKind}
-                    >
-                      <option value="image">{t("Карусель изображений")}</option>
-                      <option value="video">{t("AI-видео")}</option>
-                    </select>
-                  </label>
-                  <button
-                    className="button button-secondary"
-                    disabled={
-                      generating || uploading || !visualPrompt.trim() || !blotatoEnabled
-                    }
-                    onClick={() => void generateVisual()}
-                    type="button"
-                  >
-                    <Icon name={generating ? "sync" : "plus"} />
-                    {generating ? t("Генерируем") : t("Сгенерировать")}
-                  </button>
-                </div>
-                <label>
-                  <span>{t("Что должно быть на фото или видео")}</span>
-                  <textarea
-                    disabled={generating}
-                    onChange={(event) => setVisualPrompt(event.target.value)}
-                    rows={4}
-                    value={visualPrompt}
+                <label className="schedule-input">
+                  <span>{t("Или вставьте публичную ссылку")}</span>
+                  <input
+                    onChange={(event) => setManualMediaUrl(event.target.value)}
+                    placeholder="https://..."
+                    type="url"
+                    value={manualMediaUrl}
                   />
                 </label>
-                {generationStatus ? (
-                  <p className="media-generation-status">
-                    <Icon name={generating ? "sync" : "check"} />
-                    {generationStatus}
-                    {generating ? (
-                      <button
-                        className="button button-secondary button-small"
-                        onClick={cancelGeneration}
-                        type="button"
-                      >
-                        <Icon name="close" />
-                        {t("Отменить")}
-                      </button>
+              </section>
+            ) : null}
+
+            {actionError ? <FriendlyError message={actionError} /> : null}
+
+            {result ? (
+              <div className="publish-results">
+                {result.blotato_submissions.map((submission) => (
+                  <div className="publish-result-row" key={submission.platform}>
+                    <strong>{submission.platform}</strong>
+                    <Status value={submission.status === "failed" ? "failed" : "active"}>
+                      {t(submissionLabel(submission.status))}
+                    </Status>
+                    {submission.url ? (
+                      <a href={submission.url} rel="noreferrer" target="_blank">
+                        {t("Открыть пост")}
+                        <Icon name="external" />
+                      </a>
                     ) : null}
-                  </p>
-                ) : null}
+                    {submission.error ? (
+                      <span className="muted">{t(submission.error)}</span>
+                    ) : null}
+                  </div>
+                ))}
               </div>
+            ) : null}
 
-              <label className="schedule-input">
-                <span>{t("Или вставьте публичную ссылку")}</span>
-                <input
-                  onChange={(event) => setManualMediaUrl(event.target.value)}
-                  placeholder="https://..."
-                  type="url"
-                  value={manualMediaUrl}
-                />
-              </label>
-            </section>
-          ) : null}
-
-          {draftEmpty ? (
-            <p className="plan-note plan-note-muted">
-              {t("Черновик пуст — публикация недоступна.")}
-            </p>
-          ) : null}
-          {actionError ? <FriendlyError message={actionError} /> : null}
-
-          <div className="form-actions">
-            {mode === "manual" ? (
-              <button
-                className="button button-primary"
-                disabled={publishing || draftEmpty || !selected.length}
-                onClick={makeManualPackage}
-                type="button"
-              >
-                <Icon name="draft" />
-                {publishing ? t("Готовим") : t("Подготовить пакет для ручной публикации")}
-              </button>
-            ) : (
-              <button
-                className="button button-primary"
-                disabled={
-                  publishing ||
-                  uploading ||
-                  generating ||
-                  draftEmpty ||
-                  !selected.length ||
-                  instagramNeedsMedia ||
-                  (mode === "schedule" && !scheduledTime)
-                }
-                onClick={publish}
-                type="button"
-              >
-                <Icon name={publishing ? "sync" : "arrow"} />
-                {publishing
-                  ? t("Отправляем")
-                  : mode === "schedule"
-                    ? t("Запланировать")
-                    : t("Опубликовать сейчас")}
-              </button>
-            )}
+            {packages.length ? (
+              <div className="manual-packages">
+                {packages.map((pkg) => (
+                  <article className="manual-package" key={pkg.platform}>
+                    <h3>{pkg.platform}</h3>
+                    {pkg.hook ? (
+                      <p>
+                        <strong>{t("Хук")}:</strong> {pkg.hook}
+                      </p>
+                    ) : null}
+                    {pkg.caption ? (
+                      <p>
+                        <strong>{t("Текст")}:</strong> {pkg.caption}
+                      </p>
+                    ) : null}
+                    {pkg.script ? (
+                      <p>
+                        <strong>{t("Сценарий")}:</strong> {pkg.script}
+                      </p>
+                    ) : null}
+                    {pkg.visual_brief ? (
+                      <p>
+                        <strong>{t("Визуал")}:</strong> {pkg.visual_brief}
+                      </p>
+                    ) : null}
+                    {pkg.hashtags ? (
+                      <p>
+                        <strong>{t("Хэштеги")}:</strong> {pkg.hashtags}
+                      </p>
+                    ) : null}
+                    {pkg.cta ? (
+                      <p>
+                        <strong>CTA:</strong> {pkg.cta}
+                      </p>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            ) : null}
           </div>
-          {instagramNeedsMedia && mode !== "manual" ? (
-            <p className="plan-note plan-note-muted">
-              {t("Для публикации в Instagram добавьте изображение или видео.")}
-            </p>
-          ) : null}
 
-          {result ? (
-            <div className="publish-results">
-              {result.blotato_submissions.map((submission) => (
-                <div className="publish-result-row" key={submission.platform}>
-                  <strong>{submission.platform}</strong>
-                  <Status value={submission.status === "failed" ? "failed" : "active"}>
-                    {t(submissionLabel(submission.status))}
-                  </Status>
-                  {submission.url ? (
-                    <a href={submission.url} rel="noreferrer" target="_blank">
-                      {t("Открыть пост")}
-                      <Icon name="external" />
-                    </a>
-                  ) : null}
-                  {submission.error ? (
-                    <span className="muted">{t(submission.error)}</span>
-                  ) : null}
-                </div>
-              ))}
-              {result.blotato_submissions.some((s) => s.status === "failed") ? (
-                <button
-                  className="button button-secondary button-small"
-                  disabled={publishing}
-                  onClick={publish}
-                  type="button"
-                >
-                  {t("Повторить")}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-
-          {packages.length ? (
-            <div className="manual-packages">
-              {packages.map((pkg) => (
-                <article className="manual-package" key={pkg.platform}>
-                  <h3>{pkg.platform}</h3>
-                  {pkg.hook ? (
-                    <p>
-                      <strong>{t("Хук")}:</strong> {pkg.hook}
-                    </p>
-                  ) : null}
-                  {pkg.caption ? (
-                    <p>
-                      <strong>{t("Текст")}:</strong> {pkg.caption}
-                    </p>
-                  ) : null}
-                  {pkg.script ? (
-                    <p>
-                      <strong>{t("Сценарий")}:</strong> {pkg.script}
-                    </p>
-                  ) : null}
-                  {pkg.visual_brief ? (
-                    <p>
-                      <strong>{t("Визуал")}:</strong> {pkg.visual_brief}
-                    </p>
-                  ) : null}
-                  {pkg.hashtags ? (
-                    <p>
-                      <strong>{t("Хэштеги")}:</strong> {pkg.hashtags}
-                    </p>
-                  ) : null}
-                  {pkg.cta ? (
-                    <p>
-                      <strong>CTA:</strong> {pkg.cta}
-                    </p>
-                  ) : null}
-                </article>
-              ))}
-            </div>
-          ) : null}
-        </section>
+          <StickyPublishActions
+            label={primary.label}
+            busyLabel={primary.busyLabel}
+            busy={publishing}
+            disabled={primary.disabled}
+            reason={disabledReason}
+            onPrimary={primary.onPrimary}
+          />
+        </aside>
       </div>
+
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ export type IconName =
   | "arrow"
   | "bars"
   | "book"
+  | "calendar"
   | "chat"
   | "check"
   | "chevron"
@@ -11,14 +12,18 @@ export type IconName =
   | "draft"
   | "external"
   | "home"
+  | "image"
+  | "layers"
   | "market"
   | "notion"
   | "plus"
   | "report"
   | "search"
   | "settings"
+  | "sparkles"
   | "source"
-  | "sync";
+  | "sync"
+  | "upload";
 
 const paths: Record<IconName, React.ReactNode> = {
   arrow: <path d="M5 12h14m-5-5 5 5-5 5" />,
@@ -33,6 +38,12 @@ const paths: Record<IconName, React.ReactNode> = {
     <>
       <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
       <path d="M8 9h8M8 13h5" />
+    </>
+  ),
+  calendar: (
+    <>
+      <rect x="3" y="4" width="18" height="17" rx="2" />
+      <path d="M3 9h18M8 2v4M16 2v4" />
     </>
   ),
   check: <path d="m5 12 4 4L19 6" />,
@@ -68,7 +79,32 @@ const paths: Record<IconName, React.ReactNode> = {
       <path d="M8 16V8l8 8V8" />
     </>
   ),
+  image: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="m21 15-5-5L5 21" />
+    </>
+  ),
+  layers: (
+    <>
+      <path d="m12 2 9 5-9 5-9-5z" />
+      <path d="m3 12 9 5 9-5M3 17l9 5 9-5" />
+    </>
+  ),
   plus: <path d="M12 5v14M5 12h14" />,
+  sparkles: (
+    <>
+      <path d="M12 3l1.8 4.7L18.5 9.5 13.8 11.3 12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
+      <path d="M19 14l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
+    </>
+  ),
+  upload: (
+    <>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M12 3v13M7 8l5-5 5 5" />
+    </>
+  ),
   report: (
     <>
       <path d="M4 3h16v18H4z" />
