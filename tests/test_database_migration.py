@@ -63,6 +63,7 @@ def test_drafts_repair_contains_full_model_schema() -> None:
         "prompt_name",
         "original_context_json",
         "generation_metadata_json",
+        "workspace_id",
         "created_at",
         "updated_at",
     }

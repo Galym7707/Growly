@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import logging
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
@@ -17,6 +17,8 @@ from app.repositories.drafts_repo import DraftsRepository
 from app.repositories.reports_repo import ReportsRepository
 from app.repositories.settings_repo import SettingsRepository
 from app.repositories.sources_repo import SourcesRepository
+from app.repositories.tasks_repo import TasksRepository
+from app.repositories.workspace_repo import WorkspaceRepository
 from app.services.content_plan_service import ContentPlanService
 from app.services.draft_service import DraftService
 from app.services.market_intelligence import MarketIntelligenceService
@@ -26,7 +28,23 @@ from app.services.social_connection_service import SocialConnectionService
 from app.services.social_publishing_service import SocialPublishingService
 from app.services.source_analysis_service import SourceAnalysisService
 from app.services.source_discovery_service import SourceDiscoveryService
-from app.utils.errors import BlotatoServiceError, GrowlyError
+from app.services.workspace_service import (
+    Membership,
+    WorkspaceService,
+    can_edit,
+    can_manage_integrations,
+    can_manage_team,
+    can_publish,
+    generate_token,
+    hash_share_password,
+    is_valid_role,
+    verify_share_password,
+)
+from app.utils.errors import (
+    BlotatoServiceError,
+    GrowlyError,
+    WorkspaceAccessError,
+)
 
 router = APIRouter(prefix="/api", tags=["web"])
 logger = logging.getLogger(__name__)
@@ -79,6 +97,45 @@ def get_user_email(
     x_growly_user_email: str | None = Header(default=None),
 ) -> str | None:
     return (x_growly_user_email or "").strip() or None
+
+
+def current_membership(
+    email: str | None = Depends(get_user_email),
+) -> Membership | None:
+    """Resolve the caller's workspace membership.
+
+    Returns ``None`` for the legacy/unauthenticated path (no verified email
+    forwarded by the proxy), which leaves existing single-tenant behaviour
+    untouched. When an email *is* present, an authenticated non-member is
+    denied (403) so they can never see another workspace's data.
+    """
+    if not email:
+        return None
+    return WorkspaceService().require_membership(email)
+
+
+def require_member(
+    membership: Membership | None = Depends(current_membership),
+) -> Membership:
+    if membership is None:
+        raise WorkspaceAccessError(
+            "У вас нет доступа к этому workspace.", status=403
+        )
+    return membership
+
+
+def _visible_in_workspace(
+    resource_workspace_id: str | None, membership: Membership | None
+) -> bool:
+    """Read-side workspace check: legacy rows (NULL workspace) and the legacy
+    no-auth path stay visible; otherwise the row must match the caller's
+    workspace.
+    """
+    if membership is None:
+        return True
+    if resource_workspace_id is None:
+        return True
+    return resource_workspace_id == membership.workspace_id
 
 
 def require_admin(
@@ -889,12 +946,18 @@ async def create_post(payload: CreatePostRequest) -> dict[str, Any]:
 @secured_router.get("/drafts")
 async def drafts(
     limit: int = Query(default=50, ge=1, le=200),
+    membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
     def load() -> list[Draft]:
         with session_scope() as session:
             return DraftsRepository(session).list_recent(limit)
 
     rows = await asyncio.to_thread(load)
+    rows = [
+        row
+        for row in rows
+        if _visible_in_workspace(getattr(row, "workspace_id", None), membership)
+    ]
     return {"items": [_draft_payload(row) for row in rows]}
 
 
@@ -925,15 +988,26 @@ async def update_draft(
 @secured_router.get("/reports")
 async def reports(
     limit: int = Query(default=50, ge=1, le=200),
+    membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
     rows = await ReportService().list_latest(limit)
+    rows = [
+        row
+        for row in rows
+        if _visible_in_workspace(getattr(row, "workspace_id", None), membership)
+    ]
     return {"items": [_report_payload(row) for row in rows]}
 
 
 @secured_router.get("/reports/{report_id}")
-async def report(report_id: int) -> dict[str, Any]:
+async def report(
+    report_id: int,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
     row = await ReportService().get_report(report_id)
-    if row is None:
+    if row is None or not _visible_in_workspace(
+        getattr(row, "workspace_id", None), membership
+    ):
         raise HTTPException(status_code=404, detail="Отчёт не найден.")
     return {"report": _report_payload(row)}
 
@@ -1299,13 +1373,18 @@ async def blotato_get_mappings(
 
 
 @secured_router.get("/drafts/{draft_id}")
-async def draft_detail(draft_id: int) -> dict[str, Any]:
+async def draft_detail(
+    draft_id: int,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
     def load() -> Draft | None:
         with session_scope() as session:
             return DraftsRepository(session).get(draft_id)
 
     row = await asyncio.to_thread(load)
-    if row is None:
+    if row is None or not _visible_in_workspace(
+        getattr(row, "workspace_id", None), membership
+    ):
         raise HTTPException(status_code=404, detail="Черновик не найден.")
     return {"draft": _draft_payload(row)}
 
@@ -1315,7 +1394,12 @@ async def publish_draft_blotato(
     draft_id: int,
     payload: PublishBlotatoRequest,
     workspace_id: str = Depends(get_workspace_id),
+    membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
+    if membership is not None and not can_publish(membership.role):
+        raise WorkspaceAccessError(
+            "У вашей роли нет прав на публикацию.", status=403
+        )
     try:
         return await SocialPublishingService().publish_draft(
             workspace_id=workspace_id,
@@ -1335,7 +1419,12 @@ async def schedule_draft_blotato(
     draft_id: int,
     payload: ScheduleBlotatoRequest,
     workspace_id: str = Depends(get_workspace_id),
+    membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
+    if membership is not None and not can_publish(membership.role):
+        raise WorkspaceAccessError(
+            "У вашей роли нет прав на публикацию.", status=403
+        )
     try:
         return await SocialPublishingService().publish_draft(
             workspace_id=workspace_id,
@@ -1455,6 +1544,577 @@ async def admin_unlink_account(
     return await SocialConnectionService().admin_unlink_account(
         payload.workspace_id, payload.platform
     )
+
+
+# ==========================================================================
+# Workspace / team access, invitations, share links and tasks
+# ==========================================================================
+
+INVITE_TTL_DAYS = 14
+_INVITE_ROLES = {"viewer", "editor", "admin"}
+
+
+class InvitationCreateRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    role: Literal["viewer", "editor", "admin"] = "viewer"
+    message: str | None = Field(default=None, max_length=2000)
+
+
+class MemberRoleUpdateRequest(BaseModel):
+    role: Literal["owner", "admin", "editor", "viewer"]
+
+
+class ShareLinkCreateRequest(BaseModel):
+    resource_type: Literal["workspace", "report", "content_plan", "draft"]
+    resource_id: int | None = Field(default=None, ge=1)
+    password: str | None = Field(default=None, min_length=1, max_length=200)
+    expires_in_days: int | None = Field(default=None, ge=1, le=365)
+
+
+class TaskCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    description: str | None = Field(default=None, max_length=4000)
+    source_type: Literal["report", "content_plan", "draft", "manual"] = "manual"
+    source_id: int | None = Field(default=None, ge=1)
+    assignee_email: str | None = Field(default=None, max_length=320)
+    status: Literal["todo", "in_progress", "done", "cancelled"] = "todo"
+    priority: Literal["low", "medium", "high"] = "medium"
+    due_date: date | None = None
+
+
+class TaskUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    description: str | None = Field(default=None, max_length=4000)
+    assignee_email: str | None = Field(default=None, max_length=320)
+    status: Literal["todo", "in_progress", "done", "cancelled"] | None = None
+    priority: Literal["low", "medium", "high"] | None = None
+    due_date: date | None = None
+
+
+def _member_payload(member: Any) -> dict[str, Any]:
+    return {
+        "id": member.id,
+        "workspace_id": member.workspace_id,
+        "email": member.email,
+        "role": member.role,
+        "status": member.status,
+        "invited_by": member.invited_by,
+        "invited_at": _date_value(member.invited_at),
+        "joined_at": _date_value(member.joined_at),
+        "created_at": _date_value(member.created_at),
+        "updated_at": _date_value(member.updated_at),
+    }
+
+
+def _invitation_payload(inv: Any) -> dict[str, Any]:
+    return {
+        "id": inv.id,
+        "workspace_id": inv.workspace_id,
+        "email": inv.email,
+        "role": inv.role,
+        "token": inv.token,
+        "status": inv.status,
+        "invited_by": inv.invited_by,
+        "expires_at": _date_value(inv.expires_at),
+        "accepted_at": _date_value(inv.accepted_at),
+        "created_at": _date_value(inv.created_at),
+        "invite_path": f"/invite/{inv.token}",
+    }
+
+
+def _task_payload(task: Any) -> dict[str, Any]:
+    return {
+        "id": task.id,
+        "workspace_id": task.workspace_id,
+        "source_type": task.source_type,
+        "source_id": task.source_id,
+        "title": task.title,
+        "description": task.description,
+        "assignee_email": task.assignee_email,
+        "status": task.status,
+        "priority": task.priority,
+        "due_date": _date_value(task.due_date),
+        "created_by": task.created_by,
+        "created_at": _date_value(task.created_at),
+        "updated_at": _date_value(task.updated_at),
+    }
+
+
+def _share_link_payload(link: Any) -> dict[str, Any]:
+    return {
+        "id": link.id,
+        "token": link.token,
+        "resource_type": link.resource_type,
+        "resource_id": link.resource_id,
+        "access_level": link.access_level,
+        "has_password": bool(link.password_hash),
+        "expires_at": _date_value(link.expires_at),
+        "is_active": link.is_active,
+        "created_at": _date_value(link.created_at),
+        "share_path": f"/share/{link.resource_type}/{link.token}",
+    }
+
+
+@secured_router.get("/workspaces/current")
+async def workspace_current(
+    membership: Membership = Depends(require_member),
+) -> dict[str, Any]:
+    return {
+        "workspace_id": membership.workspace_id,
+        "email": membership.email,
+        "role": membership.role,
+        "permissions": {
+            "can_view": True,
+            "can_edit": can_edit(membership.role),
+            "can_publish": can_publish(membership.role),
+            "can_manage_team": can_manage_team(membership.role),
+            "can_manage_integrations": can_manage_integrations(membership.role),
+        },
+    }
+
+
+@secured_router.get("/workspaces/{workspace_id}/members")
+async def workspace_members(
+    workspace_id: str,
+    membership: Membership = Depends(require_member),
+) -> dict[str, Any]:
+    if membership.workspace_id != workspace_id:
+        raise WorkspaceAccessError(
+            "У вас нет доступа к этому workspace.", status=404
+        )
+
+    def load() -> dict[str, Any]:
+        with session_scope() as session:
+            repo = WorkspaceRepository(session)
+            members = repo.list_members(workspace_id)
+            invitations = repo.list_invitations(workspace_id, status="pending")
+            return {
+                "members": [_member_payload(m) for m in members],
+                "invitations": [_invitation_payload(i) for i in invitations],
+            }
+
+    return await asyncio.to_thread(load)
+
+
+@secured_router.post("/workspaces/{workspace_id}/invitations")
+async def create_invitation(
+    workspace_id: str,
+    payload: InvitationCreateRequest,
+    membership: Membership = Depends(require_member),
+) -> dict[str, Any]:
+    if membership.workspace_id != workspace_id:
+        raise WorkspaceAccessError(
+            "У вас нет доступа к этому workspace.", status=404
+        )
+    WorkspaceService.require_can_manage_team(membership)
+    email = payload.email.strip().lower()
+    if "@" not in email or "." not in email:
+        raise HTTPException(status_code=400, detail="Укажите корректный email.")
+    token = generate_token()
+    expires_at = datetime.now(UTC) + timedelta(days=INVITE_TTL_DAYS)
+
+    def create() -> dict[str, Any]:
+        with session_scope() as session:
+            repo = WorkspaceRepository(session)
+            existing = repo.get_member_in_workspace(workspace_id, email)
+            if existing is not None and existing.status == "active":
+                raise WorkspaceAccessError(
+                    "Этот участник уже в команде.", status=409
+                )
+            invitation = repo.create_invitation(
+                workspace_id=workspace_id,
+                email=email,
+                role=payload.role,
+                token=token,
+                invited_by=membership.email,
+                expires_at=expires_at,
+            )
+            return _invitation_payload(invitation)
+
+    invitation = await asyncio.to_thread(create)
+    # No email service is configured yet, so the owner copies the link.
+    return {"status": "created", "invitation": invitation}
+
+
+@secured_router.get("/invitations/{token}")
+async def invitation_details(token: str) -> dict[str, Any]:
+    def load() -> dict[str, Any]:
+        with session_scope() as session:
+            invitation = WorkspaceRepository(session).get_invitation_by_token(
+                token
+            )
+            if invitation is None:
+                raise HTTPException(
+                    status_code=404, detail="Приглашение не найдено."
+                )
+            expired = (
+                invitation.expires_at is not None
+                and invitation.expires_at < datetime.now(UTC)
+            )
+            return {
+                "workspace_id": invitation.workspace_id,
+                "email": invitation.email,
+                "role": invitation.role,
+                "status": "expired" if expired else invitation.status,
+            }
+
+    return await asyncio.to_thread(load)
+
+
+@secured_router.post("/invitations/{token}/accept")
+async def accept_invitation(
+    token: str,
+    email: str | None = Depends(get_user_email),
+) -> dict[str, Any]:
+    if not email:
+        raise WorkspaceAccessError(
+            "Войдите, чтобы принять приглашение.", status=401
+        )
+    normalized = email.strip().lower()
+
+    def accept() -> dict[str, Any]:
+        with session_scope() as session:
+            repo = WorkspaceRepository(session)
+            invitation = repo.get_invitation_by_token(token)
+            if invitation is None:
+                raise HTTPException(
+                    status_code=404, detail="Приглашение не найдено."
+                )
+            if invitation.status == "revoked":
+                raise WorkspaceAccessError(
+                    "Приглашение больше недействительно.", status=410
+                )
+            if (
+                invitation.expires_at is not None
+                and invitation.expires_at < datetime.now(UTC)
+            ):
+                repo.set_invitation_status(invitation, "expired")
+                raise WorkspaceAccessError(
+                    "Приглашение истекло. Попросите владельца отправить новое.",
+                    status=410,
+                )
+            if invitation.email.strip().lower() != normalized:
+                raise WorkspaceAccessError(
+                    "Это приглашение отправлено на другой email.", status=403
+                )
+            existing = repo.get_member_in_workspace(
+                invitation.workspace_id, normalized
+            )
+            if existing is None:
+                repo.add_member(
+                    workspace_id=invitation.workspace_id,
+                    email=normalized,
+                    role=invitation.role,
+                    status="active",
+                    invited_by=invitation.invited_by,
+                )
+            elif existing.status != "active":
+                existing.status = "active"
+                existing.role = invitation.role
+            repo.set_invitation_status(
+                invitation, "accepted", accepted_at=datetime.now(UTC)
+            )
+            return {"workspace_id": invitation.workspace_id}
+
+    result = await asyncio.to_thread(accept)
+    return {"status": "accepted", **result}
+
+
+@secured_router.patch("/workspaces/{workspace_id}/members/{member_id}/role")
+async def update_member_role(
+    workspace_id: str,
+    member_id: int,
+    payload: MemberRoleUpdateRequest,
+    membership: Membership = Depends(require_member),
+) -> dict[str, Any]:
+    if membership.workspace_id != workspace_id:
+        raise WorkspaceAccessError(
+            "У вас нет доступа к этому workspace.", status=404
+        )
+    WorkspaceService.require_can_manage_team(membership)
+    if not is_valid_role(payload.role):
+        raise HTTPException(status_code=400, detail="Недопустимая роль.")
+
+    def update() -> dict[str, Any]:
+        with session_scope() as session:
+            repo = WorkspaceRepository(session)
+            member = repo.get_member(member_id)
+            if member is None or member.workspace_id != workspace_id:
+                raise HTTPException(
+                    status_code=404, detail="Участник не найден."
+                )
+            # Never leave a workspace without an owner.
+            if (
+                member.role == "owner"
+                and payload.role != "owner"
+                and repo.count_owners(workspace_id) <= 1
+            ):
+                raise WorkspaceAccessError(
+                    "Нельзя понизить последнего владельца.", status=409
+                )
+            repo.update_member_role(member, payload.role)
+            return _member_payload(member)
+
+    member = await asyncio.to_thread(update)
+    return {"status": "updated", "member": member}
+
+
+@secured_router.delete("/workspaces/{workspace_id}/members/{member_id}")
+async def remove_member(
+    workspace_id: str,
+    member_id: int,
+    membership: Membership = Depends(require_member),
+) -> dict[str, Any]:
+    if membership.workspace_id != workspace_id:
+        raise WorkspaceAccessError(
+            "У вас нет доступа к этому workspace.", status=404
+        )
+    WorkspaceService.require_can_manage_team(membership)
+
+    def remove() -> dict[str, Any]:
+        with session_scope() as session:
+            repo = WorkspaceRepository(session)
+            member = repo.get_member(member_id)
+            if member is None or member.workspace_id != workspace_id:
+                raise HTTPException(
+                    status_code=404, detail="Участник не найден."
+                )
+            if (
+                member.role == "owner"
+                and repo.count_owners(workspace_id) <= 1
+            ):
+                raise WorkspaceAccessError(
+                    "Нельзя удалить последнего владельца.", status=409
+                )
+            repo.remove_member(member)
+            return {"id": member.id, "status": member.status}
+
+    result = await asyncio.to_thread(remove)
+    return {"status": "removed", "member": result}
+
+
+@secured_router.post("/share-links")
+async def create_share_link(
+    payload: ShareLinkCreateRequest,
+    membership: Membership = Depends(require_member),
+) -> dict[str, Any]:
+    WorkspaceService.require_can_manage_team(membership)
+    token = generate_token()
+    password_hash = (
+        hash_share_password(payload.password) if payload.password else None
+    )
+    expires_at = (
+        datetime.now(UTC) + timedelta(days=payload.expires_in_days)
+        if payload.expires_in_days
+        else None
+    )
+
+    def create() -> dict[str, Any]:
+        with session_scope() as session:
+            link = WorkspaceRepository(session).create_share_link(
+                workspace_id=membership.workspace_id,
+                resource_type=payload.resource_type,
+                resource_id=payload.resource_id,
+                token=token,
+                password_hash=password_hash,
+                expires_at=expires_at,
+                created_by=membership.email,
+            )
+            return _share_link_payload(link)
+
+    link = await asyncio.to_thread(create)
+    return {"status": "created", "share_link": link}
+
+
+@secured_router.delete("/share-links/{link_id}")
+async def delete_share_link(
+    link_id: int,
+    membership: Membership = Depends(require_member),
+) -> dict[str, Any]:
+    WorkspaceService.require_can_manage_team(membership)
+
+    def deactivate() -> dict[str, Any]:
+        with session_scope() as session:
+            repo = WorkspaceRepository(session)
+            link = repo.get_share_link(link_id)
+            if link is None or link.workspace_id != membership.workspace_id:
+                raise HTTPException(status_code=404, detail="Ссылка не найдена.")
+            repo.deactivate_share_link(link)
+            return {"id": link.id, "is_active": link.is_active}
+
+    result = await asyncio.to_thread(deactivate)
+    return {"status": "deleted", "share_link": result}
+
+
+@secured_router.get("/share-links/{token}")
+async def resolve_share_link(
+    token: str,
+    password: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """Public, view-only resolution of a share link. Requires no membership and
+    never exposes integrations, admin notes or publishing controls.
+    """
+
+    def resolve() -> dict[str, Any]:
+        with session_scope() as session:
+            repo = WorkspaceRepository(session)
+            link = repo.get_share_link_by_token(token)
+            if link is None or not link.is_active:
+                raise HTTPException(status_code=404, detail="Ссылка недоступна.")
+            if (
+                link.expires_at is not None
+                and link.expires_at < datetime.now(UTC)
+            ):
+                raise WorkspaceAccessError(
+                    "Срок действия ссылки истёк.", status=410
+                )
+            if link.password_hash and not verify_share_password(
+                password or "", link.password_hash
+            ):
+                raise WorkspaceAccessError(
+                    "Неверный пароль.", status=401
+                )
+            resource = _load_shared_resource(session, link)
+            return {
+                "resource_type": link.resource_type,
+                "access_level": link.access_level,
+                "resource": resource,
+            }
+
+    return await asyncio.to_thread(resolve)
+
+
+def _load_shared_resource(session: Any, link: Any) -> dict[str, Any] | None:
+    """Build a sanitized, view-only payload for a shared resource."""
+    if link.resource_type == "report" and link.resource_id is not None:
+        report = ReportsRepository(session).get_report(link.resource_id)
+        if report is None or (
+            report.workspace_id is not None
+            and report.workspace_id != link.workspace_id
+        ):
+            return None
+        return {
+            "title": report.title,
+            "summary": report.summary,
+            "body": report.body or report.report_text,
+            "created_at": _date_value(report.created_at),
+        }
+    if link.resource_type == "draft" and link.resource_id is not None:
+        draft = DraftsRepository(session).get(link.resource_id)
+        if draft is None or (
+            draft.workspace_id is not None
+            and draft.workspace_id != link.workspace_id
+        ):
+            return None
+        return {
+            "title": draft.title,
+            "text": draft.draft_text,
+            "channel": draft.channel,
+            "status": draft.status,
+            "created_at": _date_value(draft.created_at),
+        }
+    if link.resource_type == "content_plan" and link.resource_id is not None:
+        item = session.get(ContentPlan, link.resource_id)
+        if item is None or (
+            item.workspace_id is not None
+            and item.workspace_id != link.workspace_id
+        ):
+            return None
+        return {
+            "topic": item.topic,
+            "channel": item.channel,
+            "content_type": item.content_type,
+            "goal": item.goal,
+            "cta": item.cta,
+            "status": item.status,
+            "publish_date": _date_value(item.publish_date),
+        }
+    return {"workspace_id": link.workspace_id}
+
+
+@secured_router.get("/tasks")
+async def list_tasks(
+    status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=100, ge=1, le=200),
+    membership: Membership = Depends(require_member),
+) -> dict[str, Any]:
+    def load() -> list[dict[str, Any]]:
+        with session_scope() as session:
+            rows = TasksRepository(session).list_for_workspace(
+                membership.workspace_id, status=status_filter, limit=limit
+            )
+            return [_task_payload(row) for row in rows]
+
+    items = await asyncio.to_thread(load)
+    return {"items": items}
+
+
+@secured_router.post("/tasks")
+async def create_task(
+    payload: TaskCreateRequest,
+    membership: Membership = Depends(require_member),
+) -> dict[str, Any]:
+    WorkspaceService.require_can_edit(membership)
+
+    def create() -> dict[str, Any]:
+        with session_scope() as session:
+            task = TasksRepository(session).create(
+                workspace_id=membership.workspace_id,
+                title=payload.title,
+                description=payload.description,
+                source_type=payload.source_type,
+                source_id=payload.source_id,
+                assignee_email=payload.assignee_email,
+                status=payload.status,
+                priority=payload.priority,
+                due_date=payload.due_date,
+                created_by=membership.email,
+            )
+            return _task_payload(task)
+
+    task = await asyncio.to_thread(create)
+    return {"status": "created", "task": task}
+
+
+@secured_router.patch("/tasks/{task_id}")
+async def update_task(
+    task_id: int,
+    payload: TaskUpdateRequest,
+    membership: Membership = Depends(require_member),
+) -> dict[str, Any]:
+    WorkspaceService.require_can_edit(membership)
+
+    def update() -> dict[str, Any]:
+        with session_scope() as session:
+            repo = TasksRepository(session)
+            task = repo.get(task_id)
+            if task is None or task.workspace_id != membership.workspace_id:
+                raise HTTPException(status_code=404, detail="Задача не найдена.")
+            repo.update(task, **payload.model_dump(exclude_none=True))
+            return _task_payload(task)
+
+    task = await asyncio.to_thread(update)
+    return {"status": "updated", "task": task}
+
+
+@secured_router.delete("/tasks/{task_id}")
+async def delete_task(
+    task_id: int,
+    membership: Membership = Depends(require_member),
+) -> dict[str, Any]:
+    WorkspaceService.require_can_edit(membership)
+
+    def delete() -> dict[str, Any]:
+        with session_scope() as session:
+            repo = TasksRepository(session)
+            task = repo.get(task_id)
+            if task is None or task.workspace_id != membership.workspace_id:
+                raise HTTPException(status_code=404, detail="Задача не найдена.")
+            repo.delete(task)
+            return {"id": task_id}
+
+    result = await asyncio.to_thread(delete)
+    return {"status": "deleted", "task": result}
 
 
 router.include_router(secured_router)

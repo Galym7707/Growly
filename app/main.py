@@ -10,7 +10,7 @@ from sqlalchemy import text
 from app.config import get_settings
 from app.database import session_scope
 from app.runtime_status import telegram_initialized
-from app.utils.errors import GrowlyError, IntegrationError
+from app.utils.errors import GrowlyError, IntegrationError, WorkspaceAccessError
 from app.utils.logging import configure_logging
 from app.web_api import router as web_router
 
@@ -25,10 +25,19 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_web_origins(),
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Growly-API-Key"],
 )
 app.include_router(web_router)
+
+
+@app.exception_handler(WorkspaceAccessError)
+async def workspace_access_error_handler(
+    request: Request,
+    exc: WorkspaceAccessError,
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
 
 @app.exception_handler(GrowlyError)

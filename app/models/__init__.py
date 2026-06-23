@@ -3,6 +3,7 @@ from app.models.db_models import (
     Approval,
     Base,
     ContentPlan,
+    ContentTask,
     Draft,
     Integration,
     ManualPublishPackage,
@@ -12,11 +13,14 @@ from app.models.db_models import (
     Report,
     ReviewImport,
     Setting,
+    ShareLink,
     SocialAccount,
     SocialConnectionRequest,
     Source,
     SourceItem,
     User,
+    WorkspaceInvitation,
+    WorkspaceMember,
 )
 
 __all__ = [
@@ -24,6 +28,7 @@ __all__ = [
     "Approval",
     "Base",
     "ContentPlan",
+    "ContentTask",
     "Draft",
     "Integration",
     "ManualPublishPackage",
@@ -33,9 +38,12 @@ __all__ = [
     "Report",
     "ReviewImport",
     "Setting",
+    "ShareLink",
     "SocialAccount",
     "SocialConnectionRequest",
     "Source",
     "SourceItem",
     "User",
+    "WorkspaceInvitation",
+    "WorkspaceMember",
 ]

@@ -6,6 +6,18 @@ class ConfigurationError(GrowlyError):
     """Raised when required configuration is unavailable."""
 
 
+class WorkspaceAccessError(GrowlyError):
+    """Raised when a caller is not allowed to access a workspace resource.
+
+    ``status`` maps to an HTTP status: 403 for permission failures, 404 to hide
+    the existence of another workspace's resource.
+    """
+
+    def __init__(self, message: str, *, status: int = 403) -> None:
+        super().__init__(message)
+        self.status = status
+
+
 class IntegrationError(GrowlyError):
     """Raised when an external integration fails."""
 

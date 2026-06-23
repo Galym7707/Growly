@@ -232,6 +232,7 @@ class ContentPlan(Base, TimestampMixin):
     why_recommended: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, server_default="draft", nullable=False)
     notion_page_id: Mapped[str | None] = mapped_column(Text)
+    workspace_id: Mapped[str | None] = mapped_column(Text)
 
     drafts: Mapped[list[Draft]] = relationship(back_populates="content_plan")
 
@@ -260,6 +261,7 @@ class Draft(Base, TimestampMixin):
     generation_metadata_json: Mapped[dict[str, Any]] = mapped_column(
         JSONB, server_default=text("'{}'::jsonb"), nullable=False
     )
+    workspace_id: Mapped[str | None] = mapped_column(Text)
 
     content_plan: Mapped[ContentPlan | None] = relationship(back_populates="drafts")
     approvals: Mapped[list[Approval]] = relationship(
@@ -312,6 +314,7 @@ class Report(Base, TimestampMixin):
     week_end: Mapped[date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(Text, server_default="ready", nullable=False)
     notion_page_id: Mapped[str | None] = mapped_column(Text)
+    workspace_id: Mapped[str | None] = mapped_column(Text)
 
 
 class Publication(Base, TimestampMixin):
@@ -482,3 +485,86 @@ class Setting(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     key: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     value: Mapped[str | None] = mapped_column(Text)
+
+
+class WorkspaceMember(Base, TimestampMixin):
+    """A person who belongs to a workspace, identified by email.
+
+    Membership is the single source of truth for access control: every
+    workspace-scoped query checks for an ``active`` member row for the caller.
+    """
+
+    __tablename__ = "workspace_members"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(Text, nullable=False)
+    user_id: Mapped[int | None] = mapped_column(BigInteger)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str] = mapped_column(Text, server_default="viewer", nullable=False)
+    status: Mapped[str] = mapped_column(Text, server_default="active", nullable=False)
+    invited_by: Mapped[str | None] = mapped_column(Text)
+    invited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    joined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class WorkspaceInvitation(Base, TimestampMixin):
+    __tablename__ = "workspace_invitations"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str] = mapped_column(Text, server_default="viewer", nullable=False)
+    token: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    status: Mapped[str] = mapped_column(
+        Text, server_default="pending", nullable=False
+    )
+    invited_by: Mapped[str | None] = mapped_column(Text)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ShareLink(Base, TimestampMixin):
+    """A view-only, unguessable public link to a single resource."""
+
+    __tablename__ = "share_links"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(Text, nullable=False)
+    resource_type: Mapped[str] = mapped_column(Text, nullable=False)
+    resource_id: Mapped[int | None] = mapped_column(BigInteger)
+    token: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    access_level: Mapped[str] = mapped_column(
+        Text, server_default="view", nullable=False
+    )
+    password_hash: Mapped[str | None] = mapped_column(Text)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("true"), nullable=False
+    )
+    created_by: Mapped[str | None] = mapped_column(Text)
+
+
+class ContentTask(Base, TimestampMixin):
+    """A 'what to do next' task for the workspace team.
+
+    ``assignee_email`` is used instead of a numeric user id because identity in
+    Growly is email-based (members are keyed by email).
+    """
+
+    __tablename__ = "content_tasks"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(Text, nullable=False)
+    source_type: Mapped[str] = mapped_column(
+        Text, server_default="manual", nullable=False
+    )
+    source_id: Mapped[int | None] = mapped_column(BigInteger)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    assignee_email: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, server_default="todo", nullable=False)
+    priority: Mapped[str] = mapped_column(
+        Text, server_default="medium", nullable=False
+    )
+    due_date: Mapped[date | None] = mapped_column(Date)
+    created_by: Mapped[str | None] = mapped_column(Text)
