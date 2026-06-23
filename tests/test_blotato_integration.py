@@ -178,10 +178,13 @@ async def test_create_media_upload_returns_presigned_and_public_urls(monkeypatch
 @pytest.mark.asyncio
 async def test_create_visual_uses_supported_template(monkeypatch) -> None:
     _enable_blotato(monkeypatch)
-    captured: dict = {}
+    calls: list[dict] = []
 
     async def fake_request(self, method, path, *, json=None):
-        captured.update({"method": method, "path": path, "json": json})
+        calls.append({"method": method, "path": path, "json": json})
+        if path == "/videos/templates":
+            # Default id is present in the account, so it should be used as-is.
+            return {"items": [{"id": "5903fe43-514d-40ee-a060-0d6628c5f8fd"}]}
         return {"item": {"id": "visual-1", "status": "queueing"}}
 
     monkeypatch.setattr(BlotatoService, "_request", fake_request)
@@ -189,10 +192,64 @@ async def test_create_visual_uses_supported_template(monkeypatch) -> None:
         kind="video", prompt="Create a short product video", title="Post visual"
     )
 
-    assert captured["path"] == "/videos/from-templates"
-    assert captured["json"]["templateId"] == "5903fe43-514d-40ee-a060-0d6628c5f8fd"
-    assert captured["json"]["render"] is True
+    create = calls[-1]
+    assert create["path"] == "/videos/from-templates"
+    assert create["json"]["templateId"] == "5903fe43-514d-40ee-a060-0d6628c5f8fd"
+    assert create["json"]["render"] is True
     assert result == {"id": "visual-1", "status": "queueing", "media_urls": []}
+
+
+@pytest.mark.asyncio
+async def test_create_visual_resolves_rotated_template(monkeypatch) -> None:
+    """When the default id is gone, match a live template by its title."""
+
+    _enable_blotato(monkeypatch)
+    calls: list[dict] = []
+
+    async def fake_request(self, method, path, *, json=None):
+        calls.append({"method": method, "path": path, "json": json})
+        if path == "/videos/templates":
+            return {
+                "items": [
+                    {"id": "new-carousel", "title": "Instagram Carousel Slideshow"},
+                    {"id": "new-voice", "title": "AI Video with AI Voice"},
+                ]
+            }
+        return {"item": {"id": "visual-9", "status": "queueing"}}
+
+    monkeypatch.setattr(BlotatoService, "_request", fake_request)
+    result = await BlotatoService(get_settings()).create_visual(
+        kind="video", prompt="Create a short product video"
+    )
+
+    create = calls[-1]
+    assert create["path"] == "/videos/from-templates"
+    assert create["json"]["templateId"] == "new-voice"
+    assert result["id"] == "visual-9"
+
+
+@pytest.mark.asyncio
+async def test_create_visual_falls_back_when_templates_unavailable(monkeypatch) -> None:
+    """A failing templates listing must not block generation."""
+
+    _enable_blotato(monkeypatch)
+    calls: list[dict] = []
+
+    async def fake_request(self, method, path, *, json=None):
+        calls.append({"method": method, "path": path, "json": json})
+        if path == "/videos/templates":
+            raise BlotatoServiceError("Не удалось отправить публикацию.")
+        return {"item": {"id": "visual-1", "status": "queueing"}}
+
+    monkeypatch.setattr(BlotatoService, "_request", fake_request)
+    result = await BlotatoService(get_settings()).create_visual(
+        kind="image", prompt="Create a carousel"
+    )
+
+    create = calls[-1]
+    assert create["path"] == "/videos/from-templates"
+    assert create["json"]["templateId"] == "53cfec04-2500-41cf-8cc1-ba670d2c341a"
+    assert result["status"] == "queueing"
 
 
 def test_visual_status_normalizes_generated_media() -> None:

@@ -50,9 +50,17 @@ PLATFORM_TARGET = {
 # Platforms that publish to a page/organization in addition to an account.
 PAGE_PLATFORMS = {"facebook", "linkedin"}
 
+# Default template ids. Blotato rotates these ids per account, so when a
+# default is no longer offered we fall back to matching a live template by the
+# keywords below (see ``_resolve_template_id``).
 VISUAL_TEMPLATE_IDS = {
     "image": "53cfec04-2500-41cf-8cc1-ba670d2c341a",
     "video": "5903fe43-514d-40ee-a060-0d6628c5f8fd",
+}
+
+VISUAL_TEMPLATE_KEYWORDS = {
+    "image": ("carousel", "slideshow", "slide"),
+    "video": ("voiceover", "voice", "faceless", "ai video", "narration"),
 }
 
 MEDIA_EXTENSIONS = {
@@ -382,7 +390,7 @@ class BlotatoService:
         prompt: str,
         title: str | None = None,
     ) -> dict[str, Any]:
-        template_id = VISUAL_TEMPLATE_IDS.get((kind or "").strip().lower())
+        template_id = await self._resolve_template_id(kind)
         if not template_id:
             raise BlotatoServiceError("Неизвестный тип медиа для генерации.")
         body: dict[str, Any] = {
@@ -397,6 +405,90 @@ class BlotatoService:
             "POST", "/videos/from-templates", json=body
         )
         return self._normalize_visual(payload)
+
+    async def list_video_templates(self) -> list[dict[str, str]]:
+        """List the visual templates available to the current account.
+
+        Blotato rotates template ids, so the hardcoded defaults can stop being
+        recognised ("Unknown template ID"). Fetching the live catalogue lets
+        ``create_visual`` self-heal by resolving a currently-valid id.
+        """
+        payload = await self._request("GET", "/videos/templates")
+        templates: list[dict[str, str]] = []
+        for row in self._template_rows(payload):
+            template = self._normalize_template(row)
+            if template["id"]:
+                templates.append(template)
+        return templates
+
+    async def _resolve_template_id(self, kind: str) -> str | None:
+        slug = (kind or "").strip().lower()
+        default_id = VISUAL_TEMPLATE_IDS.get(slug)
+        if not default_id:
+            return None
+        try:
+            templates = await self.list_video_templates()
+        except BlotatoServiceError as exc:
+            # The catalogue is best-effort. Fall back to the default id and let
+            # the create call surface any real error instead of failing here.
+            logger.warning("Could not list Blotato templates: %s", exc)
+            return default_id
+        if not templates:
+            return default_id
+        available = {template["id"] for template in templates}
+        if default_id in available:
+            return default_id
+        matched = self._match_template(templates, slug)
+        if matched:
+            logger.info(
+                "Blotato template %s unavailable; using %s for kind=%s",
+                default_id,
+                matched,
+                slug,
+            )
+            return matched
+        return default_id
+
+    @staticmethod
+    def _template_rows(payload: Any) -> list[dict[str, Any]]:
+        if isinstance(payload, list):
+            return [row for row in payload if isinstance(row, dict)]
+        if isinstance(payload, dict):
+            for key in ("items", "templates", "data", "results"):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    return [row for row in value if isinstance(row, dict)]
+        return []
+
+    @staticmethod
+    def _normalize_template(row: dict[str, Any]) -> dict[str, str]:
+        template_id = (
+            row.get("id") or row.get("templateId") or row.get("template_id")
+        )
+        title = row.get("title") or row.get("name") or ""
+        description = row.get("description") or row.get("summary") or ""
+        return {
+            "id": str(template_id) if template_id is not None else "",
+            "title": str(title),
+            "description": str(description),
+        }
+
+    @staticmethod
+    def _match_template(
+        templates: list[dict[str, str]], kind: str
+    ) -> str | None:
+        keywords = VISUAL_TEMPLATE_KEYWORDS.get(kind, ())
+        if not keywords:
+            return None
+        best_id: str | None = None
+        best_score = 0
+        for template in templates:
+            haystack = f"{template['title']} {template['description']}".lower()
+            score = sum(1 for keyword in keywords if keyword in haystack)
+            if score > best_score:
+                best_score = score
+                best_id = template["id"]
+        return best_id
 
     async def get_visual_status(self, visual_id: str) -> dict[str, Any]:
         payload = await self._request(
