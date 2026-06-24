@@ -73,6 +73,7 @@ def test_market_scan_jobs_schema_tracks_long_tasks() -> None:
     assert EXPECTED_SCHEMA["market_scan_jobs"] == {
         "id",
         "user_id",
+        "workspace_id",
         "status",
         "current_step",
         "query",

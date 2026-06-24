@@ -21,6 +21,7 @@ from app.repositories.tasks_repo import TasksRepository
 from app.repositories.workspace_repo import WorkspaceRepository
 from app.services.content_plan_service import ContentPlanService
 from app.services.draft_service import DraftService
+from app.services.email_service import EmailService
 from app.services.market_intelligence import MarketIntelligenceService
 from app.services.notion_service import NotionService
 from app.services.report_service import ReportService
@@ -807,9 +808,17 @@ def _schedule_market_scan_job(
     "/market-scan",
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def market_scan(payload: MarketScanRequest) -> dict[str, Any]:
+async def market_scan(
+    payload: MarketScanRequest,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
     service = MarketIntelligenceService()
-    job = await service.create_market_scan_job(None, payload.niche)
+    if membership is not None:
+        job = await service.create_market_scan_job(
+            None, payload.niche, workspace_id=membership.workspace_id
+        )
+    else:
+        job = await service.create_market_scan_job(None, payload.niche)
     _schedule_market_scan_job(service, job.id, payload)
     return {
         "status": "accepted",
@@ -1818,8 +1827,25 @@ async def create_invitation(
             return _invitation_payload(invitation)
 
     invitation = await asyncio.to_thread(create)
-    # No email service is configured yet, so the owner copies the link.
-    return {"status": "created", "invitation": invitation}
+    # Best-effort email delivery; falls back to the copyable link when SMTP is
+    # not configured (or sending fails).
+    email_sent = False
+    email_service = EmailService()
+    invite_url = email_service.invite_url(invitation["invite_path"])
+    if invite_url:
+        role_labels = {
+            "viewer": "Только просмотр",
+            "editor": "Редактор",
+            "admin": "Администратор",
+            "owner": "Владелец",
+        }
+        email_sent = await asyncio.to_thread(
+            email_service.send_invitation,
+            to_email=invitation["email"],
+            invite_url=invite_url,
+            role_label=role_labels.get(invitation["role"], invitation["role"]),
+        )
+    return {"status": "created", "invitation": invitation, "email_sent": email_sent}
 
 
 @secured_router.get("/invitations/{token}")

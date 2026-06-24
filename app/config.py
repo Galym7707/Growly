@@ -135,6 +135,18 @@ class Settings(BaseSettings):
     erpnext_enabled: bool = Field(default=False, alias="ERPNEXT_ENABLED")
     crm_provider: str = Field(default="none", alias="CRM_PROVIDER")
 
+    # Optional SMTP for sending team invitations by email. When unset, the app
+    # falls back to copyable invite links (no email is sent).
+    smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_user: str | None = Field(default=None, alias="SMTP_USER")
+    smtp_password: SecretStr | None = Field(default=None, alias="SMTP_PASSWORD")
+    smtp_from: str | None = Field(default=None, alias="SMTP_FROM")
+    smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
+    # Public base URL of the web app, used to build absolute invite links in
+    # emails (e.g. https://growly-five.vercel.app).
+    app_base_url: str | None = Field(default=None, alias="APP_BASE_URL")
+
     scheduler_enabled: bool = Field(default=False, alias="SCHEDULER_ENABLED")
     weekly_report_day: str = Field(default="monday", alias="WEEKLY_REPORT_DAY")
     weekly_report_hour: int = Field(default=9, ge=0, le=23, alias="WEEKLY_REPORT_HOUR")
@@ -154,6 +166,20 @@ class Settings(BaseSettings):
         if value is None or not str(value).strip():
             raise ConfigurationError(f"Required environment variable {env_name} is missing.")
         return str(value).strip()
+
+    def smtp_configured(self) -> bool:
+        return bool(
+            self.smtp_host
+            and self.smtp_host.strip()
+            and self.smtp_from
+            and self.smtp_from.strip()
+        )
+
+    def smtp_password_value(self) -> str | None:
+        if self.smtp_password is None:
+            return None
+        secret = self.smtp_password.get_secret_value().strip()
+        return secret or None
 
     def database_dsn(self) -> str:
         return self.require_secret("database_url", "DATABASE_URL")

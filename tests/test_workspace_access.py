@@ -371,6 +371,40 @@ def test_stamp_workspace_only_fills_empty(monkeypatch) -> None:
     _stamp_workspace(Draft, 1, None)
 
 
+def test_market_scan_job_stamps_report_with_workspace() -> None:
+    from app.repositories.market_scan_jobs_repo import MarketScanJobsRepository
+
+    report = SimpleNamespace(workspace_id=None)
+
+    class FakeSession:
+        def get(self, model, obj_id):
+            del model, obj_id
+            return report
+
+        def flush(self):
+            pass
+
+    job = SimpleNamespace(workspace_id="ws-b", report_id=None)
+    MarketScanJobsRepository(FakeSession()).update(job, report_id=7)
+    assert job.report_id == 7
+    assert report.workspace_id == "ws-b"
+
+    # Existing workspace is never overwritten.
+    owned = SimpleNamespace(workspace_id="default")
+
+    class FakeSession2:
+        def get(self, model, obj_id):
+            del model, obj_id
+            return owned
+
+        def flush(self):
+            pass
+
+    job2 = SimpleNamespace(workspace_id="ws-b", report_id=None)
+    MarketScanJobsRepository(FakeSession2()).update(job2, report_id=8)
+    assert owned.workspace_id == "default"
+
+
 def test_resolve_service_bootstraps_first_owner(monkeypatch) -> None:
     added: dict = {}
 

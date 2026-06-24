@@ -3,16 +3,23 @@ from __future__ import annotations
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from app.models import MarketScanJob
+from app.models import MarketScanJob, Report
 
 
 class MarketScanJobsRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def create(self, *, user_id: int | None, query: str) -> MarketScanJob:
+    def create(
+        self,
+        *,
+        user_id: int | None,
+        query: str,
+        workspace_id: str | None = None,
+    ) -> MarketScanJob:
         job = MarketScanJob(
             user_id=user_id,
+            workspace_id=workspace_id,
             status="running",
             current_step="Шаг 1/5: ищу источники через Tavily...",
             query=query,
@@ -71,6 +78,12 @@ class MarketScanJobsRepository:
             job.sources_count = sources_count
         if report_id is not None:
             job.report_id = report_id
+            # Stamp the produced report with the job's workspace so background
+            # scans land in the right tenant (only fills an empty workspace).
+            if job.workspace_id:
+                report = self.session.get(Report, report_id)
+                if report is not None and report.workspace_id is None:
+                    report.workspace_id = job.workspace_id
         if clear_error:
             job.error_message = None
         elif error_message is not None:

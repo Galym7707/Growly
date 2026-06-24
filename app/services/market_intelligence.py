@@ -64,11 +64,13 @@ class MarketIntelligenceService:
         self,
         user_id: int | None,
         query: str,
+        workspace_id: str | None = None,
     ) -> MarketScanJob:
         return await asyncio.to_thread(
             self._create_market_scan_job,
             user_id,
             query,
+            workspace_id,
         )
 
     async def latest_market_scan_job(
@@ -1183,11 +1185,13 @@ class MarketIntelligenceService:
     def _create_market_scan_job(
         user_id: int | None,
         query: str,
+        workspace_id: str | None = None,
     ) -> MarketScanJob:
         with session_scope() as session:
             return MarketScanJobsRepository(session).create(
                 user_id=user_id,
                 query=query,
+                workspace_id=workspace_id,
             )
 
     @staticmethod

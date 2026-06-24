@@ -30,6 +30,7 @@ export function InviteModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<Invitation | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const inviteUrl = created
@@ -42,14 +43,15 @@ export function InviteModal({
     setSubmitting(true);
     setError("");
     try {
-      const response = await apiRequest<{ invitation: Invitation }>(
-        `/workspaces/${encodeURIComponent(workspaceId)}/invitations`,
-        {
-          method: "POST",
-          body: JSON.stringify({ email: email.trim(), role, message }),
-        },
-      );
+      const response = await apiRequest<{
+        invitation: Invitation;
+        email_sent?: boolean;
+      }>(`/workspaces/${encodeURIComponent(workspaceId)}/invitations`, {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim(), role, message }),
+      });
       setCreated(response.invitation);
+      setEmailSent(Boolean(response.email_sent));
       onCreated?.();
     } catch (value) {
       setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
@@ -95,12 +97,16 @@ export function InviteModal({
         {created ? (
           <div className="invite-created">
             <p className="feedback feedback-success">
-              {t("Приглашение создано")}
+              {emailSent
+                ? t("Приглашение отправлено на {email}.", { email: created.email })
+                : t("Приглашение создано")}
             </p>
             <p className="muted">
-              {t("Скопируйте ссылку и отправьте её участнику ({email}).", {
-                email: created.email,
-              })}
+              {emailSent
+                ? t("Можно также скопировать ссылку и отправить вручную.")
+                : t("Скопируйте ссылку и отправьте её участнику ({email}).", {
+                    email: created.email,
+                  })}
             </p>
             <div className="copy-row">
               <input readOnly value={inviteUrl} />

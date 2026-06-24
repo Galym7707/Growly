@@ -58,6 +58,7 @@ class MarketScanJob(Base, TimestampMixin):
     user_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="SET NULL")
     )
+    workspace_id: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(
         Text, server_default="running", nullable=False
     )
