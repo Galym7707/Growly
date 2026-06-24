@@ -29,6 +29,8 @@ export default function ContentPlanDetailPage() {
     "none",
   );
   const [error, setError] = useState("");
+  const [taskingId, setTaskingId] = useState<number | null>(null);
+  const [tasksReload, setTasksReload] = useState(0);
   const [loadErrorDebug, setLoadErrorDebug] = useState<ApiDebugInfo | null>(
     null,
   );
@@ -107,6 +109,27 @@ export default function ContentPlanDetailPage() {
 
   function openDraft(item: ContentPlanItem) {
     if (item.draft_id) router.push(`/drafts/${item.draft_id}`);
+  }
+
+  async function createTaskFromItem(item: ContentPlanItem) {
+    setTaskingId(item.id);
+    setError("");
+    try {
+      await apiRequest("/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          title: item.topic || t("Без темы"),
+          source_type: "content_plan",
+          source_id: Number(params.id),
+          assignee_email: null,
+        }),
+      });
+      setTasksReload((value) => value + 1);
+    } catch (value) {
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
+    } finally {
+      setTaskingId(null);
+    }
   }
 
   function goToDraftWithIntent(item: ContentPlanItem, intent: "publish" | "schedule") {
@@ -191,6 +214,8 @@ export default function ContentPlanDetailPage() {
           onOpenDraft={openDraft}
           onPublish={(item) => goToDraftWithIntent(item, "publish")}
           onSchedule={(item) => goToDraftWithIntent(item, "schedule")}
+          onCreateTask={createTaskFromItem}
+          taskingId={taskingId}
           source={data.source}
         />
       ) : null}
@@ -210,6 +235,7 @@ export default function ContentPlanDetailPage() {
               />
             </div>
             <TasksPanel
+              reloadSignal={tasksReload}
               source={{
                 source_type: "content_plan",
                 source_id: Number(params.id),

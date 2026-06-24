@@ -18,10 +18,12 @@ export function TasksPanel({
   title,
   source,
   limit,
+  reloadSignal,
 }: {
   title?: string;
   source?: { source_type: "content_plan" | "report" | "draft"; source_id: number };
   limit?: number;
+  reloadSignal?: number;
 }) {
   const { locale, t } = useLanguage();
   const { workspace } = useWorkspace();
@@ -52,7 +54,7 @@ export function TasksPanel({
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, reloadSignal]);
 
   async function addTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 
 from app.config import get_settings
 from app.database import session_scope
@@ -136,6 +136,20 @@ def _visible_in_workspace(
     if resource_workspace_id is None:
         return True
     return resource_workspace_id == membership.workspace_id
+
+
+def _stamp_workspace(model: Any, obj_id: int | None, workspace_id: str | None) -> None:
+    """Assign a freshly-created resource to the caller's workspace.
+
+    Only stamps rows that have no workspace yet, so it never moves data between
+    workspaces. No-op in the legacy/no-auth path (workspace_id is None).
+    """
+    if not workspace_id or obj_id is None:
+        return
+    with session_scope() as session:
+        row = session.get(model, obj_id)
+        if row is not None and getattr(row, "workspace_id", None) is None:
+            row.workspace_id = workspace_id
 
 
 def require_admin(
@@ -510,13 +524,26 @@ def _content_plan_source_payload(session: Any) -> dict[str, Any] | None:
     }
 
 
-def _list_content_plan_response(limit: int) -> dict[str, Any]:
+def _content_plan_workspace_filter(workspace_id: str):
+    # Legacy rows (NULL workspace) stay visible alongside the caller's own.
+    return or_(
+        ContentPlan.workspace_id == workspace_id,
+        ContentPlan.workspace_id.is_(None),
+    )
+
+
+def _list_content_plan_response(
+    limit: int, workspace_id: str | None = None
+) -> dict[str, Any]:
     with session_scope() as session:
-        anchor = session.scalar(
-            select(ContentPlan)
-            .order_by(desc(ContentPlan.created_at), desc(ContentPlan.id))
-            .limit(1)
+        anchor_statement = select(ContentPlan).order_by(
+            desc(ContentPlan.created_at), desc(ContentPlan.id)
         )
+        if workspace_id is not None:
+            anchor_statement = anchor_statement.where(
+                _content_plan_workspace_filter(workspace_id)
+            )
+        anchor = session.scalar(anchor_statement.limit(1))
         if anchor is None:
             return {
                 "plan_id": None,
@@ -524,7 +551,9 @@ def _list_content_plan_response(limit: int) -> dict[str, Any]:
                 "items": [],
                 "source": _content_plan_source_payload(session),
             }
-        rows = _content_plan_batch_rows(session, anchor, limit=limit)
+        rows = _content_plan_batch_rows(
+            session, anchor, limit=limit, workspace_id=workspace_id
+        )
         plan_id = min(row.id for row in rows)
         return {
             "plan_id": plan_id,
@@ -539,26 +568,38 @@ def _content_plan_batch_rows(
     anchor: ContentPlan,
     *,
     limit: int | None = None,
+    workspace_id: str | None = None,
 ) -> list[ContentPlan]:
     if anchor.created_at is None:
         return [anchor]
-    statement = (
-        select(ContentPlan)
-        .where(ContentPlan.created_at == anchor.created_at)
-        .order_by(ContentPlan.publish_date, ContentPlan.id)
+    statement = select(ContentPlan).where(
+        ContentPlan.created_at == anchor.created_at
     )
+    if workspace_id is not None:
+        statement = statement.where(
+            _content_plan_workspace_filter(workspace_id)
+        )
+    statement = statement.order_by(ContentPlan.publish_date, ContentPlan.id)
     if limit is not None:
         statement = statement.limit(limit)
     rows = list(session.scalars(statement))
     return rows or [anchor]
 
 
-def _content_plan_detail_response(plan_id: int) -> dict[str, Any]:
+def _content_plan_detail_response(
+    plan_id: int, workspace_id: str | None = None
+) -> dict[str, Any]:
     with session_scope() as session:
         anchor = session.get(ContentPlan, plan_id)
-        if anchor is None:
+        if anchor is None or (
+            workspace_id is not None
+            and anchor.workspace_id is not None
+            and anchor.workspace_id != workspace_id
+        ):
             raise HTTPException(status_code=404, detail="Контент-план не найден.")
-        rows = _content_plan_batch_rows(session, anchor)
+        rows = _content_plan_batch_rows(
+            session, anchor, workspace_id=workspace_id
+        )
         try:
             draft_ids = DraftsRepository(session).latest_ids_for_plans(
                 [row.id for row in rows]
@@ -801,12 +842,19 @@ async def market_scan_job(job_id: int) -> dict[str, Any]:
 
 
 @secured_router.post("/competitor-report")
-async def competitor_report(payload: CompetitorReportRequest) -> dict[str, Any]:
+async def competitor_report(
+    payload: CompetitorReportRequest,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
     report = await MarketIntelligenceService().generate_competitor_report(
         query=payload.query,
         market_report_id=payload.report_id,
         output_language=payload.language,
     )
+    if membership is not None:
+        await asyncio.to_thread(
+            _stamp_workspace, Report, report.id, membership.workspace_id
+        )
     return {
         "status": "completed",
         "message": "Отчёт готов",
@@ -819,20 +867,33 @@ async def competitor_report(payload: CompetitorReportRequest) -> dict[str, Any]:
 @secured_router.get("/content-plan")
 async def content_plan_list(
     limit: int = Query(default=40, ge=1, le=200),
+    membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
-    return await asyncio.to_thread(_list_content_plan_response, limit)
+    if membership is None:
+        return await asyncio.to_thread(_list_content_plan_response, limit)
+    return await asyncio.to_thread(
+        _list_content_plan_response, limit, membership.workspace_id
+    )
 
 
 @secured_router.get("/content-plans")
 async def content_plans_list(
     limit: int = Query(default=40, ge=1, le=200),
+    membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
-    return await content_plan_list(limit=limit)
+    return await content_plan_list(limit=limit, membership=membership)
 
 
 @secured_router.get("/content-plans/{plan_id}")
-async def content_plan_detail(plan_id: int) -> dict[str, Any]:
-    return await asyncio.to_thread(_content_plan_detail_response, plan_id)
+async def content_plan_detail(
+    plan_id: int,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
+    if membership is None:
+        return await asyncio.to_thread(_content_plan_detail_response, plan_id)
+    return await asyncio.to_thread(
+        _content_plan_detail_response, plan_id, membership.workspace_id
+    )
 
 
 def _build_content_plan_context(payload: ContentPlanRequest) -> dict[str, Any]:
@@ -905,11 +966,19 @@ def _build_content_plan_context(payload: ContentPlanRequest) -> dict[str, Any]:
 
 
 @secured_router.post("/content-plan")
-async def content_plan_create(payload: ContentPlanRequest) -> dict[str, Any]:
+async def content_plan_create(
+    payload: ContentPlanRequest,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
     items = await ContentPlanService().generate_weekly_plan(
         _build_content_plan_context(payload)
     )
     plan_id = items[0].id if items else None
+    if membership is not None:
+        for item in items:
+            await asyncio.to_thread(
+                _stamp_workspace, ContentPlan, item.id, membership.workspace_id
+            )
     return {
         "status": "completed",
         "plan_id": plan_id,
@@ -919,13 +988,23 @@ async def content_plan_create(payload: ContentPlanRequest) -> dict[str, Any]:
 
 
 @secured_router.post("/content-plans")
-async def content_plans_create(payload: ContentPlanRequest) -> dict[str, Any]:
-    return await content_plan_create(payload)
+async def content_plans_create(
+    payload: ContentPlanRequest,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
+    return await content_plan_create(payload, membership=membership)
 
 
 @secured_router.post("/content-plan/{item_id}/draft")
-async def content_plan_draft(item_id: int) -> dict[str, Any]:
+async def content_plan_draft(
+    item_id: int,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
     draft = await DraftService().create_from_plan(item_id)
+    if membership is not None:
+        await asyncio.to_thread(
+            _stamp_workspace, Draft, draft.id, membership.workspace_id
+        )
     return {
         "status": "completed",
         "draft_id": draft.id,
@@ -934,8 +1013,15 @@ async def content_plan_draft(item_id: int) -> dict[str, Any]:
 
 
 @secured_router.post("/create-post")
-async def create_post(payload: CreatePostRequest) -> dict[str, Any]:
+async def create_post(
+    payload: CreatePostRequest,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
     draft = await DraftService().create_post(payload.model_dump(exclude_none=True))
+    if membership is not None:
+        await asyncio.to_thread(
+            _stamp_workspace, Draft, draft.id, membership.workspace_id
+        )
     return {
         "status": "completed",
         "draft_id": draft.id,

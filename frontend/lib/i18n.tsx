@@ -788,6 +788,9 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Не удалось подготовить пакет": "Could not prepare the package",
     "Не удалось загрузить черновик. Попробуйте обновить страницу.":
       "Could not load the draft. Try refreshing the page.",
+    "Задачи": "Tasks",
+    "Что нужно сделать команде: ответственные, сроки и статусы.":
+      "What the team needs to do: owners, due dates and statuses.",
     "Команда": "Team",
     "Участники этого workspace и их роли.":
       "Members of this workspace and their roles.",
@@ -1627,6 +1630,9 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Не удалось подготовить пакет": "Топтаманы дайындау мүмкін болмады",
     "Не удалось загрузить черновик. Попробуйте обновить страницу.":
       "Жобаны жүктеу мүмкін болмады. Бетті жаңартып көріңіз.",
+    "Задачи": "Тапсырмалар",
+    "Что нужно сделать команде: ответственные, сроки и статусы.":
+      "Команда не істеу керек: жауаптылар, мерзімдер және күйлер.",
     "Команда": "Команда",
     "Участники этого workspace и их роли.":
       "Осы workspace қатысушылары және олардың рөлдері.",

@@ -27,6 +27,8 @@ type Props = {
   onOpenDraft?: (item: ContentPlanItem) => void;
   onPublish?: (item: ContentPlanItem) => void;
   onSchedule?: (item: ContentPlanItem) => void;
+  onCreateTask?: (item: ContentPlanItem) => void;
+  taskingId?: number | null;
   source?: ContentPlanSource | null;
 };
 
@@ -50,12 +52,14 @@ export function ContentPlanView({
   onOpenDraft,
   onPublish,
   onSchedule,
+  onCreateTask,
+  taskingId = null,
   source = null,
 }: Props) {
   const { locale, t } = useLanguage();
   const copy = contentPlanCopy(locale);
   const hasActions = Boolean(
-    onCreateDraft || onOpenDraft || onPublish || onSchedule,
+    onCreateDraft || onOpenDraft || onPublish || onSchedule || onCreateTask,
   );
 
   const stateLabels: Record<PlanItemState, string> = {
@@ -212,6 +216,21 @@ export function ContentPlanView({
                               type="button"
                             >
                               {t("Повторить")}
+                            </button>
+                          ) : null}
+
+                          {onCreateTask ? (
+                            <button
+                              className="button button-secondary button-small"
+                              disabled={taskingId === item.id}
+                              onClick={() => onCreateTask(item)}
+                              type="button"
+                              title={t("Создать задачу")}
+                            >
+                              <Icon
+                                name={taskingId === item.id ? "sync" : "plus"}
+                              />
+                              {t("Создать задачу")}
                             </button>
                           ) : null}
                         </div>

@@ -19,6 +19,7 @@ const nav: { href: string; label: string; icon: IconName }[] = [
   { href: "/reports", label: "Отчёты", icon: "report" },
   { href: "/content-plan", label: "Контент-план", icon: "book" },
   { href: "/drafts", label: "Черновики", icon: "draft" },
+  { href: "/tasks", label: "Задачи", icon: "check" },
   { href: "/sources", label: "Источники", icon: "source" },
   { href: "/settings/team", label: "Команда", icon: "users" },
   { href: "/settings/integrations", label: "Интеграции", icon: "settings" },

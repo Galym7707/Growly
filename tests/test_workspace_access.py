@@ -320,6 +320,57 @@ def test_resolve_service_denies_unknown_non_member(monkeypatch) -> None:
     assert WorkspaceService().resolve("stranger@example.com") is None
 
 
+def test_content_plan_detail_from_other_workspace_is_hidden(monkeypatch) -> None:
+    _no_key(monkeypatch)
+
+    class FakeSession:
+        def get(self, model, plan_id):
+            del model, plan_id
+            return SimpleNamespace(workspace_id="default")
+
+    @contextmanager
+    def fake_scope():
+        yield FakeSession()
+
+    monkeypatch.setattr("app.web_api.session_scope", fake_scope)
+
+    with _override_membership(_membership("admin", workspace_id="ws-b")):
+        response = TestClient(app).get("/api/content-plans/9")
+
+    assert response.status_code == 404
+
+
+def test_stamp_workspace_only_fills_empty(monkeypatch) -> None:
+    from app.models import Draft
+    from app.web_api import _stamp_workspace
+
+    empty = SimpleNamespace(workspace_id=None)
+    already = SimpleNamespace(workspace_id="default")
+
+    def fake_scope_for(row):
+        class FakeSession:
+            def get(self, model, obj_id):
+                del model, obj_id
+                return row
+
+        @contextmanager
+        def scope():
+            yield FakeSession()
+
+        return scope
+
+    monkeypatch.setattr("app.web_api.session_scope", fake_scope_for(empty))
+    _stamp_workspace(Draft, 1, "ws-b")
+    assert empty.workspace_id == "ws-b"
+
+    monkeypatch.setattr("app.web_api.session_scope", fake_scope_for(already))
+    _stamp_workspace(Draft, 1, "ws-b")
+    assert already.workspace_id == "default"  # never overwrites
+
+    # No-op for the legacy/no-auth path (workspace_id is None).
+    _stamp_workspace(Draft, 1, None)
+
+
 def test_resolve_service_bootstraps_first_owner(monkeypatch) -> None:
     added: dict = {}
 
