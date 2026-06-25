@@ -16,6 +16,9 @@ import hmac
 import secrets
 from dataclasses import dataclass
 
+from sqlalchemy.exc import IntegrityError
+
+from app.config import Settings, get_settings
 from app.database import session_scope
 from app.repositories.workspace_repo import WorkspaceRepository
 from app.utils.errors import WorkspaceAccessError
@@ -101,28 +104,63 @@ class Membership:
 class WorkspaceService:
     """Resolves and enforces workspace membership for a caller email."""
 
+    def __init__(self, settings: Settings | None = None) -> None:
+        self.settings = settings or get_settings()
+
     def resolve(self, email: str | None) -> Membership | None:
-        """Return the caller's active membership, provisioning the default
-        workspace owner on first use. Returns ``None`` when no email is known.
+        """Return the caller's active membership, self-provisioning into the
+        default workspace as needed. Returns ``None`` when no email is known or
+        when the caller is denied (invite-only mode, not an admin).
+
+        Provisioning rules for a caller with no membership:
+        - default workspace has no owner -> caller becomes owner (first user, or
+          recovery if a prior owner row was lost);
+        - caller's email is a configured admin -> owner (always recoverable);
+        - otherwise, if ``workspace_auto_join`` is on -> viewer; else denied.
         """
         normalized = (email or "").strip().lower()
         if not normalized:
             return None
+        admin_emails = self.settings.admin_email_set()
         with session_scope() as session:
             repo = WorkspaceRepository(session)
             member = repo.get_active_member_by_email(normalized)
             if member is not None:
                 return _to_membership(member)
-            # Bootstrap: the very first caller owns the default workspace.
-            if not repo.has_any_member(DEFAULT_WORKSPACE_ID):
+            role = self._role_for_new_member(repo, normalized, admin_emails)
+            if role is None:
+                return None
+            try:
                 member = repo.add_member(
                     workspace_id=DEFAULT_WORKSPACE_ID,
                     email=normalized,
-                    role="owner",
+                    role=role,
                     status="active",
                     invited_by=None,
                 )
                 return _to_membership(member)
+            except IntegrityError:
+                # A concurrent request inserted the same member; fall through to
+                # re-read it in a fresh session.
+                session.rollback()
+        with session_scope() as session:
+            member = WorkspaceRepository(session).get_active_member_by_email(
+                normalized
+            )
+            return _to_membership(member) if member is not None else None
+
+    def _role_for_new_member(
+        self,
+        repo: WorkspaceRepository,
+        email: str,
+        admin_emails: set[str],
+    ) -> str | None:
+        if repo.count_owners(DEFAULT_WORKSPACE_ID) == 0:
+            return "owner"
+        if email in admin_emails:
+            return "owner"
+        if self.settings.workspace_auto_join:
+            return "viewer"
         return None
 
     def require_membership(self, email: str | None) -> Membership:

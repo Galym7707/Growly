@@ -291,8 +291,12 @@ def test_invitation_accept_requires_matching_email(monkeypatch) -> None:
 
 
 def test_resolve_service_denies_unknown_non_member(monkeypatch) -> None:
-    """An authenticated user who is not a member and is not the bootstrap owner
-    is denied (the default workspace already has an owner)."""
+    """In invite-only mode a non-member, non-admin caller is denied when the
+    default workspace already has an owner."""
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "workspace_auto_join", False)
+    monkeypatch.setattr(settings, "admin_emails", "")
 
     class FakeRepo:
         def __init__(self, session):
@@ -302,9 +306,9 @@ def test_resolve_service_denies_unknown_non_member(monkeypatch) -> None:
             del email
             return None
 
-        def has_any_member(self, workspace_id):
+        def count_owners(self, workspace_id):
             del workspace_id
-            return True  # owner already exists
+            return 1  # owner already exists
 
     @contextmanager
     def fake_session_scope():
@@ -318,6 +322,93 @@ def test_resolve_service_denies_unknown_non_member(monkeypatch) -> None:
     )
 
     assert WorkspaceService().resolve("stranger@example.com") is None
+
+
+def test_resolve_auto_joins_as_viewer_when_owner_exists(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "workspace_auto_join", True)
+    monkeypatch.setattr(settings, "admin_emails", "")
+    added: dict = {}
+
+    class FakeRepo:
+        def __init__(self, session):
+            del session
+
+        def get_active_member_by_email(self, email):
+            del email
+            return None
+
+        def count_owners(self, workspace_id):
+            del workspace_id
+            return 1
+
+        def add_member(self, **kwargs):
+            added.update(kwargs)
+            return SimpleNamespace(
+                id=2,
+                workspace_id=kwargs["workspace_id"],
+                email=kwargs["email"],
+                role=kwargs["role"],
+                status=kwargs["status"],
+            )
+
+    @contextmanager
+    def fake_session_scope():
+        yield SimpleNamespace()
+
+    monkeypatch.setattr(
+        "app.services.workspace_service.WorkspaceRepository", FakeRepo
+    )
+    monkeypatch.setattr(
+        "app.services.workspace_service.session_scope", fake_session_scope
+    )
+
+    membership = WorkspaceService().resolve("teammate@example.com")
+    assert membership is not None
+    assert membership.role == "viewer"
+    assert added["role"] == "viewer"
+
+
+def test_resolve_admin_recovers_owner(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "workspace_auto_join", False)
+    monkeypatch.setattr(settings, "admin_emails", "boss@example.com")
+
+    class FakeRepo:
+        def __init__(self, session):
+            del session
+
+        def get_active_member_by_email(self, email):
+            del email
+            return None
+
+        def count_owners(self, workspace_id):
+            del workspace_id
+            return 1  # someone else already owns it
+
+        def add_member(self, **kwargs):
+            return SimpleNamespace(
+                id=3,
+                workspace_id=kwargs["workspace_id"],
+                email=kwargs["email"],
+                role=kwargs["role"],
+                status=kwargs["status"],
+            )
+
+    @contextmanager
+    def fake_session_scope():
+        yield SimpleNamespace()
+
+    monkeypatch.setattr(
+        "app.services.workspace_service.WorkspaceRepository", FakeRepo
+    )
+    monkeypatch.setattr(
+        "app.services.workspace_service.session_scope", fake_session_scope
+    )
+
+    membership = WorkspaceService().resolve("boss@example.com")
+    assert membership is not None
+    assert membership.role == "owner"
 
 
 def test_content_plan_detail_from_other_workspace_is_hidden(monkeypatch) -> None:
@@ -416,9 +507,9 @@ def test_resolve_service_bootstraps_first_owner(monkeypatch) -> None:
             del email
             return None
 
-        def has_any_member(self, workspace_id):
+        def count_owners(self, workspace_id):
             del workspace_id
-            return False  # empty workspace -> first caller becomes owner
+            return 0  # no owner yet -> first caller becomes owner
 
         def add_member(self, **kwargs):
             added.update(kwargs)
