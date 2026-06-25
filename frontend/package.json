@@ -10,6 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@polar-sh/nextjs": "^0.9.6",
+    "@polar-sh/sdk": "^0.48.1",
     "@supabase/ssr": "0.12.0",
     "@supabase/supabase-js": "2.108.2",
     "next": "16.2.9",

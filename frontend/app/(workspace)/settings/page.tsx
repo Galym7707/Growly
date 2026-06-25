@@ -200,6 +200,23 @@ export default function SettingsPage() {
 
       <section className="workspace-section">
         <div className="form-panel">
+          <div className="section-heading">
+            <div>
+              <h2>{t("Billing")}</h2>
+              <p className="muted">
+                {t("Manage your Growly subscription, checkout, invoices, and plan access.")}
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/settings/billing">
+              <Icon name="layers" />
+              {t("Open billing")}
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="workspace-section">
+        <div className="form-panel">
           <h2>{t("Режим рабочего пространства")}</h2>
           <p>
             {t("Текущая база Growly использует единую бизнес-область. Supabase Auth управляет входом в веб-интерфейс, но изоляция нескольких компаний требует отдельной миграции данных с полем workspace_id.")}

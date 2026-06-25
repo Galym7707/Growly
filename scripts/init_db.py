@@ -20,6 +20,17 @@ EXPECTED_SCHEMA = {
 REQUIRED_USERS_COLUMNS = set(EXPECTED_SCHEMA["users"])
 
 
+def migration_paths() -> list[Path]:
+    migrations_dir = ROOT / "migrations"
+    init_path = migrations_dir / "init.sql"
+    extra_paths = sorted(
+        path
+        for path in migrations_dir.glob("*.sql")
+        if path.name != "init.sql"
+    )
+    return [init_path, *extra_paths]
+
+
 def verify_schema(cursor: psycopg.Cursor) -> None:
     cursor.execute(
         """
@@ -55,11 +66,12 @@ def main() -> int:
     if not sql_path.is_file():
         print("ERROR: migrations/init.sql was not found.")
         return 1
-    migration = sql_path.read_text(encoding="utf-8")
     try:
         with psycopg.connect(get_settings().database_dsn(), autocommit=True) as connection:
             with connection.cursor() as cursor:
-                cursor.execute(migration, prepare=False)
+                for path in migration_paths():
+                    cursor.execute(path.read_text(encoding="utf-8"), prepare=False)
+                    print(f"Applied migration: {path.name}")
                 verify_schema(cursor)
         print(
             "Database initialization completed. All SQLAlchemy tables and columns "
