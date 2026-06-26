@@ -393,7 +393,13 @@ export default function DraftDetailPage() {
         (submission) => submission.status === "failed",
       );
       if (anyFailed) {
-        pushToast("error", t("Не удалось опубликовать"));
+        const firstError = response.blotato_submissions.find(
+          (submission) => submission.status === "failed" && submission.error,
+        )?.error;
+        pushToast(
+          "error",
+          firstError ? t(firstError) : t("Не удалось опубликовать"),
+        );
       } else {
         pushToast(
           "success",
@@ -404,7 +410,7 @@ export default function DraftDetailPage() {
       const message =
         value instanceof Error ? t(value.message) : t("Неизвестная ошибка");
       setActionError(message);
-      pushToast("error", t("Не удалось опубликовать"));
+      pushToast("error", message);
     } finally {
       setPublishing(false);
     }
@@ -453,7 +459,7 @@ export default function DraftDetailPage() {
       <div className="draft-page">
         <FriendlyError
           debug={errorDebug}
-          message={t("Не удалось загрузить черновик. Попробуйте обновить страницу.")}
+          message={draftLoadErrorMessage(errorDebug, t)}
           onRetry={load}
         />
       </div>
@@ -728,4 +734,18 @@ function submissionLabel(status: string): string {
   if (status === "skipped") return "Пропущено";
   if (status === "unsupported") return "Не поддерживается";
   return status;
+}
+
+function draftLoadErrorMessage(
+  debug: ApiDebugInfo | null,
+  t: (value: string) => string,
+): string {
+  if (debug?.status === 404) {
+    return t("Черновик не найден или у вашего аккаунта нет доступа к этому workspace.");
+  }
+  if (debug?.status === 403) {
+    return t(debug.message || "У вашего аккаунта нет доступа к этому workspace.");
+  }
+  if (debug?.message) return t(debug.message);
+  return t("Не удалось загрузить черновик. Попробуйте обновить страницу.");
 }
