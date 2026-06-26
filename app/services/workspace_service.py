@@ -4,9 +4,10 @@ This is the single source of truth for *who* may do *what* in a workspace.
 Identity is email-based (the Next proxy verifies the Supabase session and
 forwards the verified email); membership rows decide access.
 
-Phase-1 bootstrap: the app was single-tenant, so all legacy data lives in the
-``default`` workspace. The first authenticated caller with no membership becomes
-the owner of that workspace; everyone else must be invited.
+Phase-1 bootstrap: the app was single-tenant, so legacy data may still live in
+the ``default`` workspace. New authenticated callers are provisioned into their
+own workspace instead of being joined to ``default``; otherwise separate emails
+can see the same legacy workspace.
 """
 
 from __future__ import annotations
@@ -107,32 +108,69 @@ class WorkspaceService:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
 
-    def resolve(self, email: str | None) -> Membership | None:
+    def resolve(
+        self, email: str | None, preferred_workspace_id: str | None = None
+    ) -> Membership | None:
         """Return the caller's active membership, self-provisioning into the
-        default workspace as needed. Returns ``None`` when no email is known or
-        when the caller is denied (invite-only mode, not an admin).
+        caller's private workspace as needed. Returns ``None`` when no email is
+        known or when the caller is denied (invite-only mode, not an admin).
 
         Provisioning rules for a caller with no membership:
-        - default workspace has no owner -> caller becomes owner (first user, or
-          recovery if a prior owner row was lost);
+        - if the trusted proxy provides a workspace id, it becomes the caller's
+          private workspace id;
+        - default workspace has no owner and no proxy workspace was provided ->
+          caller becomes owner of ``default`` for legacy recovery;
         - caller's email is a configured admin -> owner (always recoverable);
-        - otherwise, if ``workspace_auto_join`` is on -> viewer; else denied.
+        - otherwise, if ``workspace_auto_join`` is on -> owner of a deterministic
+          private workspace derived from email; else denied.
         """
         normalized = (email or "").strip().lower()
         if not normalized:
             return None
+        preferred = self._normalize_preferred_workspace_id(preferred_workspace_id)
         admin_emails = self.settings.admin_email_set()
         with session_scope() as session:
             repo = WorkspaceRepository(session)
+            if preferred:
+                member = repo.get_member_in_workspace(preferred, normalized)
+                if member is not None and getattr(member, "status", None) == "active":
+                    return _to_membership(member)
+                if (
+                    not self.settings.workspace_auto_join
+                    and normalized not in admin_emails
+                ):
+                    return None
+                try:
+                    member = repo.add_member(
+                        workspace_id=preferred,
+                        email=normalized,
+                        role="owner",
+                        status="active",
+                        invited_by=None,
+                    )
+                    return _to_membership(member)
+                except IntegrityError:
+                    session.rollback()
+                    member = repo.get_member_in_workspace(preferred, normalized)
+                    if (
+                        member is not None
+                        and getattr(member, "status", None) == "active"
+                    ):
+                        return _to_membership(member)
+                    return None
+
             member = repo.get_active_member_by_email(normalized)
             if member is not None:
                 return _to_membership(member)
-            role = self._role_for_new_member(repo, normalized, admin_emails)
-            if role is None:
+            workspace_role = self._workspace_role_for_new_member(
+                repo, normalized, admin_emails
+            )
+            if workspace_role is None:
                 return None
+            workspace_id, role = workspace_role
             try:
                 member = repo.add_member(
-                    workspace_id=DEFAULT_WORKSPACE_ID,
+                    workspace_id=workspace_id,
                     email=normalized,
                     role=role,
                     status="active",
@@ -149,22 +187,37 @@ class WorkspaceService:
             )
             return _to_membership(member) if member is not None else None
 
-    def _role_for_new_member(
+    @staticmethod
+    def _normalize_preferred_workspace_id(workspace_id: str | None) -> str | None:
+        value = (workspace_id or "").strip()
+        if not value or value == DEFAULT_WORKSPACE_ID:
+            return None
+        return value[:200]
+
+    @staticmethod
+    def private_workspace_id(email: str) -> str:
+        normalized = email.strip().lower()
+        digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:24]
+        return f"user-{digest}"
+
+    def _workspace_role_for_new_member(
         self,
         repo: WorkspaceRepository,
         email: str,
         admin_emails: set[str],
-    ) -> str | None:
+    ) -> tuple[str, str] | None:
         if repo.count_owners(DEFAULT_WORKSPACE_ID) == 0:
-            return "owner"
+            return (DEFAULT_WORKSPACE_ID, "owner")
         if email in admin_emails:
-            return "owner"
+            return (DEFAULT_WORKSPACE_ID, "owner")
         if self.settings.workspace_auto_join:
-            return "viewer"
+            return (self.private_workspace_id(email), "owner")
         return None
 
-    def require_membership(self, email: str | None) -> Membership:
-        membership = self.resolve(email)
+    def require_membership(
+        self, email: str | None, preferred_workspace_id: str | None = None
+    ) -> Membership:
+        membership = self.resolve(email, preferred_workspace_id)
         if membership is None:
             raise WorkspaceAccessError(
                 "У вас нет доступа к этому workspace.", status=403

@@ -146,10 +146,9 @@ class Settings(BaseSettings):
     # Public base URL of the web app, used to build absolute invite links in
     # emails (e.g. https://growly-five.vercel.app).
     app_base_url: str | None = Field(default=None, alias="APP_BASE_URL")
-    # When true (default), an authenticated user with no membership auto-joins
-    # the default workspace (as owner if it has none, otherwise as viewer) so
-    # nobody is locked out during the single-tenant transition. Set to false to
-    # enforce invite-only access.
+    # When true (default), an authenticated user with no membership gets a
+    # private workspace automatically. Set to false to enforce invite-only
+    # access.
     workspace_auto_join: bool = Field(default=True, alias="WORKSPACE_AUTO_JOIN")
 
     scheduler_enabled: bool = Field(default=False, alias="SCHEDULER_ENABLED")

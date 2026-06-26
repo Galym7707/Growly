@@ -324,7 +324,9 @@ def test_resolve_service_denies_unknown_non_member(monkeypatch) -> None:
     assert WorkspaceService().resolve("stranger@example.com") is None
 
 
-def test_resolve_auto_joins_as_viewer_when_owner_exists(monkeypatch) -> None:
+def test_resolve_auto_provisions_private_owner_when_default_owner_exists(
+    monkeypatch,
+) -> None:
     settings = get_settings()
     monkeypatch.setattr(settings, "workspace_auto_join", True)
     monkeypatch.setattr(settings, "admin_emails", "")
@@ -365,8 +367,68 @@ def test_resolve_auto_joins_as_viewer_when_owner_exists(monkeypatch) -> None:
 
     membership = WorkspaceService().resolve("teammate@example.com")
     assert membership is not None
-    assert membership.role == "viewer"
-    assert added["role"] == "viewer"
+    assert membership.role == "owner"
+    assert added["role"] == "owner"
+    assert added["workspace_id"] == WorkspaceService.private_workspace_id(
+        "teammate@example.com"
+    )
+
+
+def test_resolve_uses_proxy_workspace_as_private_owner(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "workspace_auto_join", True)
+    monkeypatch.setattr(settings, "admin_emails", "")
+    added: dict = {}
+
+    class FakeRepo:
+        def __init__(self, session):
+            del session
+
+        def get_member_in_workspace(self, workspace_id, email):
+            del workspace_id, email
+            return None
+
+        def add_member(self, **kwargs):
+            added.update(kwargs)
+            return SimpleNamespace(
+                id=9,
+                workspace_id=kwargs["workspace_id"],
+                email=kwargs["email"],
+                role=kwargs["role"],
+                status=kwargs["status"],
+            )
+
+    @contextmanager
+    def fake_session_scope():
+        yield SimpleNamespace()
+
+    monkeypatch.setattr(
+        "app.services.workspace_service.WorkspaceRepository", FakeRepo
+    )
+    monkeypatch.setattr(
+        "app.services.workspace_service.session_scope", fake_session_scope
+    )
+
+    membership = WorkspaceService().resolve("teammate@example.com", "supabase-user-id")
+    assert membership is not None
+    assert membership.workspace_id == "supabase-user-id"
+    assert membership.role == "owner"
+    assert added["workspace_id"] == "supabase-user-id"
+
+
+def test_legacy_null_report_is_hidden_from_private_workspace(monkeypatch) -> None:
+    _no_key(monkeypatch)
+
+    async def get_report(self, report_id: int):
+        del self, report_id
+        return SimpleNamespace(workspace_id=None)
+
+    monkeypatch.setattr("app.web_api.ReportService.get_report", get_report)
+
+    with _override_membership(_membership("admin", workspace_id="ws-private")):
+        response = TestClient(app).get("/api/reports/5")
+
+    assert response.status_code == 404
 
 
 def test_resolve_admin_recovers_owner(monkeypatch) -> None:

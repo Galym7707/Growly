@@ -449,6 +449,8 @@ class SocialPublishingService:
         draft = await asyncio.to_thread(self._load_draft, draft_id)
         if draft is None:
             raise ValueError("Черновик не найден.")
+        if not self._draft_visible_in_workspace(draft, workspace):
+            raise ValueError("Черновик не найден.")
         text = (draft.draft_text or "").strip()
         if not text:
             raise GrowlyError("Черновик пуст; публикация невозможна.")
@@ -603,6 +605,13 @@ class SocialPublishingService:
             return session.get(Draft, draft_id)
 
     @staticmethod
+    def _draft_visible_in_workspace(draft: Draft, workspace: str) -> bool:
+        draft_workspace = getattr(draft, "workspace_id", None)
+        if draft_workspace is None:
+            return workspace == DEFAULT_WORKSPACE
+        return draft_workspace == workspace
+
+    @staticmethod
     def _mark_draft_published(draft_id: int) -> None:
         with session_scope() as session:
             draft = session.get(Draft, draft_id)
@@ -708,6 +717,8 @@ class SocialPublishingService:
         workspace = normalize_workspace(workspace_id)
         draft = await asyncio.to_thread(self._load_draft, draft_id)
         if draft is None:
+            raise ValueError("Черновик не найден.")
+        if not self._draft_visible_in_workspace(draft, workspace):
             raise ValueError("Черновик не найден.")
         text = (draft.draft_text or "").strip()
         if not text:

@@ -6,6 +6,13 @@ type WorkspaceHeaders =
   | { headers: Headers }
   | { response: NextResponse };
 
+type SupabaseUserWithConfirmation = {
+  id: string;
+  email?: string;
+  email_confirmed_at?: string | null;
+  confirmed_at?: string | null;
+};
+
 // Public, view-only endpoints reachable without a session: resolving a share
 // link (GET /share-links/{token}) and reading invitation details
 // (GET /invitations/{token}). Everything else requires authentication.
@@ -58,10 +65,27 @@ async function resolveWorkspaceHeaders(
       ),
     };
   }
-  headers.set("X-Growly-Workspace-Id", data.user.id);
-  if (data.user.email) {
-    headers.set("X-Growly-User-Email", data.user.email);
+  const user = data.user as SupabaseUserWithConfirmation;
+  if (!user.email) {
+    if (allowAnonymous) return { headers };
+    return {
+      response: NextResponse.json(
+        { detail: "В аккаунте Supabase нет подтвержденного email." },
+        { status: 403 },
+      ),
+    };
   }
+  if (!user.email_confirmed_at && !user.confirmed_at) {
+    if (allowAnonymous) return { headers };
+    return {
+      response: NextResponse.json(
+        { detail: "Подтвердите email, чтобы продолжить работу в Growly." },
+        { status: 403 },
+      ),
+    };
+  }
+  headers.set("X-Growly-Workspace-Id", user.id);
+  headers.set("X-Growly-User-Email", user.email);
   return { headers };
 }
 

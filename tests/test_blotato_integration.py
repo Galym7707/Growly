@@ -291,7 +291,14 @@ def test_map_platform_to_account_uses_env_fallback(monkeypatch) -> None:
 # -- publishing orchestration -------------------------------------------------
 
 
-def _publish_service(monkeypatch, *, mapping, publish_result=None, raises=None):
+def _publish_service(
+    monkeypatch,
+    *,
+    mapping,
+    publish_result=None,
+    raises=None,
+    draft_workspace=None,
+):
     _enable_blotato(monkeypatch)
     recorded: list[dict] = []
     service = SocialPublishingService()
@@ -299,7 +306,13 @@ def _publish_service(monkeypatch, *, mapping, publish_result=None, raises=None):
     monkeypatch.setattr(
         service,
         "_load_draft",
-        staticmethod(lambda draft_id: SimpleNamespace(draft_text="Post body", status="approved")),
+        staticmethod(
+            lambda draft_id: SimpleNamespace(
+                draft_text="Post body",
+                status="approved",
+                workspace_id=draft_workspace,
+            )
+        ),
     )
     monkeypatch.setattr(service.blotato, "is_enabled", lambda: True)
     monkeypatch.setattr(service.blotato, "validate_platform", lambda p: True)
@@ -349,6 +362,33 @@ async def test_publish_draft_creates_publication_record(monkeypatch) -> None:
     assert result["publication_ids"] == [1]
     assert result["blotato_submissions"][0]["post_submission_id"] == "sub-1"
     assert recorded[0]["status"] == "submitted"
+
+
+@pytest.mark.asyncio
+async def test_publish_draft_rejects_other_workspace(monkeypatch) -> None:
+    service = SocialPublishingService()
+    monkeypatch.setattr(
+        service,
+        "_load_draft",
+        staticmethod(
+            lambda draft_id: SimpleNamespace(
+                draft_text="Post body",
+                status="approved",
+                workspace_id="workspace-a",
+            )
+        ),
+    )
+
+    with pytest.raises(ValueError, match="Черновик"):
+        await service.publish_draft(
+            workspace_id="workspace-b",
+            draft_id=7,
+            platforms=["threads"],
+            publish_now=True,
+            scheduled_time=None,
+            media_urls=[],
+            language="ru",
+        )
 
 
 @pytest.mark.asyncio
@@ -407,6 +447,7 @@ async def test_workspace_without_mapping_cannot_publish(monkeypatch) -> None:
     service, recorded = _publish_service(
         monkeypatch,
         mapping=None,  # workspace has no account mapping and no env fallback
+        draft_workspace="other-workspace",
     )
     result = await service.publish_draft(
         workspace_id="other-workspace",

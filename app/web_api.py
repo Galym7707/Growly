@@ -30,6 +30,7 @@ from app.services.social_publishing_service import SocialPublishingService
 from app.services.source_analysis_service import SourceAnalysisService
 from app.services.source_discovery_service import SourceDiscoveryService
 from app.services.workspace_service import (
+    DEFAULT_WORKSPACE_ID,
     Membership,
     WorkspaceService,
     can_edit,
@@ -102,6 +103,7 @@ def get_user_email(
 
 def current_membership(
     email: str | None = Depends(get_user_email),
+    x_growly_workspace_id: str | None = Header(default=None),
 ) -> Membership | None:
     """Resolve the caller's workspace membership.
 
@@ -112,7 +114,14 @@ def current_membership(
     """
     if not email:
         return None
-    return WorkspaceService().require_membership(email)
+    return WorkspaceService().require_membership(email, x_growly_workspace_id)
+
+
+def effective_workspace_id(
+    workspace_id: str = Depends(get_workspace_id),
+    membership: Membership | None = Depends(current_membership),
+) -> str:
+    return membership.workspace_id if membership is not None else workspace_id
 
 
 def require_member(
@@ -135,7 +144,7 @@ def _visible_in_workspace(
     if membership is None:
         return True
     if resource_workspace_id is None:
-        return True
+        return membership.workspace_id == DEFAULT_WORKSPACE_ID
     return resource_workspace_id == membership.workspace_id
 
 
@@ -526,11 +535,14 @@ def _content_plan_source_payload(session: Any) -> dict[str, Any] | None:
 
 
 def _content_plan_workspace_filter(workspace_id: str):
-    # Legacy rows (NULL workspace) stay visible alongside the caller's own.
-    return or_(
-        ContentPlan.workspace_id == workspace_id,
-        ContentPlan.workspace_id.is_(None),
-    )
+    # Legacy rows (NULL workspace) remain visible only in the legacy default
+    # workspace. Private workspaces must not see global single-tenant leftovers.
+    if workspace_id == DEFAULT_WORKSPACE_ID:
+        return or_(
+            ContentPlan.workspace_id == workspace_id,
+            ContentPlan.workspace_id.is_(None),
+        )
+    return ContentPlan.workspace_id == workspace_id
 
 
 def _list_content_plan_response(
@@ -592,12 +604,18 @@ def _content_plan_detail_response(
 ) -> dict[str, Any]:
     with session_scope() as session:
         anchor = session.get(ContentPlan, plan_id)
-        if anchor is None or (
-            workspace_id is not None
-            and anchor.workspace_id is not None
-            and anchor.workspace_id != workspace_id
-        ):
+        if anchor is None:
             raise HTTPException(status_code=404, detail="Контент-план не найден.")
+        if workspace_id is not None:
+            visible = (
+                anchor.workspace_id == workspace_id
+                or (
+                    anchor.workspace_id is None
+                    and workspace_id == DEFAULT_WORKSPACE_ID
+                )
+            )
+            if not visible:
+                raise HTTPException(status_code=404, detail="Контент-план не найден.")
         rows = _content_plan_batch_rows(
             session, anchor, workspace_id=workspace_id
         )
@@ -1313,21 +1331,21 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
 
 @secured_router.get("/integrations/status")
 async def integrations_status(
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
 ) -> dict[str, Any]:
     return await SocialPublishingService().integrations_status(workspace_id)
 
 
 @secured_router.get("/integrations/blotato/status")
 async def blotato_status(
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
 ) -> dict[str, Any]:
     return await SocialPublishingService().blotato_status(workspace_id)
 
 
 @secured_router.get("/integrations/blotato/accounts")
 async def blotato_accounts(
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
 ) -> dict[str, Any]:
     accounts = await SocialPublishingService().list_accounts(workspace_id)
     return {"accounts": accounts}
@@ -1343,7 +1361,7 @@ def _safe_blotato_detail(exc: BlotatoServiceError) -> str:
 @secured_router.post("/integrations/blotato/media-upload")
 async def blotato_media_upload(
     payload: BlotatoMediaUploadRequest,
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
 ) -> dict[str, str]:
     try:
         return await SocialPublishingService().create_media_upload(
@@ -1358,7 +1376,7 @@ async def blotato_media_upload(
 @secured_router.post("/integrations/blotato/visuals")
 async def blotato_create_visual(
     payload: BlotatoVisualRequest,
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
 ) -> dict[str, Any]:
     try:
         return await SocialPublishingService().create_visual(
@@ -1376,7 +1394,7 @@ async def blotato_create_visual(
 @secured_router.get("/integrations/blotato/visuals/{visual_id}")
 async def blotato_visual_status(
     visual_id: str,
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
 ) -> dict[str, Any]:
     if not visual_id.strip() or len(visual_id) > 200:
         raise HTTPException(status_code=400, detail="Некорректный ID медиа.")
@@ -1396,7 +1414,7 @@ async def blotato_visual_status(
 @secured_router.get("/integrations/social/status")
 async def social_status(
     platform: str = Query(default="instagram", max_length=50),
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
 ) -> dict[str, Any]:
     return await SocialConnectionService().status(workspace_id, platform)
 
@@ -1404,7 +1422,7 @@ async def social_status(
 @secured_router.post("/integrations/social/request")
 async def social_request(
     payload: SocialConnectionRequestBody,
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
     user_email: str | None = Depends(get_user_email),
 ) -> dict[str, Any]:
     try:
@@ -1418,7 +1436,7 @@ async def social_request(
 @secured_router.delete("/integrations/social/request/{request_id}")
 async def social_cancel_request(
     request_id: int,
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
 ) -> dict[str, Any]:
     try:
         return await SocialConnectionService().cancel_request(
@@ -1431,7 +1449,7 @@ async def social_cancel_request(
 @secured_router.post("/integrations/social/disconnect")
 async def social_disconnect(
     payload: SocialDisconnectRequest,
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
 ) -> dict[str, Any]:
     return await SocialConnectionService().disconnect(
         workspace_id, payload.platform
@@ -1440,7 +1458,7 @@ async def social_disconnect(
 
 @secured_router.post("/integrations/blotato/test")
 async def blotato_test(
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
 ) -> dict[str, Any]:
     return await SocialPublishingService().test_connection(workspace_id)
 
@@ -1448,7 +1466,7 @@ async def blotato_test(
 @secured_router.post("/integrations/blotato/mappings")
 async def blotato_set_mappings(
     payload: BlotatoMappingsRequest,
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
 ) -> dict[str, Any]:
     target_workspace = payload.workspace_id or workspace_id
     saved = await SocialPublishingService().save_mappings(
@@ -1460,7 +1478,7 @@ async def blotato_set_mappings(
 
 @secured_router.get("/integrations/blotato/mappings")
 async def blotato_get_mappings(
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
 ) -> dict[str, Any]:
     return {
         "mappings": await SocialPublishingService().get_mappings(workspace_id)
@@ -1488,7 +1506,7 @@ async def draft_detail(
 async def publish_draft_blotato(
     draft_id: int,
     payload: PublishBlotatoRequest,
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
     membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
     if membership is not None and not can_publish(membership.role):
@@ -1513,7 +1531,7 @@ async def publish_draft_blotato(
 async def schedule_draft_blotato(
     draft_id: int,
     payload: ScheduleBlotatoRequest,
-    workspace_id: str = Depends(get_workspace_id),
+    workspace_id: str = Depends(effective_workspace_id),
     membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
     if membership is not None and not can_publish(membership.role):
