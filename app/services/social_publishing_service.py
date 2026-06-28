@@ -14,6 +14,8 @@ from datetime import UTC, datetime
 from threading import Lock
 from typing import Any
 
+from sqlalchemy import desc, select
+
 from app.config import Settings, get_settings
 from app.database import session_scope
 from app.models import Draft, ManualPublishPackage, Publication, SocialAccount
@@ -485,6 +487,20 @@ class SocialPublishingService:
                     }
                 )
                 continue
+            existing = await asyncio.to_thread(
+                self._load_existing_submission, workspace, draft_id, slug
+            )
+            if existing is not None:
+                publication_ids.append(int(existing["publication_id"]))
+                submissions.append(
+                    {
+                        "platform": slug,
+                        "post_submission_id": existing["post_submission_id"],
+                        "status": existing["status"],
+                        "url": existing["url"],
+                    }
+                )
+                continue
             # Security: the account id is taken ONLY from this workspace's
             # connected social_accounts — never from the request or env.
             mapping = await asyncio.to_thread(
@@ -583,6 +599,42 @@ class SocialPublishingService:
             "publication_ids": publication_ids,
             "blotato_submissions": submissions,
         }
+
+    @staticmethod
+    def _load_existing_submission(
+        workspace: str,
+        draft_id: int,
+        platform: str,
+    ) -> dict[str, Any] | None:
+        """Return an already-submitted publication for retry/idempotency.
+
+        A provider can accept the post while the browser still receives a
+        transient 500/network error. Retrying must not create a duplicate post
+        for the same draft/platform.
+        """
+
+        with session_scope() as session:
+            publication = session.scalar(
+                select(Publication)
+                .where(
+                    Publication.workspace_id == workspace,
+                    Publication.draft_id == draft_id,
+                    Publication.platform == platform,
+                    Publication.provider == "blotato",
+                    Publication.external_submission_id.is_not(None),
+                    Publication.status.in_(("submitted", "scheduled", "published")),
+                )
+                .order_by(desc(Publication.created_at), desc(Publication.id))
+                .limit(1)
+            )
+            if publication is None:
+                return None
+            return {
+                "publication_id": publication.id,
+                "post_submission_id": publication.external_submission_id,
+                "status": publication.status,
+                "url": publication.external_post_url or publication.published_url,
+            }
 
     @staticmethod
     def _resolve_account(workspace: str, platform: str) -> dict[str, str | None] | None:

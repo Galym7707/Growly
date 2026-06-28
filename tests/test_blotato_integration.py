@@ -365,6 +365,48 @@ async def test_publish_draft_creates_publication_record(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_publish_draft_reuses_existing_submission_on_retry(monkeypatch) -> None:
+    service, recorded = _publish_service(
+        monkeypatch,
+        mapping={"account_id": "acc-1", "page_id": None},
+    )
+    publish_calls: list[dict] = []
+
+    async def unexpected_publish(**kwargs):
+        publish_calls.append(kwargs)
+        raise AssertionError("retry must not create a duplicate provider post")
+
+    monkeypatch.setattr(service.blotato, "publish_post", unexpected_publish)
+    monkeypatch.setattr(
+        service,
+        "_load_existing_submission",
+        staticmethod(
+            lambda workspace, draft_id, platform: {
+                "publication_id": 42,
+                "post_submission_id": "sub-existing",
+                "status": "submitted",
+                "url": None,
+            }
+        ),
+    )
+
+    result = await service.publish_draft(
+        workspace_id="default",
+        draft_id=7,
+        platforms=["threads"],
+        publish_now=True,
+        scheduled_time=None,
+        media_urls=[],
+        language="ru",
+    )
+
+    assert result["publication_ids"] == [42]
+    assert result["blotato_submissions"][0]["post_submission_id"] == "sub-existing"
+    assert publish_calls == []
+    assert recorded == []
+
+
+@pytest.mark.asyncio
 async def test_publish_draft_rejects_other_workspace(monkeypatch) -> None:
     service = SocialPublishingService()
     monkeypatch.setattr(

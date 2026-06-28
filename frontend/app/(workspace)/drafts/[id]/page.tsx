@@ -728,6 +728,7 @@ export default function DraftDetailPage() {
 }
 
 function submissionLabel(status: string): string {
+  if (status === "published") return "Опубликовано";
   if (status === "submitted") return "Отправлено";
   if (status === "scheduled") return "Запланировано";
   if (status === "failed") return "Ошибка";
