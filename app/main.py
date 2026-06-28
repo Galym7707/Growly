@@ -10,7 +10,12 @@ from sqlalchemy import text
 from app.config import get_settings
 from app.database import session_scope
 from app.runtime_status import telegram_initialized
-from app.utils.errors import GrowlyError, IntegrationError, WorkspaceAccessError
+from app.utils.errors import (
+    AIServiceError,
+    GrowlyError,
+    IntegrationError,
+    WorkspaceAccessError,
+)
 from app.utils.logging import configure_logging
 from app.web_api import router as web_router
 
@@ -46,8 +51,36 @@ async def growly_error_handler(
     exc: GrowlyError,
 ) -> JSONResponse:
     del request
-    status_code = 502 if isinstance(exc, IntegrationError) else 400
-    return JSONResponse(status_code=status_code, content={"detail": str(exc)})
+    status_code = _growly_error_status(exc)
+    return JSONResponse(
+        status_code=status_code,
+        content={"detail": _growly_error_detail(exc)},
+    )
+
+
+def _growly_error_status(exc: GrowlyError) -> int:
+    if isinstance(exc, AIServiceError):
+        status = getattr(exc, "status", None)
+        if isinstance(status, int) and 400 <= status < 600:
+            return status
+        return 503
+    if isinstance(exc, IntegrationError):
+        status = getattr(exc, "status", None)
+        if isinstance(status, int) and 400 <= status < 600:
+            return status
+        return 502
+    return 400
+
+
+def _growly_error_detail(exc: GrowlyError) -> str:
+    if isinstance(exc, AIServiceError):
+        if exc.is_rate_limited:
+            return (
+                "Генерация временно недоступна: лимит AI-сервиса исчерпан. "
+                "Попробуйте позже."
+            )
+        return "Генерация временно недоступна. Попробуйте позже."
+    return str(exc)
 
 
 @app.exception_handler(ValueError)

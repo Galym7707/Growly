@@ -4,7 +4,7 @@ import asyncio
 import hmac
 import logging
 from datetime import UTC, date, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, NoReturn
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -43,8 +43,10 @@ from app.services.workspace_service import (
     verify_share_password,
 )
 from app.utils.errors import (
+    AIServiceError,
     BlotatoServiceError,
     GrowlyError,
+    IntegrationError,
     WorkspaceAccessError,
 )
 
@@ -1214,8 +1216,48 @@ async def update_settings(payload: WorkspaceSettingsRequest) -> dict[str, Any]:
     return {"status": "completed", "settings": saved}
 
 
+def _action_error_status(exc: Exception) -> int:
+    if isinstance(exc, AIServiceError):
+        status_code = exc.status
+        if isinstance(status_code, int) and 400 <= status_code < 600:
+            return status_code
+        return status.HTTP_503_SERVICE_UNAVAILABLE
+    if isinstance(exc, TimeoutError):
+        return status.HTTP_504_GATEWAY_TIMEOUT
+    if isinstance(exc, IntegrationError):
+        status_code = getattr(exc, "status", None)
+        if isinstance(status_code, int) and 400 <= status_code < 600:
+            return status_code
+        return status.HTTP_502_BAD_GATEWAY
+    return status.HTTP_400_BAD_REQUEST
+
+
+def _action_error_detail(exc: Exception) -> str:
+    if isinstance(exc, AIServiceError):
+        if exc.is_rate_limited:
+            return (
+                "Генерация временно недоступна: лимит AI-сервиса исчерпан. "
+                "Попробуйте позже."
+            )
+        return "Генерация временно недоступна. Попробуйте позже."
+    if isinstance(exc, TimeoutError):
+        return "Генерация заняла слишком много времени. Попробуйте ещё раз."
+    message = str(exc).strip()
+    return message or "Задачу не удалось выполнить. Сервис временно недоступен."
+
+
+def _raise_action_error(exc: Exception) -> NoReturn:
+    raise HTTPException(
+        status_code=_action_error_status(exc),
+        detail=_action_error_detail(exc),
+    ) from exc
+
+
 @secured_router.post("/chat")
-async def chat(payload: ChatRequest) -> dict[str, Any]:
+async def chat(
+    payload: ChatRequest,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
     context = payload.context
     report_id = payload.report_id
     if report_id is None and str(context.get("report_id") or "").isdigit():
@@ -1226,11 +1268,14 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
     if action == "ask":
         if report_id is None:
             raise HTTPException(status_code=400, detail="Сначала выберите отчёт.")
-        answer = await ReportService().answer_question(
-            report_id,
-            payload.message,
-            payload.language,
-        )
+        try:
+            answer = await ReportService().answer_question(
+                report_id,
+                payload.message,
+                payload.language,
+            )
+        except (GrowlyError, TimeoutError) as exc:
+            _raise_action_error(exc)
         return {
             "status": "completed",
             "action": "ask",
@@ -1240,87 +1285,96 @@ async def chat(payload: ChatRequest) -> dict[str, Any]:
     if action == "ideas":
         if report_id is None:
             raise HTTPException(status_code=400, detail="Сначала выберите отчёт.")
-        answer = await ReportService().report_ideas(report_id, payload.language)
+        try:
+            answer = await ReportService().report_ideas(report_id, payload.language)
+        except (GrowlyError, TimeoutError) as exc:
+            _raise_action_error(exc)
         return {
             "status": "completed",
             "action": "ideas",
             "message": "Готово.",
             "result": {"answer": answer},
         }
-    if action == "market_scan":
-        request = MarketScanRequest(
-            niche=str(context.get("niche") or payload.message),
-            region_language=str(
-                context.get("region_language") or "Казахстан, русский язык"
-            ),
-            competitor_keywords=str(context.get("competitor_keywords") or ""),
-            language=payload.language,
-        )
-        result = await _run_market_scan_sync(request)
-    elif action == "competitors":
-        result = await competitor_report(
-            CompetitorReportRequest(
-                query=str(context.get("query") or payload.message),
-                report_id=report_id,
+    try:
+        if action == "market_scan":
+            request = MarketScanRequest(
+                niche=str(context.get("niche") or payload.message),
+                region_language=str(
+                    context.get("region_language") or "Казахстан, русский язык"
+                ),
+                competitor_keywords=str(context.get("competitor_keywords") or ""),
                 language=payload.language,
             )
-        )
-    elif action == "content_plan":
-        result = await content_plan_create(
-            ContentPlanRequest(
-                weekly_objective=str(
-                    context.get("weekly_objective") or payload.message
+            result = await _run_market_scan_sync(request)
+        elif action == "competitors":
+            result = await competitor_report(
+                CompetitorReportRequest(
+                    query=str(context.get("query") or payload.message),
+                    report_id=report_id,
+                    language=payload.language,
                 ),
-                business=(
-                    {
-                        **context.get("business"),
-                        "language": payload.language,
-                    }
-                    if isinstance(context.get("business"), dict)
-                    else {"language": payload.language}
-                ),
-                report_id=report_id,
-                language=payload.language,
+                membership=membership,
             )
-        )
-    elif action == "create_post":
-        result = await create_post(
-            CreatePostRequest(
-                brief=str(context.get("brief") or payload.message),
-                channel=str(context.get("channel") or "Telegram"),
-                title=(
-                    str(context["title"]) if context.get("title") else None
+        elif action == "content_plan":
+            result = await content_plan_create(
+                ContentPlanRequest(
+                    weekly_objective=str(
+                        context.get("weekly_objective") or payload.message
+                    ),
+                    business=(
+                        {
+                            **context.get("business"),
+                            "language": payload.language,
+                        }
+                        if isinstance(context.get("business"), dict)
+                        else {"language": payload.language}
+                    ),
+                    report_id=report_id,
+                    language=payload.language,
                 ),
-                cta=str(context["cta"]) if context.get("cta") else None,
-                language=payload.language,
+                membership=membership,
             )
-        )
-    elif action == "drafts":
-        result = await drafts(limit=50)
-    elif action == "reports":
-        result = await reports(limit=50)
-    elif action == "sources":
-        result = await sources(active_only=False)
-    elif action == "notion_sync":
-        result = await notion_sync(NotionSyncRequest())
-    else:
-        return {
-            "status": "needs_action",
-            "message": (
-                "Уточните действие: анализ рынка, конкуренты, контент-план, "
-                "создание поста, черновики, отчёты, источники или синхронизация Notion."
-            ),
-            "available_actions": [
-                "market_scan",
-                "competitors",
-                "content_plan",
-                "create_post",
-                "drafts",
-                "reports",
-                "sources",
-                "notion_sync",
-            ],
-        }
+        elif action == "create_post":
+            result = await create_post(
+                CreatePostRequest(
+                    brief=str(context.get("brief") or payload.message),
+                    channel=str(context.get("channel") or "Telegram"),
+                    title=(
+                        str(context["title"]) if context.get("title") else None
+                    ),
+                    cta=str(context["cta"]) if context.get("cta") else None,
+                    language=payload.language,
+                ),
+                membership=membership,
+            )
+        elif action == "drafts":
+            result = await drafts(limit=50, membership=membership)
+        elif action == "reports":
+            result = await reports(limit=50, membership=membership)
+        elif action == "sources":
+            result = await sources(active_only=False)
+        elif action == "notion_sync":
+            result = await notion_sync(NotionSyncRequest())
+        else:
+            return {
+                "status": "needs_action",
+                "message": (
+                    "Уточните действие: анализ рынка, конкуренты, контент-план, "
+                    "создание поста, черновики, отчёты, источники или синхронизация Notion."
+                ),
+                "available_actions": [
+                    "market_scan",
+                    "competitors",
+                    "content_plan",
+                    "create_post",
+                    "drafts",
+                    "reports",
+                    "sources",
+                    "notion_sync",
+                ],
+            }
+    except (GrowlyError, TimeoutError) as exc:
+        _raise_action_error(exc)
     return {
         "status": "completed",
         "action": action,

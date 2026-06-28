@@ -15,7 +15,7 @@ import { Icon, type IconName } from "@/components/icons";
 import { ReportPicker } from "@/components/report-picker";
 import { SelectedReportCard } from "@/components/selected-report-card";
 import { LoadingState, PageHeader } from "@/components/ui";
-import { apiRequest } from "@/lib/api";
+import { apiErrorDebugInfo, apiRequest } from "@/lib/api";
 import {
   activeContextTopic,
   CHAT_PLACEHOLDER_NO_CONTEXT,
@@ -46,6 +46,27 @@ type Message = {
   text: string;
   meta?: string;
 };
+
+function friendlyChatError(value: unknown, t: (value: string) => string): string {
+  const debugInfo = apiErrorDebugInfo(value);
+  if (debugInfo) {
+    const message = debugInfo.message.trim();
+    if (message && message.toLowerCase() !== "internal server error") {
+      return t(message);
+    }
+    if (debugInfo.status === 429) {
+      return t(
+        "Генерация временно недоступна: лимит AI-сервиса исчерпан. Попробуйте позже.",
+      );
+    }
+    if (debugInfo.status >= 500) {
+      return t("Задачу не удалось выполнить. Сервис временно недоступен.");
+    }
+  }
+  return value instanceof Error
+    ? t(value.message)
+    : t("Задачу не удалось выполнить.");
+}
 
 const nicheActions: {
   id: Action;
@@ -166,10 +187,7 @@ function ChatContent() {
           {
             id: Date.now() + 1,
             role: "assistant",
-            text:
-              value instanceof Error
-                ? t(value.message)
-                : t("Задачу не удалось выполнить."),
+            text: friendlyChatError(value, t),
             meta: t("Ошибка"),
           },
         ]);
@@ -275,7 +293,7 @@ function ChatContent() {
       ? [
           { id: "plan", label: "Создать контент-план", icon: "book", run: () => router.push(`/content-plan?reportId=${active.report_id}`) },
           { id: "ideas", label: "Показать идеи постов", icon: "report", run: () => void runChat("ideas", t("Показать идеи постов"), {}, t("Идеи постов")) },
-          { id: "competitors", label: "Сформировать конкурентный вывод", icon: "search", run: () => void runChat("competitors", activeTopic || t("последний анализ рынка"), { query: activeTopic || "" }, t("Конкуренты")) },
+          { id: "competitors", label: "Разобрать конкурентов", icon: "search", run: () => void runChat("competitors", activeTopic || t("последний анализ рынка"), { query: activeTopic || "" }, t("Конкуренты")) },
           { id: "post", label: "Создать пост", icon: "draft", run: () => router.push(`/create-post?reportId=${active.report_id}`) },
           { id: "notion", label: "Сохранить в Notion", icon: "notion", run: () => void saveActiveReportToNotion() },
         ]

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.main import app
+from app.utils.errors import AIServiceError
 
 
 def test_root_health_is_available_for_container_readiness() -> None:
@@ -165,6 +166,100 @@ def test_market_scan_job_status_includes_stable_report_id(monkeypatch) -> None:
     assert payload["report_id"] == 123
     assert payload["sources_count"] == 42
     assert payload["sources_saved"] == 42
+
+
+def test_chat_competitors_uses_resolved_membership_for_internal_call(
+    monkeypatch,
+) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "growly_web_api_key", None)
+    now = datetime.now(UTC)
+    report = SimpleNamespace(
+        id=88,
+        report_type="competitor_report",
+        title="Конкурентный отчёт: финансы",
+        body="Текст",
+        report_text="Текст",
+        summary="Краткий вывод",
+        query="финансы",
+        sources_count=3,
+        evidence_json=[],
+        recommendations_json=[],
+        raw_json={},
+        week_start=None,
+        week_end=None,
+        status="ready",
+        notion_page_id=None,
+        workspace_id=None,
+        created_at=now,
+        updated_at=now,
+    )
+
+    async def generate_competitor_report(
+        self,
+        *,
+        query=None,
+        market_report_id=None,
+        output_language=None,
+    ):
+        del self, market_report_id
+        assert query == "финансы"
+        assert output_language == "ru"
+        return report
+
+    monkeypatch.setattr(
+        "app.web_api.MarketIntelligenceService.generate_competitor_report",
+        generate_competitor_report,
+    )
+
+    response = TestClient(app).post(
+        "/api/chat",
+        json={
+            "message": "финансы",
+            "action": "competitors",
+            "context": {"query": "финансы"},
+            "language": "ru",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["result"]["report_id"] == 88
+
+
+def test_chat_returns_clear_message_for_ai_rate_limit(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "growly_web_api_key", None)
+
+    async def generate_competitor_report(self, **kwargs):
+        del self, kwargs
+        raise AIServiceError(
+            "rate limited",
+            status=429,
+            provider="github_models",
+            reason="rate_limit",
+        )
+
+    monkeypatch.setattr(
+        "app.web_api.MarketIntelligenceService.generate_competitor_report",
+        generate_competitor_report,
+    )
+
+    response = TestClient(app).post(
+        "/api/chat",
+        json={
+            "message": "финансы",
+            "action": "competitors",
+            "context": {"query": "финансы"},
+            "language": "ru",
+        },
+    )
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == (
+        "Генерация временно недоступна: лимит AI-сервиса исчерпан. "
+        "Попробуйте позже."
+    )
 
 
 def test_content_plans_create_returns_plan_id_and_passes_language(monkeypatch) -> None:

@@ -46,8 +46,19 @@ export default function ContentPlanDetailPage() {
       debugInfo?.status === 404 ||
       debugInfo?.message.trim().toLowerCase() === "not found";
     if (isNotFound) return copy.loadErrorReasons[2];
+    if (debugInfo) {
+      const message = debugInfo.message.trim();
+      if (message && message.toLowerCase() !== "internal server error") {
+        return t(message);
+      }
+      if (debugInfo.status === 429) {
+        return t(
+          "Генерация временно недоступна: лимит AI-сервиса исчерпан. Попробуйте позже.",
+        );
+      }
+    }
     if (debugInfo && debugInfo.status >= 500) {
-      return t("Не удалось создать черновик. Сервис временно недоступен.");
+      return t("Задачу не удалось выполнить. Сервис временно недоступен.");
     }
     return value instanceof Error ? t(value.message) : t("Неизвестная ошибка");
   }

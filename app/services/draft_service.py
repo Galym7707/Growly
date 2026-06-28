@@ -155,16 +155,33 @@ class DraftService:
             }
         }
         spec = normalize_content_type(item.content_type)
-        draft = await self._create_typed_draft(
-            {
-                **context,
-                "channel": item.channel or "Telegram",
-                "title": item.topic or f"Элемент контент-плана {item.id}",
-                "cta": item.cta,
-            },
-            spec,
-            content_plan_id=item.id,
-        )
+        draft_context = {
+            **context,
+            "channel": item.channel or "Telegram",
+            "title": item.topic or f"Элемент контент-плана {item.id}",
+            "cta": item.cta,
+        }
+        try:
+            draft = await self._create_typed_draft(
+                draft_context,
+                spec,
+                content_plan_id=item.id,
+            )
+        except AIServiceError as exc:
+            if not self._can_create_plan_fallback(exc):
+                raise
+            logger.warning(
+                "content_plan_draft_fallback item_id=%s status=%s reason=%s",
+                item.id,
+                exc.status,
+                exc.reason,
+            )
+            draft = await self._create_fallback_from_plan(
+                item,
+                draft_context,
+                spec,
+                exc,
+            )
 
         def mark_drafted() -> None:
             with session_scope() as session:
@@ -174,6 +191,77 @@ class DraftService:
 
         await asyncio.to_thread(mark_drafted)
         return draft
+
+    async def _create_fallback_from_plan(
+        self,
+        item: ContentPlan,
+        context: dict[str, Any],
+        spec: ContentTypeSpec,
+        error: AIServiceError,
+    ) -> Draft:
+        draft_text = self._fallback_plan_text(item)
+        metadata = {
+            "content_angle": item.topic or spec.label,
+            "source_insight": item.source_idea or item.why_recommended,
+            "target_pain": item.target_audience,
+            "cta": item.cta,
+            "risk_check": (
+                "AI generation was temporarily unavailable; this draft was "
+                "assembled only from saved content-plan fields."
+            ),
+            "why_this_should_work": item.why_recommended,
+            "fallback": {
+                "enabled": True,
+                "provider": error.provider,
+                "reason": error.reason,
+                "status": error.status,
+            },
+        }
+        return await self._save_new(
+            draft_type=spec.key,
+            channel=item.channel or "Telegram",
+            title=item.topic or f"Элемент контент-плана {item.id}",
+            draft_text=draft_text,
+            prompt_name=f"fallback:{spec.prompt_name}",
+            original_context={**context, "fallback_generation": True},
+            generation_metadata=metadata,
+            content_plan_id=item.id,
+        )
+
+    @staticmethod
+    def _can_create_plan_fallback(error: AIServiceError) -> bool:
+        transient_reasons = {
+            "rate_limit",
+            "timeout",
+            "connection",
+            "temporary_server_error",
+        }
+        return bool(
+            error.is_rate_limited
+            or error.status in {500, 502, 503, 504}
+            or error.reason in transient_reasons
+        )
+
+    @staticmethod
+    def _fallback_plan_text(item: ContentPlan) -> str:
+        topic = (item.topic or "Тема из контент-плана").strip()
+        key_message = (item.key_message or "").strip()
+        target_audience = (item.target_audience or "").strip()
+        source_idea = (item.source_idea or "").strip()
+        why_recommended = (item.why_recommended or "").strip()
+        cta = (item.cta or "").strip()
+
+        parts = [topic]
+        if target_audience:
+            parts.append(f"Для кого: {target_audience}.")
+        if key_message:
+            parts.append(key_message.rstrip(".") + ".")
+        if source_idea:
+            parts.append(f"Идея из анализа: {source_idea.rstrip('.')}.")
+        if why_recommended:
+            parts.append(f"Почему это важно сейчас: {why_recommended.rstrip('.')}.")
+        parts.append(cta or "Напишите нам, если хотите обсудить детали.")
+        return "\n\n".join(part for part in parts if part.strip())
 
     async def _save_new(
         self,
