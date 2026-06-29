@@ -24,6 +24,7 @@ import {
   apiErrorDebugInfo,
   apiRequest,
   formatDate,
+  formatStatusLabel,
   type ApiDebugInfo,
 } from "@/lib/api";
 import {
@@ -530,7 +531,9 @@ export default function DraftDetailPage() {
               <div>
                 <dt>{t("Статус")}</dt>
                 <dd>
-                  <Status value={draft.status}>{draft.status}</Status>
+                  <Status value={draft.status}>
+                    {formatStatusLabel(draft.status, locale)}
+                  </Status>
                 </dd>
               </div>
               <div>

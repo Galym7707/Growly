@@ -11,6 +11,7 @@ import {
   formatDate,
   formatReportTitle,
   formatReportType,
+  formatStatusLabel,
   type ApiDebugInfo,
 } from "@/lib/api";
 import { shortConclusion } from "@/lib/report-sections";
@@ -141,7 +142,9 @@ export function ReportPicker({
                 </p>
                 <h3>{formatReportTitle(report.title, report.type, locale)}</h3>
               </div>
-              <Status value={report.status}>{report.status}</Status>
+              <Status value={report.status}>
+                {formatStatusLabel(report.status, locale)}
+              </Status>
             </div>
             <p className="report-card-summary">
               {shortConclusion(report.summary, 2) || t("Краткий вывод не указан.")}

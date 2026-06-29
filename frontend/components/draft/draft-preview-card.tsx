@@ -20,7 +20,7 @@ export function DraftPreviewCard({
   return (
     <section className="draft-card">
       <div className="draft-card-head">
-        <h2>{t("Preview")}</h2>
+        <h2>{t("Предпросмотр")}</h2>
         {media.length > 1 ? (
           <span className="draft-counter">
             <Icon name="layers" /> {media.length}

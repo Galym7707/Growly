@@ -16,6 +16,7 @@ import {
   formatDate,
   formatReportTitle,
   formatReportType,
+  formatStatusLabel,
 } from "@/lib/api";
 import { useActiveContext } from "@/lib/active-context-provider";
 import { shortConclusion } from "@/lib/report-sections";
@@ -155,7 +156,7 @@ function ReportCard({ report }: { report: Report }) {
           <p className="eyebrow">{formatReportType(report.type, locale)}</p>
           <h3>{formatReportTitle(report.title, report.type, locale)}</h3>
         </div>
-        <Status value={report.status}>{report.status}</Status>
+        <Status value={report.status}>{formatStatusLabel(report.status, locale)}</Status>
       </div>
       <p className="report-card-summary">{summary}</p>
       <div className="report-card-meta">

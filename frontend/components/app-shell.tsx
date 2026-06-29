@@ -23,7 +23,7 @@ const nav: { href: string; label: string; icon: IconName }[] = [
   { href: "/sources", label: "Источники", icon: "source" },
   { href: "/settings/team", label: "Команда", icon: "users" },
   { href: "/settings/integrations", label: "Интеграции", icon: "settings" },
-  { href: "/settings/billing", label: "Billing", icon: "layers" },
+  { href: "/settings/billing", label: "Оплата", icon: "layers" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

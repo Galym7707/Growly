@@ -943,7 +943,7 @@ class ContentPlanService:
     def _ensure_current_plan_dates(
         items: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        today = datetime.now(UTC).date()
+        today = max(datetime.now(UTC).date(), datetime.now().date())
         for index, item in enumerate(items):
             value = item.get("publish_date")
             if not isinstance(value, datetime) or value.date() >= today:

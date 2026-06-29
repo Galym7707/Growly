@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Status } from "@/components/ui";
-import { formatDate } from "@/lib/api";
+import { formatDate, formatStatusLabel } from "@/lib/api";
 import { useLanguage } from "@/lib/i18n";
 import type { Draft } from "@/lib/types";
 
@@ -27,7 +27,7 @@ export function DraftHeader({ draft }: { draft: Draft }) {
       <h1 className="draft-title">{title}</h1>
 
       <div className="draft-badges">
-        <Status value={draft.status}>{draft.status}</Status>
+        <Status value={draft.status}>{formatStatusLabel(draft.status, locale)}</Status>
         <span className="draft-badge">{formatDate(draft.updated_at, locale)}</span>
         {draft.channel ? (
           <span className="draft-badge draft-badge-channel">{draft.channel}</span>

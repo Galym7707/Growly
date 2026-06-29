@@ -174,7 +174,7 @@ export default function IntegrationsPage() {
               {t("Отправьте заявку, и мы поможем подключить ваш Instagram к автопостингу. Подключение проходит через официальный OAuth, без передачи пароля.")}
             </p>
             <label className="full">
-              <span>{t("Instagram username")}</span>
+              <span>{t("Имя пользователя Instagram")}</span>
               <input
                 onChange={(event) => setUsername(event.target.value)}
                 placeholder="@your_business"
@@ -204,7 +204,7 @@ export default function IntegrationsPage() {
             </p>
             <ul className="integration-facts">
               <li>
-                {t("Instagram username")}: <strong>{social?.request?.requested_username || "—"}</strong>
+                {t("Имя пользователя Instagram")}: <strong>{social?.request?.requested_username || "—"}</strong>
               </li>
               <li>
                 {t("Статус")}: <strong>{t("Ожидает подключения")}</strong>

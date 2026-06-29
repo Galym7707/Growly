@@ -10,7 +10,7 @@ import {
   PageHeader,
   Status,
 } from "@/components/ui";
-import { apiRequest, formatDate } from "@/lib/api";
+import { apiRequest, formatDate, formatStatusLabel } from "@/lib/api";
 import { useLanguage } from "@/lib/i18n";
 import type { Draft } from "@/lib/types";
 
@@ -103,7 +103,9 @@ export default function DraftsPage() {
                       {t("версия {version}", { version: draft.version })}
                     </p>
                     <div className="item-meta">
-                      <Status value={draft.status}>{draft.status}</Status>
+                      <Status value={draft.status}>
+                        {formatStatusLabel(draft.status, locale)}
+                      </Status>
                       <span className="muted">{formatDate(draft.updated_at, locale)}</span>
                       <span className="muted">
                         {draft.notion_synced

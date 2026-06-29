@@ -62,6 +62,13 @@ class ReportService:
 
         return await asyncio.to_thread(load)
 
+    async def list_latest_summary(self, limit: int = 10) -> list[Report]:
+        def load() -> list[Report]:
+            with session_scope() as session:
+                return ReportsRepository(session).list_latest_summary(limit)
+
+        return await asyncio.to_thread(load)
+
     async def get_report(self, report_id: int) -> Report | None:
         def load() -> Report | None:
             with session_scope() as session:
@@ -73,6 +80,13 @@ class ReportService:
         def load() -> Report | None:
             with session_scope() as session:
                 return ReportsRepository(session).latest_report(report_type)
+
+        return await asyncio.to_thread(load)
+
+    async def latest_report_summary(self, report_type: str) -> Report | None:
+        def load() -> Report | None:
+            with session_scope() as session:
+                return ReportsRepository(session).latest_report_summary(report_type)
 
         return await asyncio.to_thread(load)
 

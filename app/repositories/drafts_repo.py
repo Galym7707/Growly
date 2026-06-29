@@ -2,10 +2,27 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import desc, select
-from sqlalchemy.orm import Session
+from sqlalchemy import desc, func, select
+from sqlalchemy.orm import Session, load_only
 
 from app.models import Approval, Draft, User
+
+
+def _draft_summary_columns():
+    return load_only(
+        Draft.id,
+        Draft.content_plan_id,
+        Draft.draft_type,
+        Draft.channel,
+        Draft.title,
+        Draft.version,
+        Draft.status,
+        Draft.approved_by,
+        Draft.notion_page_id,
+        Draft.workspace_id,
+        Draft.created_at,
+        Draft.updated_at,
+    )
 
 
 class DraftsRepository:
@@ -52,6 +69,24 @@ class DraftsRepository:
         )
         return list(self.session.scalars(statement))
 
+    def list_pending_summary(self, limit: int = 20) -> list[Draft]:
+        statement = (
+            select(Draft)
+            .options(_draft_summary_columns())
+            .where(Draft.status == "pending")
+            .order_by(desc(Draft.created_at))
+            .limit(limit)
+        )
+        return list(self.session.scalars(statement))
+
+    def count_pending(self) -> int:
+        return int(
+            self.session.scalar(
+                select(func.count(Draft.id)).where(Draft.status == "pending")
+            )
+            or 0
+        )
+
     def latest_for_plan(self, content_plan_id: int) -> Draft | None:
         return self.session.scalar(
             select(Draft)
@@ -81,6 +116,16 @@ class DraftsRepository:
         return list(
             self.session.scalars(
                 select(Draft).order_by(desc(Draft.created_at)).limit(limit)
+            )
+        )
+
+    def list_recent_summary(self, limit: int = 50) -> list[Draft]:
+        return list(
+            self.session.scalars(
+                select(Draft)
+                .options(_draft_summary_columns())
+                .order_by(desc(Draft.created_at))
+                .limit(limit)
             )
         )
 

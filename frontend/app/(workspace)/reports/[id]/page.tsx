@@ -20,6 +20,7 @@ import {
   formatDate,
   formatReportTitle,
   formatReportType,
+  formatStatusLabel,
 } from "@/lib/api";
 import { useActiveContext } from "@/lib/active-context-provider";
 import type { Report } from "@/lib/types";
@@ -121,7 +122,9 @@ export default function ReportPage() {
                 <div>
                   <dt>{t("Статус")}</dt>
                   <dd>
-                    <Status value={report.status}>{report.status}</Status>
+                    <Status value={report.status}>
+                      {formatStatusLabel(report.status, locale)}
+                    </Status>
                   </dd>
                 </div>
                 <div>

@@ -390,6 +390,32 @@ def _report_payload(report: Report) -> dict[str, Any]:
     }
 
 
+def _report_summary_payload(report: Report) -> dict[str, Any]:
+    return {
+        "id": report.id,
+        "type": report.report_type,
+        "title": report.title,
+        "body": None,
+        "summary": report.summary,
+        "query": report.query,
+        "sources_count": report.sources_count,
+        "evidence": [],
+        "recommendations": [],
+        "structure": {},
+        "week_start": _date_value(report.week_start),
+        "week_end": _date_value(report.week_end),
+        "status": report.status,
+        "notion_synced": bool(report.notion_page_id),
+        "notion_url": (
+            NotionService.page_url(report.notion_page_id)
+            if report.notion_page_id
+            else None
+        ),
+        "created_at": _date_value(report.created_at),
+        "updated_at": _date_value(report.updated_at),
+    }
+
+
 def _draft_payload(draft: Draft) -> dict[str, Any]:
     return {
         "id": draft.id,
@@ -402,6 +428,29 @@ def _draft_payload(draft: Draft) -> dict[str, Any]:
         "status": draft.status,
         "approved_by": draft.approved_by,
         "metadata": draft.generation_metadata_json or {},
+        "notion_synced": bool(draft.notion_page_id),
+        "notion_url": (
+            NotionService.page_url(draft.notion_page_id)
+            if draft.notion_page_id
+            else None
+        ),
+        "created_at": _date_value(draft.created_at),
+        "updated_at": _date_value(draft.updated_at),
+    }
+
+
+def _draft_summary_payload(draft: Draft) -> dict[str, Any]:
+    return {
+        "id": draft.id,
+        "content_plan_id": draft.content_plan_id,
+        "type": draft.draft_type,
+        "channel": draft.channel,
+        "title": draft.title,
+        "text": "",
+        "version": draft.version,
+        "status": draft.status,
+        "approved_by": draft.approved_by,
+        "metadata": {},
         "notion_synced": bool(draft.notion_page_id),
         "notion_url": (
             NotionService.page_url(draft.notion_page_id)
@@ -455,16 +504,17 @@ def _dashboard_data() -> dict[str, Any]:
         reports = ReportsRepository(session)
         drafts = DraftsRepository(session)
         sources = SourcesRepository(session)
-        latest_market = reports.latest_report("market_scan")
+        latest_market = reports.latest_report_summary("market_scan")
         latest_competitor = (
-            reports.latest_report("competitor_report")
-            or reports.latest_report("competitor")
+            reports.latest_report_summary("competitor_report")
+            or reports.latest_report_summary("competitor")
         )
         latest_plan = session.scalar(
             select(ContentPlan).order_by(desc(ContentPlan.created_at)).limit(1)
         )
-        pending_drafts = drafts.list_pending(limit=5)
-        active_sources = sources.list_sources(active_only=True)
+        pending_drafts = drafts.list_pending_summary(limit=5)
+        pending_drafts_count = drafts.count_pending()
+        active_sources_count = sources.count_sources(active_only=True)
         notion_last_sync = SettingsRepository(session).get("notion_last_sync_at")
         published_count = int(
             session.scalar(
@@ -477,18 +527,22 @@ def _dashboard_data() -> dict[str, Any]:
         return {
             "workspace_mode": "single",
             "latest_market_scan": (
-                _report_payload(latest_market) if latest_market else None
+                _report_summary_payload(latest_market) if latest_market else None
             ),
             "latest_competitor_report": (
-                _report_payload(latest_competitor) if latest_competitor else None
+                _report_summary_payload(latest_competitor)
+                if latest_competitor
+                else None
             ),
             "latest_content_plan": (
                 _content_plan_payload(latest_plan) if latest_plan else None
             ),
-            "drafts_waiting": [_draft_payload(row) for row in pending_drafts],
+            "drafts_waiting": [
+                _draft_summary_payload(row) for row in pending_drafts
+            ],
             "counts": {
-                "pending_drafts": len(pending_drafts),
-                "active_sources": len(active_sources),
+                "pending_drafts": pending_drafts_count,
+                "active_sources": active_sources_count,
                 "published": published_count,
             },
             "notion": {
@@ -1051,7 +1105,7 @@ async def drafts(
 ) -> dict[str, Any]:
     def load() -> list[Draft]:
         with session_scope() as session:
-            return DraftsRepository(session).list_recent(limit)
+            return DraftsRepository(session).list_recent_summary(limit)
 
     rows = await asyncio.to_thread(load)
     rows = [
@@ -1059,7 +1113,7 @@ async def drafts(
         for row in rows
         if _visible_in_workspace(getattr(row, "workspace_id", None), membership)
     ]
-    return {"items": [_draft_payload(row) for row in rows]}
+    return {"items": [_draft_summary_payload(row) for row in rows]}
 
 
 @secured_router.patch("/drafts/{draft_id}")
@@ -1091,13 +1145,13 @@ async def reports(
     limit: int = Query(default=50, ge=1, le=200),
     membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
-    rows = await ReportService().list_latest(limit)
+    rows = await ReportService().list_latest_summary(limit)
     rows = [
         row
         for row in rows
         if _visible_in_workspace(getattr(row, "workspace_id", None), membership)
     ]
-    return {"items": [_report_payload(row) for row in rows]}
+    return {"items": [_report_summary_payload(row) for row in rows]}
 
 
 @secured_router.get("/reports/{report_id}")

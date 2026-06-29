@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { LoadingState, PageHeader, Status } from "@/components/ui";
-import { ApiError, apiRequest, formatDate } from "@/lib/api";
+import { ApiError, apiRequest, formatDate, formatStatusLabel } from "@/lib/api";
 import { useLanguage } from "@/lib/i18n";
 import type {
   BlotatoAccount,
@@ -235,7 +235,7 @@ export default function AdminBlotatoPage() {
                 <tr>
                   <th>ID</th>
                   <th>{t("Пользователь")}</th>
-                  <th>{t("Instagram username")}</th>
+                  <th>{t("Имя пользователя Instagram")}</th>
                   <th>{t("Статус")}</th>
                   <th>{t("Дата")}</th>
                   <th>{t("Действия")}</th>
@@ -247,7 +247,11 @@ export default function AdminBlotatoPage() {
                     <td>{request.id}</td>
                     <td>{request.user_email || request.workspace_id || "—"}</td>
                     <td>{request.requested_username || "—"}</td>
-                    <td><Status value={request.status}>{request.status}</Status></td>
+                    <td>
+                      <Status value={request.status}>
+                        {formatStatusLabel(request.status, locale)}
+                      </Status>
+                    </td>
                     <td>{formatDate(request.created_at, locale)}</td>
                     <td>
                       <div className="plan-row-actions">

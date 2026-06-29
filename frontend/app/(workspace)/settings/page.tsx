@@ -202,14 +202,14 @@ export default function SettingsPage() {
         <div className="form-panel">
           <div className="section-heading">
             <div>
-              <h2>{t("Billing")}</h2>
+              <h2>{t("Тариф и оплата")}</h2>
               <p className="muted">
-                {t("Manage your Growly subscription, checkout, invoices, and plan access.")}
+                {t("План, оплата и доступ к платёжному кабинету Growly.")}
               </p>
             </div>
             <Link className="button button-secondary" href="/settings/billing">
               <Icon name="layers" />
-              {t("Open billing")}
+              {t("Открыть оплату")}
             </Link>
           </div>
         </div>

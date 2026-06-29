@@ -221,3 +221,80 @@ export function formatReportTitle(
   }
   return value || formatReportType(type, locale);
 }
+
+export function formatStatusLabel(
+  value: string | null | undefined,
+  locale: Locale = "ru",
+): string {
+  const normalized = (value || "").toLowerCase().trim();
+  const labels: Record<Locale, Record<string, string>> = {
+    ru: {
+      active: "Активен",
+      approved: "Согласован",
+      canceled: "Отменён",
+      cancelled: "Отменён",
+      completed: "Завершён",
+      disabled: "Отключён",
+      done: "Готово",
+      failed: "Ошибка",
+      free: "Бесплатный",
+      in_progress: "В работе",
+      pending: "На согласовании",
+      pending_approval: "На согласовании",
+      published: "Опубликован",
+      queued: "В очереди",
+      ready: "Готов",
+      rejected: "Отклонён",
+      running: "Выполняется",
+      scheduled: "Запланирован",
+      submitted: "Отправлен",
+      trialing: "Пробный период",
+    },
+    en: {
+      active: "Active",
+      approved: "Approved",
+      canceled: "Canceled",
+      cancelled: "Canceled",
+      completed: "Completed",
+      disabled: "Disabled",
+      done: "Done",
+      failed: "Error",
+      free: "Free",
+      in_progress: "In progress",
+      pending: "Pending approval",
+      pending_approval: "Pending approval",
+      published: "Published",
+      queued: "Queued",
+      ready: "Ready",
+      rejected: "Rejected",
+      running: "Running",
+      scheduled: "Scheduled",
+      submitted: "Submitted",
+      trialing: "Trialing",
+    },
+    kk: {
+      active: "Белсенді",
+      approved: "Бекітілді",
+      canceled: "Бас тартылды",
+      cancelled: "Бас тартылды",
+      completed: "Аяқталды",
+      disabled: "Өшірілген",
+      done: "Дайын",
+      failed: "Қате",
+      free: "Тегін",
+      in_progress: "Жұмыста",
+      pending: "Бекітуде",
+      pending_approval: "Бекітуде",
+      published: "Жарияланған",
+      queued: "Кезекте",
+      ready: "Дайын",
+      rejected: "Қабылданбады",
+      running: "Орындалуда",
+      scheduled: "Жоспарланған",
+      submitted: "Жіберілді",
+      trialing: "Сынақ кезеңі",
+    },
+  };
+  if (!normalized) return locale === "en" ? "No status" : locale === "kk" ? "Күйі жоқ" : "Нет статуса";
+  return labels[locale][normalized] || value || normalized;
+}

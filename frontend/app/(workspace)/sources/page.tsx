@@ -9,7 +9,7 @@ import {
   PageHeader,
   Status,
 } from "@/components/ui";
-import { apiRequest, formatDate } from "@/lib/api";
+import { apiRequest, formatDate, formatStatusLabel } from "@/lib/api";
 import { useLanguage } from "@/lib/i18n";
 import type { Source } from "@/lib/types";
 
@@ -254,7 +254,9 @@ export default function SourcesPage() {
                 </div>
                 <span>{source.type || t("Не указан")}</span>
                 <span>{formatDate(source.last_checked_at, locale)}</span>
-                <Status value={source.status}>{source.status}</Status>
+                <Status value={source.status}>
+                  {formatStatusLabel(source.status, locale)}
+                </Status>
               </article>
             ))}
           </div>

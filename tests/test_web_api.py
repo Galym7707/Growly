@@ -70,13 +70,13 @@ def test_reports_endpoint_serializes_structured_report(monkeypatch) -> None:
         updated_at=now,
     )
 
-    async def list_latest(self, limit: int = 10):
+    async def list_latest_summary(self, limit: int = 10):
         assert limit == 50
         return [report]
 
     monkeypatch.setattr(
-        "app.web_api.ReportService.list_latest",
-        list_latest,
+        "app.web_api.ReportService.list_latest_summary",
+        list_latest_summary,
     )
 
     response = TestClient(app).get("/api/reports")
@@ -84,7 +84,8 @@ def test_reports_endpoint_serializes_structured_report(monkeypatch) -> None:
     assert response.status_code == 200
     payload = response.json()["items"][0]
     assert payload["id"] == 7
-    assert payload["structure"]["competitors"][0]["competitor"] == "Example"
+    assert payload["body"] is None
+    assert payload["structure"] == {}
 
 
 def test_market_scan_starts_background_job_without_waiting(monkeypatch) -> None:

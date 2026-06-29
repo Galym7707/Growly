@@ -11,11 +11,11 @@ import {
 } from "@/components/ui";
 import {
   billingPlans,
-  getBillingPlan,
+  getBillingPlanDisplay,
   type BillingPlanId,
   type PaidBillingPlanId,
 } from "@/lib/billing/plans";
-import { useLanguage } from "@/lib/i18n";
+import { useLanguage, type Locale } from "@/lib/i18n";
 
 type BillingStatusResponse = {
   plan: BillingPlanId;
@@ -47,22 +47,26 @@ export default function BillingSettingsPage() {
         cache: "no-store",
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.detail || "Could not load billing.");
+      if (!response.ok) throw new Error(t("Не удалось загрузить данные по оплате."));
       setBilling(body);
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Could not load billing.");
+      setError(
+        value instanceof Error
+          ? value.message
+          : t("Не удалось загрузить данные по оплате."),
+      );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const currentPlan = useMemo(
-    () => getBillingPlan(billing?.plan || "free"),
-    [billing?.plan],
+  const currentPlanDisplay = useMemo(
+    () => getBillingPlanDisplay(billing?.plan || "free", locale),
+    [billing?.plan, locale],
   );
 
   async function openPortal() {
@@ -74,15 +78,13 @@ export default function BillingSettingsPage() {
         credentials: "include",
       });
       const body = await response.json();
-      if (!response.ok || !body.url) {
-        throw new Error(body.detail || "Billing portal is not configured yet.");
-      }
+      if (!response.ok || !body.url) throw new Error();
       window.location.assign(body.url);
     } catch (value) {
       setPortalError(
         value instanceof Error
-          ? value.message
-          : "Billing portal is not configured yet.",
+          ? value.message || t("Платёжный кабинет пока не настроен.")
+          : t("Платёжный кабинет пока не настроен."),
       );
     } finally {
       setPortalLoading(false);
@@ -100,13 +102,13 @@ export default function BillingSettingsPage() {
         body: JSON.stringify({ plan }),
       });
       const body = await response.json();
-      if (!response.ok || !body.url) {
-        throw new Error(body.detail || "Payment is not configured yet.");
-      }
+      if (!response.ok || !body.url) throw new Error();
       window.location.assign(body.url);
     } catch (value) {
       setCheckoutError(
-        value instanceof Error ? value.message : "Payment is not configured yet.",
+        value instanceof Error
+          ? value.message || t("Оплата пока не настроена.")
+          : t("Оплата пока не настроена."),
       );
     } finally {
       setCheckoutLoading(null);
@@ -116,15 +118,15 @@ export default function BillingSettingsPage() {
   return (
     <div className="workspace-page">
       <PageHeader
-        eyebrow={t("Billing")}
-        title={t("Subscription and billing")}
+        eyebrow={t("Оплата")}
+        title={t("Тариф и оплата")}
         description={t(
-          "Manage your Growly plan, subscription status and billing portal access.",
+          "Управляйте тарифом Growly, статусом подписки и доступом к платёжному кабинету.",
         )}
         action={
           <Link className="button button-secondary" href="/#pricing">
             <Icon name="layers" />
-            {t("View plans")}
+            {t("Посмотреть тарифы")}
           </Link>
         }
       />
@@ -136,17 +138,19 @@ export default function BillingSettingsPage() {
         <>
           <section className="billing-summary">
             <div>
-              <p className="eyebrow">{t("Current plan")}</p>
-              <h2>{currentPlan.name}</h2>
-              <p>{currentPlan.shortBenefit}</p>
+              <p className="eyebrow">{t("Текущий тариф")}</p>
+              <h2>{currentPlanDisplay.name}</h2>
+              <p>{currentPlanDisplay.shortBenefit}</p>
             </div>
             <div className="billing-summary-meta">
               <div>
-                <span>{t("Status")}</span>
-                <Status value={billing.status}>{billing.status}</Status>
+                <span>{t("Статус")}</span>
+                <Status value={billing.status}>
+                  {billingStatusLabel(billing.status, locale)}
+                </Status>
               </div>
               <div>
-                <span>{t("Next billing date")}</span>
+                <span>{t("Следующее списание")}</span>
                 <strong>
                   {billing.nextBillingDate
                     ? new Intl.DateTimeFormat(locale, {
@@ -154,18 +158,18 @@ export default function BillingSettingsPage() {
                         month: "short",
                         year: "numeric",
                       }).format(new Date(billing.nextBillingDate))
-                    : t("No billing date")}
+                    : t("Нет даты списания")}
                 </strong>
               </div>
               <div>
-                <span>{t("Cancel at period end")}</span>
-                <strong>{billing.cancelAtPeriodEnd ? t("Yes") : t("No")}</strong>
+                <span>{t("Отмена в конце периода")}</span>
+                <strong>{billing.cancelAtPeriodEnd ? t("Да") : t("Нет")}</strong>
               </div>
             </div>
             <div className="billing-actions">
               <Link className="button button-primary" href="/#pricing">
                 <Icon name="arrow" />
-                {billing.plan === "free" ? t("Choose plan") : t("Upgrade")}
+                {billing.plan === "free" ? t("Выбрать тариф") : t("Изменить тариф")}
               </Link>
               <button
                 className="button button-secondary"
@@ -174,7 +178,7 @@ export default function BillingSettingsPage() {
                 type="button"
               >
                 <Icon name="external" />
-                {portalLoading ? t("Opening") : t("Manage billing")}
+                {portalLoading ? t("Открываем") : t("Управлять оплатой")}
               </button>
             </div>
             {portalError ? (
@@ -185,12 +189,13 @@ export default function BillingSettingsPage() {
           <section className="workspace-section">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">{t("Plans")}</p>
-                <h2>{t("Choose the workspace size")}</h2>
+                <p className="eyebrow">{t("Тарифы")}</p>
+                <h2>{t("Выберите размер рабочей области")}</h2>
               </div>
             </div>
             <div className="billing-plan-grid">
               {billingPlans.map((plan) => {
+                const planDisplay = getBillingPlanDisplay(plan.id, locale);
                 const paidPlanId =
                   plan.id === "free" ? null : (plan.id as PaidBillingPlanId);
                 const configured = paidPlanId
@@ -204,15 +209,15 @@ export default function BillingSettingsPage() {
                     key={plan.id}
                   >
                     <div>
-                      <h3>{plan.name}</h3>
-                      <p>{plan.shortBenefit}</p>
+                      <h3>{planDisplay.name}</h3>
+                      <p>{planDisplay.shortBenefit}</p>
                     </div>
                     <div className="billing-plan-price">
-                      <strong>{plan.price}</strong>
-                      <span>{plan.period}</span>
+                      <strong>{planDisplay.price}</strong>
+                      <span>{planDisplay.period}</span>
                     </div>
                     <ul>
-                      {plan.features.map((feature) => (
+                      {planDisplay.features.map((feature) => (
                         <li key={feature}>
                           <Icon name="check" />
                           <span>{feature}</span>
@@ -230,11 +235,13 @@ export default function BillingSettingsPage() {
                         onClick={() => paidPlanId && startCheckout(paidPlanId)}
                         type="button"
                       >
-                        {checkoutLoading === paidPlanId ? t("Opening") : plan.cta}
+                        {checkoutLoading === paidPlanId
+                          ? t("Открываем")
+                          : planDisplay.cta}
                       </button>
                     ) : (
                       <button className="button button-secondary" disabled type="button">
-                        Payment is not configured yet.
+                        {t("Оплата пока не настроена.")}
                       </button>
                     )}
                   </article>
@@ -249,4 +256,35 @@ export default function BillingSettingsPage() {
       ) : null}
     </div>
   );
+}
+
+function billingStatusLabel(status: string, locale: Locale): string {
+  const normalized = status.toLowerCase();
+  const labels: Record<Locale, Record<string, string>> = {
+    ru: {
+      active: "Активна",
+      trialing: "Пробный период",
+      past_due: "Нужна оплата",
+      unpaid: "Не оплачена",
+      canceled: "Отменена",
+      free: "Бесплатный тариф",
+    },
+    en: {
+      active: "Active",
+      trialing: "Trialing",
+      past_due: "Past due",
+      unpaid: "Unpaid",
+      canceled: "Canceled",
+      free: "Free plan",
+    },
+    kk: {
+      active: "Белсенді",
+      trialing: "Сынақ кезеңі",
+      past_due: "Төлем қажет",
+      unpaid: "Төленбеген",
+      canceled: "Бас тартылған",
+      free: "Тегін тариф",
+    },
+  };
+  return labels[locale][normalized] || status;
 }

@@ -220,7 +220,7 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
     { label: t("Аудитория"), done: Boolean(audience.trim()), href: "#step-audience" },
     { label: t("Оффер"), done: Boolean(offer.trim()), href: "#step-offer" },
     { label: t("Каналы"), done: channels.length > 0, href: "#step-channels" },
-    { label: t("CTA"), done: Boolean(cta.trim()), href: "#step-cta" },
+    { label: t("Призыв к действию"), done: Boolean(cta.trim()), href: "#step-cta" },
     { label: t("Создание"), done: false, href: "#step-create" },
   ];
 

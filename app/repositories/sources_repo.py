@@ -20,6 +20,12 @@ class SourcesRepository:
             statement = statement.where(Source.status == "active")
         return list(self.session.scalars(statement))
 
+    def count_sources(self, *, active_only: bool = True) -> int:
+        statement = select(func.count(Source.id))
+        if active_only:
+            statement = statement.where(Source.status == "active")
+        return int(self.session.scalar(statement) or 0)
+
     def get(self, source_id: int) -> Source | None:
         return self.session.get(Source, source_id)
 

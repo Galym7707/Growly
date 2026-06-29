@@ -4,9 +4,27 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import desc, func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, load_only
 
 from app.models import Approval, ContentPlan, Draft, Publication, Report, ReviewImport
+
+
+def _report_summary_columns():
+    return load_only(
+        Report.id,
+        Report.report_type,
+        Report.title,
+        Report.summary,
+        Report.query,
+        Report.sources_count,
+        Report.week_start,
+        Report.week_end,
+        Report.status,
+        Report.notion_page_id,
+        Report.workspace_id,
+        Report.created_at,
+        Report.updated_at,
+    )
 
 
 class ReportsRepository:
@@ -63,9 +81,28 @@ class ReportsRepository:
             )
         )
 
+    def list_latest_summary(self, limit: int = 10) -> list[Report]:
+        return list(
+            self.session.scalars(
+                select(Report)
+                .options(_report_summary_columns())
+                .order_by(desc(Report.created_at))
+                .limit(limit)
+            )
+        )
+
     def latest_report(self, report_type: str) -> Report | None:
         return self.session.scalar(
             select(Report)
+            .where(Report.report_type == report_type)
+            .order_by(desc(Report.created_at))
+            .limit(1)
+        )
+
+    def latest_report_summary(self, report_type: str) -> Report | None:
+        return self.session.scalar(
+            select(Report)
+            .options(_report_summary_columns())
             .where(Report.report_type == report_type)
             .order_by(desc(Report.created_at))
             .limit(1)

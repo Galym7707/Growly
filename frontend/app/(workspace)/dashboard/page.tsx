@@ -10,7 +10,12 @@ import {
   Status,
 } from "@/components/ui";
 import { TasksPanel } from "@/components/tasks/tasks-panel";
-import { apiRequest, formatDate, formatDateTime } from "@/lib/api";
+import {
+  apiRequest,
+  formatDate,
+  formatDateTime,
+  formatStatusLabel,
+} from "@/lib/api";
 import { useLanguage } from "@/lib/i18n";
 import type { DashboardData } from "@/lib/types";
 
@@ -205,7 +210,9 @@ export default function DashboardPage() {
                   <Link href="/drafts" key={draft.id}>
                     <span>{draft.title || `${t("Черновик")} ${draft.id}`}</span>
                     <span>{draft.channel || t("Канал не указан")}</span>
-                    <Status value={draft.status}>{draft.status}</Status>
+                    <Status value={draft.status}>
+                      {formatStatusLabel(draft.status, locale)}
+                    </Status>
                     <span>{formatDate(draft.updated_at, locale)}</span>
                   </Link>
                 ))}
@@ -244,7 +251,9 @@ function ResultRow({
         <strong>{summary}</strong>
       </div>
       <div className="result-meta">
-        {status ? <Status value={status}>{status}</Status> : null}
+        {status ? (
+          <Status value={status}>{formatStatusLabel(status, locale)}</Status>
+        ) : null}
         <span>{formatDate(date, locale)}</span>
         <Icon name="arrow" />
       </div>
