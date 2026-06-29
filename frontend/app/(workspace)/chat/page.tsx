@@ -174,7 +174,7 @@ function ChatContent() {
             id: Date.now() + 1,
             role: "assistant",
             text: describeResult(response.result, t),
-            meta: response.status,
+            meta: chatStatusLabel(response.status, t),
           },
         ]);
         if (actionId === "competitors") {
@@ -212,7 +212,12 @@ function ChatContent() {
       });
       setMessages((current) => [
         ...current,
-        { id: Date.now() + 1, role: "assistant", text: t("Сохранено в Notion"), meta: "completed" },
+        {
+          id: Date.now() + 1,
+          role: "assistant",
+          text: t("Сохранено в Notion"),
+          meta: t("Готово"),
+        },
       ]);
     } catch (value) {
       setMessages((current) => [
@@ -483,6 +488,16 @@ function contextForAction(
   if (action === "content_plan") return { weekly_objective: message };
   if (action === "create_post") return { brief: message, channel: "Telegram" };
   return {};
+}
+
+function chatStatusLabel(
+  status: string,
+  t: (source: string, variables?: Record<string, string | number>) => string,
+): string {
+  if (status === "completed") return t("Готово");
+  if (status === "accepted") return t("Запущено");
+  if (status === "needs_action") return t("Нужно действие");
+  return t(status);
 }
 
 function describeResult(

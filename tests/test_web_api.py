@@ -334,6 +334,15 @@ def test_content_plans_detail_uses_real_backend_response(monkeypatch) -> None:
     assert payload["source"]["report_id"] == 7
 
 
+def test_content_plan_source_is_not_inferred_from_latest_report() -> None:
+    from app.web_api import _content_plan_source_payload
+
+    class FakeSession:
+        pass
+
+    assert _content_plan_source_payload(FakeSession()) is None
+
+
 def test_content_plan_list_and_detail_keep_the_latest_batch_together(
     monkeypatch,
 ) -> None:

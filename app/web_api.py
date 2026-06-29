@@ -514,26 +514,12 @@ def _list_content_plan(limit: int) -> list[dict[str, Any]]:
 
 
 def _content_plan_source_payload(session: Any) -> dict[str, Any] | None:
-    report = ReportsRepository(session).latest_report("market_scan")
-    if report is None:
-        return None
-    raw = report.raw_json if isinstance(report.raw_json, dict) else {}
-    market_context = (
-        raw.get("market_context") if isinstance(raw.get("market_context"), dict) else {}
-    )
-    return {
-        "report_id": report.id,
-        "report_title": report.title,
-        "sources_count": report.sources_count,
-        "created_at": _date_value(report.created_at),
-        "language": market_context.get("language"),
-        "notion_synced": bool(report.notion_page_id),
-        "notion_url": (
-            NotionService.page_url(report.notion_page_id)
-            if report.notion_page_id
-            else None
-        ),
-    }
+    # ContentPlan rows do not currently persist the report_id that generated
+    # them. Showing the latest market_scan here is misleading: an older plan can
+    # appear to be based on an unrelated newer report. Keep the source explicit
+    # only after the schema stores a real plan -> report link.
+    del session
+    return None
 
 
 def _content_plan_workspace_filter(workspace_id: str):
