@@ -72,7 +72,7 @@ export function ChannelSelector({
                   <Status value="disabled">{t("Не подключено")}</Status>
                 </label>
               ))}
-              <Link className="button button-secondary button-small button-wide" href="/integrations">
+              <Link className="button button-secondary button-small button-wide" href="/settings/integrations">
                 <Icon name="settings" />
                 {t("Настроить интеграции")}
               </Link>

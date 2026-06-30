@@ -107,6 +107,19 @@ async def test_list_accounts_calls_provider_with_header(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_twitter_account_is_normalized_to_x(monkeypatch) -> None:
+    _enable_blotato(monkeypatch)
+
+    async def fake_request(self, method, path, *, json=None):
+        assert path == "/users/me/accounts"
+        return [{"id": "tw-1", "platform": "twitter", "username": "@brand"}]
+
+    monkeypatch.setattr(BlotatoService, "_request", fake_request)
+    accounts = await BlotatoService(get_settings()).list_accounts()
+    assert accounts[0]["platform"] == "x"
+
+
+@pytest.mark.asyncio
 async def test_publish_post_builds_blotato_body(monkeypatch) -> None:
     _enable_blotato(monkeypatch)
     captured: dict = {}
@@ -150,6 +163,59 @@ async def test_threads_payload_matches_provider_contract(monkeypatch) -> None:
     post = captured["json"]["post"]
     assert post["content"]["platform"] == "threads"
     assert post["target"]["targetType"] == "threads"
+
+
+@pytest.mark.asyncio
+async def test_video_platform_payloads_include_required_target_fields(monkeypatch) -> None:
+    _enable_blotato(monkeypatch)
+    captured: list[dict] = []
+
+    async def fake_request(self, method, path, *, json=None):
+        captured.append(json["post"]["target"])
+        return {"submissionId": f"{json['post']['target']['targetType']}-1"}
+
+    monkeypatch.setattr(BlotatoService, "_request", fake_request)
+    service = BlotatoService(get_settings())
+    await service.publish_post(
+        platform="tiktok", account_id="tt-1", text="video text", title="TikTok title"
+    )
+    await service.publish_post(
+        platform="youtube", account_id="yt-1", text="video text", title="YouTube title"
+    )
+
+    assert captured[0]["targetType"] == "tiktok"
+    assert captured[0]["privacyLevel"] == "PUBLIC_TO_EVERYONE"
+    assert captured[0]["isAiGenerated"] is True
+    assert captured[1]["targetType"] == "youtube"
+    assert captured[1]["privacyStatus"] == "public"
+    assert captured[1]["containsSyntheticMedia"] is True
+
+
+@pytest.mark.asyncio
+async def test_page_and_board_platforms_require_destination_ids(monkeypatch) -> None:
+    _enable_blotato(monkeypatch)
+    captured: list[dict] = []
+
+    async def fake_request(self, method, path, *, json=None):
+        captured.append(json["post"]["target"])
+        return {"submissionId": "ok"}
+
+    monkeypatch.setattr(BlotatoService, "_request", fake_request)
+    service = BlotatoService(get_settings())
+
+    with pytest.raises(BlotatoServiceError, match="Facebook"):
+        await service.publish_post(platform="facebook", account_id="fb-1", text="hello")
+    with pytest.raises(BlotatoServiceError, match="Pinterest"):
+        await service.publish_post(platform="pinterest", account_id="pin-1", text="hello")
+
+    await service.publish_post(
+        platform="facebook", account_id="fb-1", page_id="page-1", text="hello"
+    )
+    await service.publish_post(
+        platform="pinterest", account_id="pin-1", page_id="board-1", text="hello"
+    )
+    assert captured[0]["pageId"] == "page-1"
+    assert captured[1]["boardId"] == "board-1"
 
 
 @pytest.mark.asyncio
@@ -551,6 +617,57 @@ def test_blotato_accounts_endpoint(monkeypatch) -> None:
     response = TestClient(app).get("/api/integrations/blotato/accounts")
     assert response.status_code == 200
     assert response.json()["accounts"][0]["platform"] == "instagram"
+
+
+def test_blotato_connect_endpoint_does_not_return_secret(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "growly_web_api_key", None)
+    captured: dict = {}
+
+    async def fake_save(self, workspace_id, api_key):
+        captured["workspace_id"] = workspace_id
+        captured["api_key"] = api_key
+        return {"ok": True, "connected": True, "accounts_count": 1}
+
+    async def fake_status(self, workspace_id):
+        return {
+            "enabled": True,
+            "api_key_configured": True,
+            "connected": True,
+            "accounts_count": 1,
+            "last_checked_at": None,
+        }
+
+    async def fake_accounts(self, workspace_id):
+        return [
+            {
+                "id": "1",
+                "platform": "instagram",
+                "name": "@brand",
+                "display_name": "Brand",
+                "connected": True,
+            }
+        ]
+
+    monkeypatch.setattr(
+        "app.web_api.SocialPublishingService.save_api_key", fake_save
+    )
+    monkeypatch.setattr(
+        "app.web_api.SocialPublishingService.blotato_status", fake_status
+    )
+    monkeypatch.setattr(
+        "app.web_api.SocialPublishingService.list_accounts", fake_accounts
+    )
+
+    response = TestClient(app).post(
+        "/api/integrations/blotato/connect",
+        json={"api_key": "secret-key"},
+        headers={"X-Growly-Workspace-Id": "ws-42"},
+    )
+
+    assert response.status_code == 200
+    assert captured == {"workspace_id": "ws-42", "api_key": "secret-key"}
+    assert "secret-key" not in str(response.json())
 
 
 def test_publish_endpoint_passes_workspace_from_header(monkeypatch) -> None:

@@ -42,6 +42,11 @@ SUPPORTED_PLATFORMS = {
     "pinterest",
 }
 
+# Blotato uses "twitter" in the API, while Growly shows the platform as X.
+PLATFORM_ALIAS = {
+    "twitter": "x",
+}
+
 # Growly platform slug -> Blotato target type.
 PLATFORM_TARGET = {
     "x": "twitter",
@@ -49,6 +54,8 @@ PLATFORM_TARGET = {
 
 # Platforms that publish to a page/organization in addition to an account.
 PAGE_PLATFORMS = {"facebook", "linkedin"}
+REQUIRED_PAGE_PLATFORMS = {"facebook"}
+BOARD_PLATFORMS = {"pinterest"}
 
 # Default template ids. Blotato rotates these ids per account, so when a
 # default is no longer offered we fall back to matching a live template by the
@@ -237,12 +244,14 @@ class BlotatoService:
             or username
         )
         status = str(row.get("status") or "connected").strip().lower()
+        platform_slug = str(platform).strip().lower()
         return {
             "id": str(account_id) if account_id is not None else "",
-            "platform": str(platform).strip().lower(),
+            "platform": PLATFORM_ALIAS.get(platform_slug, platform_slug),
             "name": str(username),
             "display_name": str(display_name),
             "connected": status in {"connected", "active", "ready", ""},
+            "subaccounts": [],
         }
 
     async def list_accounts(self) -> list[dict[str, Any]]:
@@ -250,7 +259,65 @@ class BlotatoService:
         accounts = [
             self._normalize_account(row) for row in self._account_rows(payload)
         ]
-        return [account for account in accounts if account["id"]]
+        accounts = [account for account in accounts if account["id"]]
+        for account in accounts:
+            if account["platform"] not in PAGE_PLATFORMS:
+                continue
+            try:
+                account["subaccounts"] = await self.list_subaccounts(account["id"])
+            except BlotatoServiceError as exc:
+                logger.warning(
+                    "Could not list Blotato subaccounts for account %s: %s",
+                    account["id"],
+                    exc,
+                )
+                account["subaccounts"] = []
+        return accounts
+
+    @staticmethod
+    def _subaccount_rows(payload: Any) -> list[dict[str, Any]]:
+        if isinstance(payload, list):
+            return [row for row in payload if isinstance(row, dict)]
+        if isinstance(payload, dict):
+            for key in ("subaccounts", "accounts", "items", "data", "results"):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    return [row for row in value if isinstance(row, dict)]
+        return []
+
+    @staticmethod
+    def _normalize_subaccount(row: dict[str, Any]) -> dict[str, str]:
+        subaccount_id = (
+            row.get("id")
+            or row.get("pageId")
+            or row.get("page_id")
+            or row.get("organizationId")
+            or row.get("organization_id")
+        )
+        account_id = row.get("accountId") or row.get("account_id")
+        name = (
+            row.get("name")
+            or row.get("displayName")
+            or row.get("display_name")
+            or row.get("title")
+            or ""
+        )
+        return {
+            "id": str(subaccount_id) if subaccount_id is not None else "",
+            "account_id": str(account_id) if account_id is not None else "",
+            "name": str(name),
+        }
+
+    async def list_subaccounts(self, account_id: str) -> list[dict[str, str]]:
+        payload = await self._request(
+            "GET",
+            f"/users/me/accounts/{str(account_id).strip()}/subaccounts",
+        )
+        subaccounts = [
+            self._normalize_subaccount(row)
+            for row in self._subaccount_rows(payload)
+        ]
+        return [item for item in subaccounts if item["id"]]
 
     def config_status(self) -> dict[str, Any]:
         """Lightweight config check (no network): is a key present?"""
@@ -340,24 +407,70 @@ class BlotatoService:
         media_urls: list[str] | None = None,
         page_id: str | None = None,
         scheduled_time: str | None = None,
+        title: str | None = None,
     ) -> dict[str, Any]:
         target_type = self.target_type(platform)
+        post_title = self._safe_title(title, text)
+        target: dict[str, Any] = {"targetType": target_type}
+        slug = platform.strip().lower()
+        if slug in REQUIRED_PAGE_PLATFORMS and not (page_id or "").strip():
+            raise BlotatoServiceError(
+                "Для Facebook выберите страницу в настройках Blotato."
+            )
+        if slug in PAGE_PLATFORMS and page_id:
+            target["pageId"] = str(page_id)
+        if slug in BOARD_PLATFORMS:
+            if not (page_id or "").strip():
+                raise BlotatoServiceError(
+                    "Для Pinterest укажите Board ID в настройках Blotato."
+                )
+            target["boardId"] = str(page_id)
+            target["title"] = post_title
+        if target_type == "tiktok":
+            target.update(
+                {
+                    "privacyLevel": "PUBLIC_TO_EVERYONE",
+                    "disabledComments": False,
+                    "disabledDuet": False,
+                    "disabledStitch": False,
+                    "isBrandedContent": False,
+                    "isYourBrand": False,
+                    "isAiGenerated": True,
+                    "title": post_title[:90],
+                }
+            )
+        if target_type == "youtube":
+            target.update(
+                {
+                    "title": post_title,
+                    "privacyStatus": "public",
+                    "shouldNotifySubscribers": False,
+                    "isMadeForKids": False,
+                    "containsSyntheticMedia": True,
+                }
+            )
         post: dict[str, Any] = {
             "accountId": str(account_id),
-            "target": {"targetType": target_type},
+            "target": target,
             "content": {
                 "text": text,
                 "mediaUrls": media_urls or [],
                 "platform": target_type,
             },
         }
-        if page_id and platform.strip().lower() in PAGE_PLATFORMS:
-            post["target"]["pageId"] = str(page_id)
         body: dict[str, Any] = {"post": post}
         if scheduled_time:
             body["scheduledTime"] = scheduled_time
         payload = await self._request("POST", "/posts", json=body)
         return self._normalize_submission(payload)
+
+    @staticmethod
+    def _safe_title(title: str | None, text: str) -> str:
+        value = (title or "").strip()
+        if not value:
+            value = (text or "").strip().splitlines()[0] if text.strip() else "Growly post"
+        value = " ".join(value.split())
+        return value[:100] or "Growly post"
 
     async def create_media_upload(self, filename: str) -> dict[str, str]:
         safe_name = Path((filename or "").strip()).name

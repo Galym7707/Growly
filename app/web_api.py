@@ -295,8 +295,22 @@ class BlotatoMappingsRequest(BaseModel):
     mappings: list[BlotatoMappingItem] = Field(default_factory=list, max_length=40)
 
 
+class BlotatoConnectRequest(BaseModel):
+    api_key: str = Field(min_length=1, max_length=2000)
+
+
 class SocialConnectionRequestBody(BaseModel):
-    platform: Literal["instagram", "threads", "tiktok", "youtube", "facebook", "linkedin", "x"] = "instagram"
+    platform: Literal[
+        "instagram",
+        "threads",
+        "tiktok",
+        "youtube",
+        "facebook",
+        "linkedin",
+        "x",
+        "bluesky",
+        "pinterest",
+    ] = "instagram"
     username: str | None = Field(default=None, max_length=120)
 
 
@@ -1450,6 +1464,34 @@ def _safe_blotato_detail(exc: BlotatoServiceError) -> str:
     if provider_message and provider_message != str(exc):
         return f"{exc} Blotato: {provider_message}"
     return str(exc)
+
+
+@secured_router.post("/integrations/blotato/connect")
+async def blotato_connect(
+    payload: BlotatoConnectRequest,
+    workspace_id: str = Depends(effective_workspace_id),
+) -> dict[str, Any]:
+    try:
+        result = await SocialPublishingService().save_api_key(
+            workspace_id, payload.api_key
+        )
+    except BlotatoServiceError as exc:
+        status_code = 400 if exc.status in {400, 401, 403} else 502
+        raise HTTPException(
+            status_code=status_code, detail=_safe_blotato_detail(exc)
+        ) from exc
+    except GrowlyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    status_payload = await SocialPublishingService().blotato_status(workspace_id)
+    accounts = await SocialPublishingService().list_accounts(workspace_id)
+    return {**result, "status": status_payload, "accounts": accounts}
+
+
+@secured_router.delete("/integrations/blotato/connect")
+async def blotato_disconnect(
+    workspace_id: str = Depends(effective_workspace_id),
+) -> dict[str, Any]:
+    return await SocialPublishingService().disconnect(workspace_id)
 
 
 @secured_router.post("/integrations/blotato/media-upload")

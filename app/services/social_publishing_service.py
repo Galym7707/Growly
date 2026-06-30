@@ -39,6 +39,8 @@ PUBLISHABLE_PLATFORMS = [
     "facebook",
     "linkedin",
     "x",
+    "bluesky",
+    "pinterest",
 ]
 
 VIDEO_PLATFORMS = {"tiktok", "youtube"}
@@ -156,6 +158,13 @@ class SocialPublishingService:
         instagram = await asyncio.to_thread(
             self._platform_status, workspace, "instagram", accounts
         )
+        platform_statuses = {
+            platform: await asyncio.to_thread(
+                self._platform_status, workspace, platform, accounts
+            )
+            for platform in PUBLISHABLE_PLATFORMS
+            if platform != "telegram"
+        }
         return {
             "enabled": enabled,
             "api_key_configured": configured,
@@ -163,6 +172,7 @@ class SocialPublishingService:
             "accounts_count": accounts_count,
             "last_checked_at": last_checked_at,
             "instagram": instagram,
+            "platforms": platform_statuses,
         }
 
     @staticmethod
@@ -288,6 +298,7 @@ class SocialPublishingService:
             "name": row.username or "",
             "display_name": row.display_name or row.username or "",
             "connected": row.status == "connected",
+            "subaccounts": (row.metadata_json or {}).get("subaccounts") or [],
         }
 
     async def test_connection(self, workspace_id: str | None) -> dict[str, Any]:
@@ -349,6 +360,48 @@ class SocialPublishingService:
             repo.replace_accounts(
                 workspace_id=workspace, provider="blotato", accounts=accounts
             )
+            SocialPublishingService._ensure_default_mappings(repo, workspace, accounts)
+
+    @staticmethod
+    def _ensure_default_mappings(
+        repo: IntegrationsRepository,
+        workspace: str,
+        accounts: list[dict[str, Any]],
+    ) -> None:
+        """Select the first connected account per platform when no valid
+        mapping exists yet. Users can override the selection in the UI.
+        """
+
+        first_by_platform: dict[str, dict[str, Any]] = {}
+        valid_ids: set[str] = set()
+        for account in accounts:
+            account_id = str(account.get("id") or "").strip()
+            platform = str(account.get("platform") or "").strip().lower()
+            if not account_id or not platform or not account.get("connected", True):
+                continue
+            valid_ids.add(account_id)
+            first_by_platform.setdefault(platform, account)
+
+        targets = {target.platform: target for target in repo.list_targets(workspace)}
+        for platform, account in first_by_platform.items():
+            target = targets.get(platform)
+            if target and target.enabled and target.account_id in valid_ids:
+                continue
+            repo.set_mapping(
+                workspace_id=workspace,
+                platform=platform,
+                account_id=str(account.get("id")),
+                page_id=SocialPublishingService._default_page_id(platform, account),
+                enabled=True,
+            )
+
+    @staticmethod
+    def _default_page_id(platform: str, account: dict[str, Any]) -> str | None:
+        subaccounts = account.get("subaccounts") or []
+        if platform in {"facebook", "linkedin"} and len(subaccounts) == 1:
+            value = subaccounts[0].get("id") if isinstance(subaccounts[0], dict) else None
+            return str(value) if value else None
+        return None
 
     async def disconnect(self, workspace_id: str | None) -> dict[str, Any]:
         workspace = normalize_workspace(workspace_id)
@@ -369,6 +422,7 @@ class SocialPublishingService:
             repo.replace_accounts(
                 workspace_id=workspace, provider="blotato", accounts=[]
             )
+            repo.clear_mappings(workspace, "blotato")
 
     async def select_account(
         self, workspace_id: str | None, platform: str, account_id: str | None
@@ -393,18 +447,31 @@ class SocialPublishingService:
         def save() -> list[dict[str, Any]]:
             with session_scope() as session:
                 repo = IntegrationsRepository(session)
+                account_rows = repo.list_accounts(workspace, "blotato")
+                accounts_by_id = {
+                    row.external_account_id: row
+                    for row in account_rows
+                    if row.external_account_id and row.status == "connected"
+                }
                 for mapping in mappings:
                     platform = str(mapping.get("platform") or "").strip().lower()
                     if not platform:
                         continue
+                    account_id = (
+                        str(mapping.get("account_id")).strip()
+                        if mapping.get("account_id")
+                        else None
+                    )
+                    if account_id:
+                        account = accounts_by_id.get(account_id)
+                        if account is None or account.platform != platform:
+                            raise GrowlyError(
+                                "Выберите аккаунт из списка подключённых аккаунтов Blotato."
+                            )
                     repo.set_mapping(
                         workspace_id=workspace,
                         platform=platform,
-                        account_id=(
-                            str(mapping.get("account_id"))
-                            if mapping.get("account_id")
-                            else None
-                        ),
+                        account_id=account_id,
                         page_id=(
                             str(mapping.get("page_id"))
                             if mapping.get("page_id")
@@ -538,6 +605,7 @@ class SocialPublishingService:
                     media_urls=media_urls,
                     page_id=mapping.get("page_id"),
                     scheduled_time=None if publish_now else scheduled_time,
+                    title=getattr(draft, "title", None),
                 )
                 status = "scheduled" if not publish_now and scheduled_time else "submitted"
                 pub_id = await asyncio.to_thread(
@@ -638,12 +706,21 @@ class SocialPublishingService:
 
     @staticmethod
     def _resolve_account(workspace: str, platform: str) -> dict[str, str | None] | None:
-        """Resolve the publish account for a platform from the workspace's
-        connected social_accounts only (admin-linked). No env/request fallback."""
+        """Resolve the publish account from the workspace's saved user mapping.
+
+        The frontend writes ``publication_targets`` when the user selects an
+        account in settings. Admin-linked ``social_accounts`` remain a legacy
+        fallback for older workspaces.
+        """
         with session_scope() as session:
-            account = IntegrationsRepository(session).connected_account(
-                workspace, platform
-            )
+            repo = IntegrationsRepository(session)
+            target = repo.get_target(workspace, platform)
+            if target and target.enabled and target.account_id:
+                return {
+                    "account_id": target.account_id,
+                    "page_id": target.page_id,
+                }
+            account = repo.connected_account(workspace, platform)
             if account and account.external_account_id:
                 return {
                     "account_id": account.external_account_id,

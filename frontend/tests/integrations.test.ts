@@ -29,6 +29,8 @@ describe("social publishing helpers", () => {
       "facebook",
       "linkedin",
       "x",
+      "bluesky",
+      "pinterest",
     ]);
   });
 

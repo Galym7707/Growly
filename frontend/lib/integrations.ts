@@ -23,6 +23,13 @@ export type BlotatoStatus = {
   accounts_count: number;
   last_checked_at: string | null;
   instagram?: PlatformAccountStatus | null;
+  platforms?: Record<string, PlatformAccountStatus>;
+};
+
+export type BlotatoSubaccount = {
+  id: string;
+  account_id?: string;
+  name: string;
 };
 
 export type BlotatoAccount = {
@@ -31,6 +38,7 @@ export type BlotatoAccount = {
   name: string;
   display_name: string;
   connected: boolean;
+  subaccounts?: BlotatoSubaccount[];
   linked_workspace_id?: string | null;
   linked_status?: string | null;
 };
@@ -110,6 +118,9 @@ export type PlatformMeta = {
   slug: string;
   label: string;
   provider: "telegram" | "blotato";
+  helper?: string;
+  requiresPage?: boolean;
+  requiresBoard?: boolean;
 };
 
 /** Platforms shown in publishing UI. Telegram uses the Bot API; the rest Blotato. */
@@ -117,15 +128,21 @@ export const PUBLISH_PLATFORMS: PlatformMeta[] = [
   { slug: "telegram", label: "Telegram", provider: "telegram" },
   { slug: "instagram", label: "Instagram", provider: "blotato" },
   { slug: "threads", label: "Threads", provider: "blotato" },
-  { slug: "tiktok", label: "TikTok", provider: "blotato" },
-  { slug: "youtube", label: "YouTube Shorts", provider: "blotato" },
-  { slug: "facebook", label: "Facebook", provider: "blotato" },
+  { slug: "tiktok", label: "TikTok", provider: "blotato", helper: "Video" },
+  { slug: "youtube", label: "YouTube Shorts", provider: "blotato", helper: "Video" },
+  { slug: "facebook", label: "Facebook", provider: "blotato", requiresPage: true },
   { slug: "linkedin", label: "LinkedIn", provider: "blotato" },
   { slug: "x", label: "X/Twitter", provider: "blotato" },
+  { slug: "bluesky", label: "Bluesky", provider: "blotato" },
+  { slug: "pinterest", label: "Pinterest", provider: "blotato", requiresBoard: true },
 ];
 
 export const BLOTATO_PLATFORMS = PUBLISH_PLATFORMS.filter(
   (platform) => platform.provider === "blotato",
+);
+
+export const BLOTATO_PLATFORM_LABELS = Object.fromEntries(
+  BLOTATO_PLATFORMS.map((platform) => [platform.slug, platform.label]),
 );
 
 export function accountForPlatform(

@@ -133,6 +133,10 @@ class IntegrationsRepository:
             row.display_name = account.get("display_name")
             row.username = account.get("name")
             row.status = "connected" if account.get("connected", True) else "error"
+            row.metadata_json = {
+                **(row.metadata_json or {}),
+                "subaccounts": account.get("subaccounts") or [],
+            }
             row.last_checked_at = datetime.now(UTC)
             rows.append(row)
         for row in existing_rows:
@@ -323,6 +327,19 @@ class IntegrationsRepository:
         target.enabled = enabled
         self.session.flush()
         return target
+
+    def clear_mappings(
+        self,
+        workspace_id: str | None,
+        provider: str = "blotato",
+    ) -> None:
+        for target in self.list_targets(workspace_id):
+            if target.provider != provider:
+                continue
+            target.account_id = None
+            target.page_id = None
+            target.enabled = False
+        self.session.flush()
 
     # -- publications ------------------------------------------------------
 
