@@ -125,43 +125,33 @@ class SocialPublishingService:
 
     async def blotato_status(self, workspace_id: str | None) -> dict[str, Any]:
         workspace = normalize_workspace(workspace_id)
-        blotato = await self._blotato(workspace_id)
-        configured = blotato.api_key_configured()
+        integration, rows, targets = await asyncio.to_thread(
+            self._load_blotato_state, workspace
+        )
+        configured = bool(integration and integration.api_key_encrypted)
+        configured = configured or self.blotato.api_key_configured()
         # "enabled" mirrors whether a usable key exists (UI- or env-supplied).
         enabled = configured
-        connected = False
-        accounts_count = 0
-        accounts: list[dict[str, Any]] = []
-        last_checked_at: str | None = None
-        if blotato.is_enabled():
-            try:
-                accounts = await blotato.list_accounts()
-                accounts_count = len(accounts)
-                connected = True
-            except Exception:  # noqa: BLE001 - status check only
-                connected = False
-            last_checked_at = datetime.now(UTC).isoformat()
-            await asyncio.to_thread(
-                self._record_integration_status,
-                workspace,
-                enabled,
-                connected,
-                accounts_count,
-            )
-            if connected:
-                await asyncio.to_thread(self._store_accounts, workspace, accounts)
-        if not accounts:
-            rows = await asyncio.to_thread(self._load_accounts, workspace)
-            accounts = [self._account_to_dict(row) for row in rows]
-            if not connected:
-                accounts_count = len(accounts)
-        instagram = await asyncio.to_thread(
-            self._platform_status, workspace, "instagram", accounts
+        accounts = [self._account_to_dict(row) for row in rows]
+        target_by_platform = {
+            target.platform: target for target in targets if target.platform
+        }
+        metadata = (integration.metadata_json or {}) if integration else {}
+        stored_count = int(metadata.get("accounts_count") or 0)
+        accounts_count = len(accounts) or stored_count
+        connected = bool(
+            configured
+            and integration is not None
+            and (integration.status == "connected" or accounts_count > 0)
         )
+        last_checked_at = (
+            integration.last_checked_at.isoformat()
+            if integration and integration.last_checked_at
+            else None
+        )
+        instagram = self._platform_status("instagram", accounts, target_by_platform)
         platform_statuses = {
-            platform: await asyncio.to_thread(
-                self._platform_status, workspace, platform, accounts
-            )
+            platform: self._platform_status(platform, accounts, target_by_platform)
             for platform in PUBLISHABLE_PLATFORMS
             if platform != "telegram"
         }
@@ -176,14 +166,28 @@ class SocialPublishingService:
         }
 
     @staticmethod
-    def _platform_status(
+    def _load_blotato_state(
         workspace: str,
+    ) -> tuple[Any | None, list[SocialAccount], list[Any]]:
+        try:
+            with session_scope() as session:
+                repo = IntegrationsRepository(session)
+                integration = repo.get_integration(workspace, "blotato")
+                accounts = repo.list_accounts(workspace, "blotato")
+                targets = repo.list_targets(workspace)
+                return integration, accounts, targets
+        except Exception:  # noqa: BLE001 - read-only status should degrade safely
+            logger.warning("Could not load cached Blotato state.")
+            return None, [], []
+
+    @staticmethod
+    def _platform_status(
         platform: str,
         accounts: list[dict[str, Any]],
+        targets: dict[str, Any],
     ) -> dict[str, Any]:
-        with session_scope() as session:
-            target = IntegrationsRepository(session).get_target(workspace, platform)
-            account_id = target.account_id if target else None
+        target = targets.get(platform)
+        account_id = target.account_id if target else None
         account = None
         if account_id:
             account = next(
@@ -243,10 +247,22 @@ class SocialPublishingService:
     def _store_accounts(workspace: str, accounts: list[dict[str, Any]]) -> None:
         with _ACCOUNT_SYNC_LOCK:
             with session_scope() as session:
-                IntegrationsRepository(session).replace_accounts(
+                repo = IntegrationsRepository(session)
+                repo.replace_accounts(
                     workspace_id=workspace,
                     provider="blotato",
                     accounts=accounts,
+                )
+                repo.upsert_integration(
+                    workspace_id=workspace,
+                    provider="blotato",
+                    enabled=True,
+                    status="connected",
+                    metadata={"accounts_count": len(accounts)},
+                    last_checked_at=datetime.now(UTC),
+                )
+                SocialPublishingService._ensure_default_mappings(
+                    repo, workspace, accounts
                 )
 
     async def create_media_upload(
@@ -274,21 +290,19 @@ class SocialPublishingService:
 
     async def list_accounts(self, workspace_id: str | None) -> list[dict[str, Any]]:
         workspace = normalize_workspace(workspace_id)
-        blotato = await self._blotato(workspace_id)
-        if blotato.is_enabled():
-            try:
-                accounts = await blotato.list_accounts()
-                await asyncio.to_thread(self._store_accounts, workspace, accounts)
-                return accounts
-            except BlotatoServiceError:
-                logger.warning("Falling back to stored Blotato accounts.")
         rows = await asyncio.to_thread(self._load_accounts, workspace)
         return [self._account_to_dict(row) for row in rows]
 
     @staticmethod
     def _load_accounts(workspace: str) -> list[SocialAccount]:
-        with session_scope() as session:
-            return IntegrationsRepository(session).list_accounts(workspace, "blotato")
+        try:
+            with session_scope() as session:
+                return IntegrationsRepository(session).list_accounts(
+                    workspace, "blotato"
+                )
+        except Exception:  # noqa: BLE001 - read-only accounts should degrade safely
+            logger.warning("Could not load cached Blotato accounts.")
+            return []
 
     @staticmethod
     def _account_to_dict(row: SocialAccount) -> dict[str, Any]:
@@ -356,6 +370,14 @@ class SocialPublishingService:
                 api_key_encrypted=encrypted,
                 status="connected",
                 enabled=True,
+            )
+            repo.upsert_integration(
+                workspace_id=workspace,
+                provider="blotato",
+                enabled=True,
+                status="connected",
+                metadata={"accounts_count": len(accounts)},
+                last_checked_at=datetime.now(UTC),
             )
             repo.replace_accounts(
                 workspace_id=workspace, provider="blotato", accounts=accounts
@@ -490,7 +512,11 @@ class SocialPublishingService:
                 repo = IntegrationsRepository(session)
                 return [self._target_to_dict(row) for row in repo.list_targets(workspace)]
 
-        return await asyncio.to_thread(load)
+        try:
+            return await asyncio.to_thread(load)
+        except Exception:  # noqa: BLE001 - read-only mappings should degrade safely
+            logger.warning("Could not load Blotato mappings.")
+            return []
 
     @staticmethod
     def _target_to_dict(row: Any) -> dict[str, Any]:

@@ -619,6 +619,35 @@ def test_blotato_accounts_endpoint(monkeypatch) -> None:
     assert response.json()["accounts"][0]["platform"] == "instagram"
 
 
+def test_blotato_accounts_endpoint_can_refresh(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "growly_web_api_key", None)
+    captured: dict[str, str | None] = {}
+
+    async def fake_refresh(self, workspace_id):
+        captured["workspace_id"] = workspace_id
+        return [
+            {
+                "id": "2",
+                "platform": "threads",
+                "name": "@brand",
+                "display_name": "Brand",
+                "connected": True,
+            }
+        ]
+
+    monkeypatch.setattr(
+        "app.web_api.SocialPublishingService.refresh_accounts", fake_refresh
+    )
+    response = TestClient(app).get(
+        "/api/integrations/blotato/accounts?refresh=true",
+        headers={"X-Growly-Workspace-Id": "ws-42"},
+    )
+    assert response.status_code == 200
+    assert captured == {"workspace_id": "ws-42"}
+    assert response.json()["accounts"][0]["platform"] == "threads"
+
+
 def test_blotato_connect_endpoint_does_not_return_secret(monkeypatch) -> None:
     settings = get_settings()
     monkeypatch.setattr(settings, "growly_web_api_key", None)

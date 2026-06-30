@@ -1453,9 +1453,15 @@ async def blotato_status(
 
 @secured_router.get("/integrations/blotato/accounts")
 async def blotato_accounts(
+    refresh: bool = Query(False),
     workspace_id: str = Depends(effective_workspace_id),
 ) -> dict[str, Any]:
-    accounts = await SocialPublishingService().list_accounts(workspace_id)
+    service = SocialPublishingService()
+    accounts = (
+        await service.refresh_accounts(workspace_id)
+        if refresh
+        else await service.list_accounts(workspace_id)
+    )
     return {"accounts": accounts}
 
 

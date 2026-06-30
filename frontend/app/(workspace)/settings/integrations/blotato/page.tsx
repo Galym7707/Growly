@@ -185,7 +185,7 @@ export default function BlotatoSetupPage() {
     setNotice("");
     try {
       const response = await apiRequest<{ accounts: BlotatoAccount[] }>(
-        "/integrations/blotato/accounts",
+        "/integrations/blotato/accounts?refresh=true",
       );
       setAccounts(response.accounts || []);
       await load();
