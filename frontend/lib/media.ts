@@ -1,5 +1,13 @@
 export type MediaKind = "image" | "video";
 
+export type VideoProvider = "blotato" | "replicate";
+
+export type VideoProvidersInfo = {
+  blotato: { enabled: boolean };
+  replicate: { enabled: boolean };
+  credits: { balance: number; video_cost: number };
+};
+
 export type AttachedMedia = {
   url: string;
   kind: MediaKind;
@@ -50,5 +58,10 @@ export function visualStatusLabel(status: string): string {
     return "Генерация медиа";
   }
   if (status === "exporting") return "Экспорт медиа";
+  if (status === "failed") return "Не удалось сгенерировать";
   return status;
+}
+
+export function isFailedVisualStatus(status: string): boolean {
+  return status === "failed" || status === "creation-from-template-failed";
 }

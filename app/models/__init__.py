@@ -19,6 +19,8 @@ from app.models.db_models import (
     Source,
     SourceItem,
     User,
+    VideoCredit,
+    VideoGeneration,
     WorkspaceInvitation,
     WorkspaceMember,
 )
@@ -44,6 +46,8 @@ __all__ = [
     "Source",
     "SourceItem",
     "User",
+    "VideoCredit",
+    "VideoGeneration",
     "WorkspaceInvitation",
     "WorkspaceMember",
 ]

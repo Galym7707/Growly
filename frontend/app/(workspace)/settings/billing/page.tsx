@@ -15,7 +15,11 @@ import {
   type BillingPlanId,
   type PaidBillingPlanId,
 } from "@/lib/billing/plans";
+import type { CreditPack, CreditPackId } from "@/lib/billing/credits";
+import { apiRequest } from "@/lib/api";
 import { useLanguage, type Locale } from "@/lib/i18n";
+
+type ConfiguredCreditPack = CreditPack & { configured: boolean };
 
 type BillingStatusResponse = {
   plan: BillingPlanId;
@@ -25,6 +29,7 @@ type BillingStatusResponse = {
   customerId: string | null;
   subscriptionId: string | null;
   configuredPlans: Record<"starter" | "pro" | "agency", boolean>;
+  creditPacks?: ConfiguredCreditPack[];
 };
 
 export default function BillingSettingsPage() {
@@ -36,7 +41,22 @@ export default function BillingSettingsPage() {
     useState<PaidBillingPlanId | null>(null);
   const [portalError, setPortalError] = useState("");
   const [portalLoading, setPortalLoading] = useState(false);
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [creditsCheckoutError, setCreditsCheckoutError] = useState("");
+  const [creditsCheckoutLoading, setCreditsCheckoutLoading] =
+    useState<CreditPackId | null>(null);
   const { t, locale } = useLanguage();
+
+  const loadCreditBalance = useCallback(async () => {
+    try {
+      const info = await apiRequest<{ balance: number }>(
+        "/integrations/video/credits",
+      );
+      setCreditBalance(info.balance);
+    } catch {
+      setCreditBalance(null);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,6 +69,7 @@ export default function BillingSettingsPage() {
       const body = await response.json();
       if (!response.ok) throw new Error(t("Не удалось загрузить данные по оплате."));
       setBilling(body);
+      void loadCreditBalance();
     } catch (value) {
       setError(
         value instanceof Error
@@ -58,7 +79,7 @@ export default function BillingSettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, loadCreditBalance]);
 
   useEffect(() => {
     void load();
@@ -112,6 +133,30 @@ export default function BillingSettingsPage() {
       );
     } finally {
       setCheckoutLoading(null);
+    }
+  }
+
+  async function buyCredits(pack: CreditPackId) {
+    setCreditsCheckoutLoading(pack);
+    setCreditsCheckoutError("");
+    try {
+      const response = await fetch("/api/billing/credits/checkout", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pack }),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.url) throw new Error();
+      window.location.assign(body.url);
+    } catch (value) {
+      setCreditsCheckoutError(
+        value instanceof Error
+          ? value.message || t("Оплата пока не настроена.")
+          : t("Оплата пока не настроена."),
+      );
+    } finally {
+      setCreditsCheckoutLoading(null);
     }
   }
 
@@ -183,6 +228,74 @@ export default function BillingSettingsPage() {
             </div>
             {portalError ? (
               <div className="feedback feedback-warning">{portalError}</div>
+            ) : null}
+          </section>
+
+          <section className="workspace-section" id="credits">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">{t("Кредиты на видео")}</p>
+                <h2>{t("Генерация ИИ-видео (Replicate)")}</h2>
+                <p className="muted">
+                  {t(
+                    "Оплатите пакет кредитов, чтобы генерировать ИИ-видео через Replicate. 1 видео списывает 1 кредит.",
+                  )}
+                </p>
+              </div>
+              <div className="billing-summary-meta">
+                <div>
+                  <span>{t("Баланс кредитов")}</span>
+                  <strong>{creditBalance ?? 0}</strong>
+                </div>
+              </div>
+            </div>
+            <div className="billing-plan-grid">
+              {(billing.creditPacks || []).map((pack) => (
+                <article className="billing-plan-card" key={pack.id}>
+                  <div>
+                    <h3>
+                      {pack.credits} {t("кредитов")}
+                    </h3>
+                    <p>
+                      {pack.credits} {t("ИИ-видео для соцсетей")}
+                    </p>
+                  </div>
+                  <div className="billing-plan-price">
+                    <strong>{pack.price}</strong>
+                    <span>{t("разовый платёж")}</span>
+                  </div>
+                  {pack.configured ? (
+                    <button
+                      className="button button-primary"
+                      disabled={creditsCheckoutLoading === pack.id}
+                      onClick={() => buyCredits(pack.id)}
+                      type="button"
+                    >
+                      {creditsCheckoutLoading === pack.id
+                        ? t("Открываем")
+                        : t("Купить кредиты")}
+                    </button>
+                  ) : (
+                    <button
+                      className="button button-secondary"
+                      disabled
+                      type="button"
+                    >
+                      {t("Оплата пока не настроена.")}
+                    </button>
+                  )}
+                </article>
+              ))}
+              {(billing.creditPacks || []).length === 0 ? (
+                <p className="muted">
+                  {t("Пакеты кредитов пока не настроены.")}
+                </p>
+              ) : null}
+            </div>
+            {creditsCheckoutError ? (
+              <div className="feedback feedback-warning">
+                {creditsCheckoutError}
+              </div>
             ) : null}
           </section>
 

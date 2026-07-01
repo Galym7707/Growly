@@ -2,6 +2,7 @@ import { validateEvent, WebhookVerificationError } from "@polar-sh/sdk/webhooks"
 import { NextRequest, NextResponse } from "next/server";
 import {
   completeBillingEvent,
+  grantVideoCreditsFromPolar,
   saveOrderFromPolar,
   saveSubscriptionFromPolar,
   startBillingEvent,
@@ -58,8 +59,13 @@ export async function POST(request: NextRequest) {
 
 async function processPolarPayload(payload: ReturnType<typeof validateEvent>) {
   switch (payload.type) {
-    case "order.created":
     case "order.paid":
+      await saveOrderFromPolar(payload.data as PolarOrderLike, payload);
+      // Grant video credits only on the single order.paid event so a credit
+      // pack is never granted twice across order.created/updated.
+      await grantVideoCreditsFromPolar(payload.data as PolarOrderLike);
+      return;
+    case "order.created":
     case "order.updated":
       await saveOrderFromPolar(payload.data as PolarOrderLike, payload);
       return;

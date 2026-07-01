@@ -10,6 +10,7 @@ import {
   type BillingFeature,
   type BillingPlanId,
 } from "./plans";
+import { resolveCreditsForProduct } from "./polar";
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
@@ -317,6 +318,61 @@ export async function saveOrderFromPolar(
   }
 
   await supabase.from("payments").insert(row);
+}
+
+/** Credits to grant for a paid order: explicit metadata wins, else the amount
+ * mapped to the purchased credit-pack product (fallback if Polar did not
+ * propagate the checkout metadata onto the order). */
+export function resolveCreditsFromPolarObject(order: PolarOrderLike): number {
+  const kind =
+    metadataString(order.metadata, "kind") ||
+    metadataString(order.customer?.metadata, "kind");
+  if (kind === "credits") {
+    const raw =
+      metadataString(order.metadata, "videoCredits") ||
+      metadataString(order.customer?.metadata, "videoCredits");
+    const credits = raw ? Number.parseInt(raw, 10) : 0;
+    if (Number.isFinite(credits) && credits > 0) return credits;
+  }
+  return resolveCreditsForProduct(safeString(order.productId));
+}
+
+/** Add video credits to a workspace balance when a credit-pack order is paid.
+ *
+ * Keyed on the same workspace id the backend consumes credits with (the
+ * Supabase user id in the authenticated path). Called only on `order.paid`,
+ * which Polar emits once per order, so credits are granted a single time.
+ */
+export async function grantVideoCreditsFromPolar(
+  order: PolarOrderLike,
+): Promise<void> {
+  const supabase = createBillingAdminClient();
+  if (!supabase) return;
+  const credits = resolveCreditsFromPolarObject(order);
+  if (credits <= 0) return;
+
+  const workspaceId =
+    resolveWorkspaceIdFromPolarObject(order) || resolveUserIdFromPolarObject(order);
+  if (!workspaceId) return;
+
+  const { data: existing } = await supabase
+    .from("video_credits")
+    .select("id, balance")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+
+  if (existing?.id) {
+    const nextBalance = Number(existing.balance ?? 0) + credits;
+    await supabase
+      .from("video_credits")
+      .update({ balance: nextBalance, updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+    return;
+  }
+
+  await supabase
+    .from("video_credits")
+    .insert({ workspace_id: workspaceId, balance: credits });
 }
 
 export async function startBillingEvent(

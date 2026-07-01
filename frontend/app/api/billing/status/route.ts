@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getConfiguredPaidPlans } from "@/lib/billing/polar";
+import {
+  getConfiguredCreditPacks,
+  getConfiguredPaidPlans,
+} from "@/lib/billing/polar";
 import { getBillingStatus, getBillingUser } from "@/lib/billing/server";
 
 export async function GET(request: NextRequest) {
@@ -12,5 +15,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     ...billing,
     configuredPlans: getConfiguredPaidPlans(),
+    creditPacks: getConfiguredCreditPacks(),
   });
 }

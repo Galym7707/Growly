@@ -42,10 +42,13 @@ import { useLanguage } from "@/lib/i18n";
 import {
   MEDIA_ACCEPT,
   isAllowedMediaFile,
+  isFailedVisualStatus,
   mediaKind,
   mergeMedia,
   visualStatusLabel,
   type AttachedMedia,
+  type VideoProvider,
+  type VideoProvidersInfo,
 } from "@/lib/media";
 import type { Draft } from "@/lib/types";
 
@@ -91,6 +94,8 @@ export default function DraftDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [visualKind, setVisualKind] = useState<VisualKind>("image");
   const [visualPrompt, setVisualPrompt] = useState("");
+  const [videoProvider, setVideoProvider] = useState<VideoProvider>("blotato");
+  const [providers, setProviders] = useState<VideoProvidersInfo | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState("");
   const mediaInputRef = useRef<HTMLInputElement>(null);
@@ -111,11 +116,19 @@ export default function DraftDetailPage() {
     setLoading(true);
     setFailed(false);
     try {
-      const [draftResp, statusResp, accountsResp] = await Promise.all([
-        apiRequest<{ draft: Draft }>(`/drafts/${draftId}`),
-        apiRequest<IntegrationsStatus>("/integrations/status"),
-        apiRequest<{ accounts: BlotatoAccount[] }>("/integrations/blotato/accounts"),
-      ]);
+      const [draftResp, statusResp, accountsResp, providersResp] =
+        await Promise.all([
+          apiRequest<{ draft: Draft }>(`/drafts/${draftId}`),
+          apiRequest<IntegrationsStatus>("/integrations/status"),
+          apiRequest<{ accounts: BlotatoAccount[] }>(
+            "/integrations/blotato/accounts",
+          ),
+          // Video providers/credits are best-effort: a failure here must not
+          // block the draft from loading.
+          apiRequest<VideoProvidersInfo>("/integrations/video/providers").catch(
+            () => null,
+          ),
+        ]);
       setDraft(draftResp.draft);
       setVisualPrompt((current) =>
         current ||
@@ -123,6 +136,7 @@ export default function DraftDetailPage() {
       );
       setStatus(statusResp);
       setAccounts(accountsResp.accounts || []);
+      setProviders(providersResp);
     } catch (value) {
       setFailed(true);
       setErrorDebug(apiErrorDebugInfo(value));
@@ -272,9 +286,32 @@ export default function DraftDetailPage() {
     }
   }
 
+  const refreshVideoProviders = useCallback(async () => {
+    try {
+      const info = await apiRequest<VideoProvidersInfo>(
+        "/integrations/video/providers",
+      );
+      setProviders(info);
+    } catch {
+      // Non-blocking: a stale credit balance is preferable to a hard error.
+    }
+  }, []);
+
   async function generateVisual() {
     const prompt = visualPrompt.trim();
     if (!prompt || generating) return;
+    // Replicate only generates video; image carousels always go through Blotato.
+    const useReplicate =
+      videoProvider === "replicate" &&
+      visualKind === "video" &&
+      Boolean(providers?.replicate.enabled);
+    const providerLabel = useReplicate ? "Replicate" : "Blotato";
+    const createPath = useReplicate
+      ? "/integrations/replicate/visuals"
+      : "/integrations/blotato/visuals";
+    const statusPath = useReplicate
+      ? "/integrations/replicate/visuals"
+      : "/integrations/blotato/visuals";
     const token = {
       cancelled: false,
       timer: null as number | null,
@@ -286,20 +323,21 @@ export default function DraftDetailPage() {
     setGenerationStatus(t("В очереди"));
     setActionError("");
     try {
-      let visual = await apiRequest<VisualResult>(
-        "/integrations/blotato/visuals",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            kind: visualKind,
-            prompt,
-            title: draft?.title || null,
-          }),
-          signal: token.controller.signal,
-        },
-      );
+      let visual = await apiRequest<VisualResult>(createPath, {
+        method: "POST",
+        body: JSON.stringify({
+          kind: visualKind,
+          prompt,
+          title: draft?.title || null,
+        }),
+        signal: token.controller.signal,
+      });
+      // A Replicate job reserves a credit at start; keep the balance fresh.
+      if (useReplicate) void refreshVideoProviders();
       if (!visual.id) {
-        throw new Error(t("Blotato не вернул ID созданного медиа."));
+        throw new Error(
+          t(`${providerLabel} не вернул ID созданного медиа.`),
+        );
       }
       const visualId = visual.id;
       for (let attempt = 0; attempt < VISUAL_POLL_ATTEMPTS; attempt += 1) {
@@ -307,7 +345,7 @@ export default function DraftDetailPage() {
         setGenerationStatus(t(visualStatusLabel(visual.status)));
         if (visual.status === "done") {
           if (!visual.media_urls.length) {
-            throw new Error(t("Blotato не вернул созданное медиа."));
+            throw new Error(t(`${providerLabel} не вернул созданное медиа.`));
           }
           setAttachedMedia((current) =>
             mergeMedia(
@@ -323,8 +361,12 @@ export default function DraftDetailPage() {
           pushToast("success", t("Медиа готово и добавлено к публикации."));
           return;
         }
-        if (visual.status === "creation-from-template-failed") {
-          throw new Error(t("Blotato не удалось сгенерировать медиа."));
+        if (isFailedVisualStatus(visual.status)) {
+          // A failed Replicate job refunds the reserved credit server-side.
+          if (useReplicate) void refreshVideoProviders();
+          throw new Error(
+            t(`${providerLabel} не удалось сгенерировать медиа.`),
+          );
         }
         // Cancellable wait: the cancel button clears this timer to abort early
         // instead of leaving the user stuck for the full poll interval.
@@ -334,22 +376,27 @@ export default function DraftDetailPage() {
         });
         if (token.cancelled) return;
         visual = await apiRequest<VisualResult>(
-          `/integrations/blotato/visuals/${encodeURIComponent(visualId)}`,
+          `${statusPath}/${encodeURIComponent(visualId)}`,
           { signal: token.controller.signal },
         );
       }
       throw new Error(
-        t("Генерация заняла слишком много времени. Проверьте результат в Blotato."),
+        t(
+          `Генерация заняла слишком много времени. Проверьте результат в ${providerLabel}.`,
+        ),
       );
     } catch (value) {
       // A user-triggered cancel aborts the in-flight request; that is expected,
       // so don't surface it as an error.
       if (token.cancelled) return;
       setGenerationStatus("");
+      // Refresh credits so a rejected 402 (or any failure) shows the real
+      // balance instead of a stale one.
+      if (useReplicate) void refreshVideoProviders();
       const message =
         value instanceof Error
           ? t(value.message)
-          : t("Blotato не удалось сгенерировать медиа.");
+          : t(`${providerLabel} не удалось сгенерировать медиа.`);
       setActionError(message);
       pushToast("error", message);
     } finally {
@@ -633,6 +680,9 @@ export default function DraftDetailPage() {
                   uploading={uploading}
                   generationStatus={generationStatus}
                   blotatoEnabled={blotatoEnabled}
+                  provider={videoProvider}
+                  onProviderChange={setVideoProvider}
+                  providers={providers}
                   onGenerate={() => void generateVisual()}
                   onCancel={cancelGeneration}
                 />

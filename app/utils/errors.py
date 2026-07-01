@@ -76,6 +76,46 @@ class BlotatoServiceError(IntegrationError):
         }
 
 
+class ReplicateServiceError(IntegrationError):
+    """Raised when the Replicate AI-video provider cannot complete a request."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        provider_message: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.provider_message = provider_message
+
+    def safe_details(self) -> dict[str, object]:
+        """Provider details safe to surface in development (no secrets)."""
+
+        return {
+            "status": self.status,
+            "provider_message": self.provider_message or str(self),
+        }
+
+
+class InsufficientCreditsError(GrowlyError):
+    """Raised when a workspace lacks enough video credits to generate media."""
+
+    status = 402
+
+    def __init__(
+        self,
+        message: str = "Недостаточно кредитов для генерации видео.",
+        *,
+        balance: int = 0,
+        required: int = 1,
+    ) -> None:
+        super().__init__(message)
+        self.balance = balance
+        self.required = required
+
+
 class NotionServiceError(IntegrationError):
     """Raised when Notion cannot complete a synchronization request."""
 

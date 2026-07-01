@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isAllowedMediaFile,
+  isFailedVisualStatus,
   mediaKind,
   mergeMedia,
   visualStatusLabel,
@@ -26,5 +27,13 @@ describe("media helpers", () => {
 
   it("localizes provider progress states", () => {
     expect(visualStatusLabel("generating-media")).toBe("Генерация медиа");
+    expect(visualStatusLabel("failed")).toBe("Не удалось сгенерировать");
+  });
+
+  it("recognizes terminal failure states for both providers", () => {
+    expect(isFailedVisualStatus("failed")).toBe(true);
+    expect(isFailedVisualStatus("creation-from-template-failed")).toBe(true);
+    expect(isFailedVisualStatus("generating-media")).toBe(false);
+    expect(isFailedVisualStatus("done")).toBe(false);
   });
 });

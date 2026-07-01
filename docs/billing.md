@@ -16,9 +16,34 @@ POLAR_CANCEL_URL=
 POLAR_STARTER_PRODUCT_ID=
 POLAR_PRO_PRODUCT_ID=
 POLAR_AGENCY_PRODUCT_ID=
+POLAR_VIDEO_CREDITS_10_PRODUCT_ID=
+POLAR_VIDEO_CREDITS_30_PRODUCT_ID=
+POLAR_VIDEO_CREDITS_100_PRODUCT_ID=
 ```
 
 `POLAR_SERVER` should be `sandbox` for test checkout and `production` for live checkout.
+
+## Video credits (pay-per-video AI generation)
+
+Growly offers two AI-video providers in the draft media generator: **Blotato**
+(template-based, no per-video charge) and **Replicate** (pay-per-video). To use
+Replicate, a user spends **video credits** bought through Polar.
+
+Flow:
+
+1. The user buys a credit pack on `/settings/billing#credits`. Each pack is a
+   one-time Polar product mapped by `POLAR_VIDEO_CREDITS_*_PRODUCT_ID`.
+2. On `order.paid`, `/api/webhooks/polar` grants the credits to the buyer's
+   balance in the `video_credits` table (keyed on the workspace id, which equals
+   the Supabase user id). Credits are granted once — only on `order.paid`.
+3. When the user generates a Replicate video, the backend reserves one credit
+   (atomically) before starting the job, so a user with no credits cannot
+   generate. The credit is kept when the video is delivered and **refunded once**
+   if Replicate ultimately fails (tracked in `video_generations`).
+
+The Replicate provider itself is configured on the backend with
+`REPLICATE_ENABLED`, `REPLICATE_API_TOKEN`, and `REPLICATE_VIDEO_MODEL`
+(swap the model without code changes). See `.env.example`.
 
 ## Manual setup in Polar
 
@@ -36,7 +61,7 @@ https://YOUR_APP_DOMAIN/api/webhooks/polar
 
 ## Manual checkout test
 
-1. Run database migrations so `subscriptions`, `payments`, and `billing_events` exist.
+1. Run database migrations so `subscriptions`, `payments`, `billing_events`, `video_credits`, and `video_generations` exist.
 2. Start the app in local development.
 3. Sign in to Growly.
 4. Open `/settings/billing` or the public landing pricing section.

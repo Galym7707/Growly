@@ -29,6 +29,7 @@ from app.services.social_connection_service import SocialConnectionService
 from app.services.social_publishing_service import SocialPublishingService
 from app.services.source_analysis_service import SourceAnalysisService
 from app.services.source_discovery_service import SourceDiscoveryService
+from app.services.video_service import VideoGenerationService
 from app.services.workspace_service import (
     DEFAULT_WORKSPACE_ID,
     Membership,
@@ -46,7 +47,9 @@ from app.utils.errors import (
     AIServiceError,
     BlotatoServiceError,
     GrowlyError,
+    InsufficientCreditsError,
     IntegrationError,
+    ReplicateServiceError,
     WorkspaceAccessError,
 )
 
@@ -426,6 +429,12 @@ class BlotatoMediaUploadRequest(BaseModel):
 
 class BlotatoVisualRequest(BaseModel):
     kind: Literal["image", "video"]
+    prompt: str = Field(min_length=5, max_length=6000)
+    title: str | None = Field(default=None, max_length=200)
+
+
+class ReplicateVisualRequest(BaseModel):
+    kind: Literal["image", "video"] = "video"
     prompt: str = Field(min_length=5, max_length=6000)
     title: str | None = Field(default=None, max_length=200)
 
@@ -1791,6 +1800,66 @@ async def blotato_visual_status(
     except BlotatoServiceError as exc:
         raise HTTPException(
             status_code=502, detail=_safe_blotato_detail(exc)
+        ) from exc
+
+
+# -- AI-video providers (Blotato / Replicate) and credits -----------------
+
+
+def _safe_replicate_detail(exc: ReplicateServiceError) -> str:
+    provider_message = (exc.provider_message or "").strip()
+    if provider_message and provider_message != str(exc):
+        return f"{exc} Replicate: {provider_message}"
+    return str(exc)
+
+
+@secured_router.get("/integrations/video/providers")
+async def video_providers(
+    workspace_id: str = Depends(effective_workspace_id),
+) -> dict[str, Any]:
+    return await VideoGenerationService().providers_status(workspace_id)
+
+
+@secured_router.get("/integrations/video/credits")
+async def video_credits(
+    workspace_id: str = Depends(effective_workspace_id),
+) -> dict[str, Any]:
+    return await VideoGenerationService().credits_status(workspace_id)
+
+
+@secured_router.post("/integrations/replicate/visuals")
+async def replicate_create_visual(
+    payload: ReplicateVisualRequest,
+    workspace_id: str = Depends(effective_workspace_id),
+) -> dict[str, Any]:
+    try:
+        return await VideoGenerationService().start_replicate_video(
+            workspace_id,
+            kind=payload.kind,
+            prompt=payload.prompt,
+        )
+    except InsufficientCreditsError as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
+    except ReplicateServiceError as exc:
+        raise HTTPException(
+            status_code=502, detail=_safe_replicate_detail(exc)
+        ) from exc
+
+
+@secured_router.get("/integrations/replicate/visuals/{visual_id}")
+async def replicate_visual_status(
+    visual_id: str,
+    workspace_id: str = Depends(effective_workspace_id),
+) -> dict[str, Any]:
+    if not visual_id.strip() or len(visual_id) > 200:
+        raise HTTPException(status_code=400, detail="Некорректный ID медиа.")
+    try:
+        return await VideoGenerationService().replicate_video_status(
+            workspace_id, visual_id
+        )
+    except ReplicateServiceError as exc:
+        raise HTTPException(
+            status_code=502, detail=_safe_replicate_detail(exc)
         ) from exc
 
 

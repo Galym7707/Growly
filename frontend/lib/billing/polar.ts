@@ -8,6 +8,7 @@ import {
   type BillingPlanId,
   type PaidBillingPlanId,
 } from "./plans";
+import { creditPacks, getCreditPack, type CreditPack } from "./credits";
 
 export const PAYMENT_NOT_CONFIGURED_MESSAGE = "Payment is not configured yet.";
 export const PORTAL_NOT_CONFIGURED_MESSAGE =
@@ -43,6 +44,30 @@ export function getConfiguredPaidPlans(): Record<PaidBillingPlanId, boolean> {
     pro: Boolean(getPolarProductId("pro")),
     agency: Boolean(getPolarProductId("agency")),
   };
+}
+
+export function getCreditProductId(packId: string): string | null {
+  const pack = getCreditPack(packId);
+  if (!pack) return null;
+  return process.env[pack.productEnvKey]?.trim() || null;
+}
+
+export type ConfiguredCreditPack = CreditPack & { configured: boolean };
+
+export function getConfiguredCreditPacks(): ConfiguredCreditPack[] {
+  return creditPacks.map((pack) => ({
+    ...pack,
+    configured: Boolean(process.env[pack.productEnvKey]?.trim()),
+  }));
+}
+
+/** Credits granted for a paid Polar product id, or 0 if it is not a pack. */
+export function resolveCreditsForProduct(productId: string | null): number {
+  if (!productId) return 0;
+  const pack = creditPacks.find(
+    (item) => process.env[item.productEnvKey]?.trim() === productId,
+  );
+  return pack ? pack.credits : 0;
 }
 
 export function getAppUrl(request?: NextRequest): string {

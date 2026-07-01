@@ -572,3 +572,49 @@ class ContentTask(Base, TimestampMixin):
     )
     due_date: Mapped[date | None] = mapped_column(Date)
     created_by: Mapped[str | None] = mapped_column(Text)
+
+
+class VideoCredit(Base, TimestampMixin):
+    """Per-workspace balance of AI-video generation credits.
+
+    ``workspace_id`` equals the Supabase user id in the authenticated path, so
+    the frontend Polar webhook (which grants credits) and the backend (which
+    consumes them) key on the same value.
+    """
+
+    __tablename__ = "video_credits"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    balance: Mapped[int] = mapped_column(
+        Integer, server_default=text("0"), nullable=False
+    )
+
+
+class VideoGeneration(Base, TimestampMixin):
+    """A single AI-video generation, used to settle/refund reserved credits.
+
+    A credit is reserved when a generation starts and refunded once (idempotent
+    via ``refunded``) if the provider ultimately fails.
+    """
+
+    __tablename__ = "video_generations"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[str] = mapped_column(
+        Text, server_default="replicate", nullable=False
+    )
+    kind: Mapped[str] = mapped_column(
+        Text, server_default="video", nullable=False
+    )
+    prediction_id: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        Text, server_default="starting", nullable=False
+    )
+    credits_charged: Mapped[int] = mapped_column(
+        Integer, server_default=text("0"), nullable=False
+    )
+    refunded: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false"), nullable=False
+    )

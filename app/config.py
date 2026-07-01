@@ -124,6 +124,27 @@ class Settings(BaseSettings):
         default=None, alias="BLOTATO_X_ACCOUNT_ID"
     )
 
+    # Replicate AI-video provider (pay-per-video via credits). Enabled only
+    # when both the flag and a token are present.
+    replicate_enabled: bool = Field(default=False, alias="REPLICATE_ENABLED")
+    replicate_api_token: SecretStr | None = Field(
+        default=None, alias="REPLICATE_API_TOKEN"
+    )
+    replicate_base_url: str = Field(
+        default="https://api.replicate.com/v1",
+        alias="REPLICATE_BASE_URL",
+    )
+    replicate_video_model: str = Field(
+        default="minimax/video-01", alias="REPLICATE_VIDEO_MODEL"
+    )
+    replicate_image_model: str | None = Field(
+        default=None, alias="REPLICATE_IMAGE_MODEL"
+    )
+    # How many credits one generated video costs.
+    replicate_video_credit_cost: int = Field(
+        default=1, ge=1, alias="REPLICATE_VIDEO_CREDIT_COST"
+    )
+
     instagram_enabled: bool = Field(default=False, alias="INSTAGRAM_ENABLED")
     bitrix_enabled: bool = Field(default=False, alias="BITRIX_ENABLED")
     bitrix_webhook_secret: SecretStr | None = Field(
@@ -257,6 +278,28 @@ class Settings(BaseSettings):
             self, f"blotato_{platform.strip().lower()}_page_id", None
         )
         return value.strip() if isinstance(value, str) and value.strip() else None
+
+    def replicate_token_configured(self) -> bool:
+        return bool(
+            self.replicate_api_token
+            and self.replicate_api_token.get_secret_value().strip()
+        )
+
+    def replicate_is_enabled(self) -> bool:
+        return self.replicate_enabled and self.replicate_token_configured()
+
+    def replicate_key(self) -> str:
+        return self.require_secret("replicate_api_token", "REPLICATE_API_TOKEN")
+
+    def replicate_model(self, kind: str) -> str | None:
+        slug = (kind or "").strip().lower()
+        if slug == "video":
+            value = (self.replicate_video_model or "").strip()
+            return value or None
+        if slug == "image":
+            value = (self.replicate_image_model or "").strip()
+            return value or None
+        return None
 
     def allowed_web_origins(self) -> list[str]:
         return [
