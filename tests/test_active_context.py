@@ -66,7 +66,7 @@ def test_get_active_context_returns_payload(monkeypatch) -> None:
     monkeypatch.setattr(settings, "growly_web_api_key", None)
     monkeypatch.setattr(
         "app.web_api._active_context_data",
-        lambda: {
+        lambda workspace_id=None: {
             "active": {
                 "report_id": 23,
                 "topic": "Логистика и доставка товаров",
@@ -86,7 +86,10 @@ def test_get_active_context_returns_payload(monkeypatch) -> None:
 def test_get_active_context_returns_null_when_no_reports(monkeypatch) -> None:
     settings = get_settings()
     monkeypatch.setattr(settings, "growly_web_api_key", None)
-    monkeypatch.setattr("app.web_api._active_context_data", lambda: {"active": None})
+    monkeypatch.setattr(
+        "app.web_api._active_context_data",
+        lambda workspace_id=None: {"active": None},
+    )
 
     response = TestClient(app).get("/api/context/active")
 
@@ -99,7 +102,8 @@ def test_patch_active_context_sets_report(monkeypatch) -> None:
     monkeypatch.setattr(settings, "growly_web_api_key", None)
     captured: dict[str, object] = {}
 
-    def fake_set(report_id):
+    def fake_set(report_id, workspace_id=None):
+        captured["workspace_id"] = workspace_id
         captured["report_id"] = report_id
         return {"active": {"report_id": report_id, "topic": "Логистика"}}
 
@@ -122,8 +126,9 @@ def test_market_scan_save_persists_active_context(monkeypatch) -> None:
         def __init__(self, session) -> None:
             del session
 
-        def set(self, key, value):
+        def set(self, key, value, workspace_id=None):
             captured[key] = value
+            captured[f"{key}:workspace"] = workspace_id
 
     monkeypatch.setattr(
         "app.services.market_intelligence.SettingsRepository",

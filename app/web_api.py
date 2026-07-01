@@ -150,6 +150,22 @@ def _visible_in_workspace(
     return resource_workspace_id == membership.workspace_id
 
 
+def _workspace_expr(model: Any, workspace_id: str):
+    column = model.workspace_id
+    if workspace_id == DEFAULT_WORKSPACE_ID:
+        return or_(column == workspace_id, column.is_(None))
+    return column == workspace_id
+
+
+def _require_visible_resource(
+    resource_workspace_id: str | None,
+    membership: Membership | None,
+    detail: str,
+) -> None:
+    if not _visible_in_workspace(resource_workspace_id, membership):
+        raise HTTPException(status_code=404, detail=detail)
+
+
 def _stamp_workspace(model: Any, obj_id: int | None, workspace_id: str | None) -> None:
     """Assign a freshly-created resource to the caller's workspace.
 
@@ -162,6 +178,43 @@ def _stamp_workspace(model: Any, obj_id: int | None, workspace_id: str | None) -
         row = session.get(model, obj_id)
         if row is not None and getattr(row, "workspace_id", None) is None:
             row.workspace_id = workspace_id
+
+
+async def _require_report_visible(
+    report_id: int,
+    membership: Membership | None,
+) -> Report:
+    row = await ReportService().get_report(report_id)
+    if row is None or not _visible_in_workspace(
+        getattr(row, "workspace_id", None), membership
+    ):
+        raise HTTPException(status_code=404, detail="РћС‚С‡С‘С‚ РЅРµ РЅР°Р№РґРµРЅ.")
+    return row
+
+
+def _require_content_plan_visible(
+    item_id: int,
+    membership: Membership | None,
+) -> None:
+    if membership is None:
+        return
+    with session_scope() as session:
+        item = session.get(ContentPlan, item_id)
+        if item is None or not _visible_in_workspace(
+            getattr(item, "workspace_id", None), membership
+        ):
+            raise HTTPException(status_code=404, detail="РљРѕРЅС‚РµРЅС‚-РїР»Р°РЅ РЅРµ РЅР°Р№РґРµРЅ.")
+
+
+def _require_draft_visible(draft_id: int, membership: Membership | None) -> None:
+    if membership is None:
+        return
+    with session_scope() as session:
+        draft = DraftsRepository(session).get(draft_id)
+        if draft is None or not _visible_in_workspace(
+            getattr(draft, "workspace_id", None), membership
+        ):
+            raise HTTPException(status_code=404, detail="Р§РµСЂРЅРѕРІРёРє РЅРµ РЅР°Р№РґРµРЅ.")
 
 
 def require_admin(
@@ -513,33 +566,50 @@ def _content_plan_payload(item: ContentPlan) -> dict[str, Any]:
     }
 
 
-def _dashboard_data() -> dict[str, Any]:
+def _dashboard_data(workspace_id: str | None = None) -> dict[str, Any]:
     with session_scope() as session:
         reports = ReportsRepository(session)
         drafts = DraftsRepository(session)
         sources = SourcesRepository(session)
-        latest_market = reports.latest_report_summary("market_scan")
-        latest_competitor = (
-            reports.latest_report_summary("competitor_report")
-            or reports.latest_report_summary("competitor")
+        latest_market = reports.latest_report_summary(
+            "market_scan", workspace_id=workspace_id
         )
-        latest_plan = session.scalar(
+        latest_competitor = (
+            reports.latest_report_summary(
+                "competitor_report", workspace_id=workspace_id
+            )
+            or reports.latest_report_summary(
+                "competitor", workspace_id=workspace_id
+            )
+        )
+        latest_plan_statement = (
             select(ContentPlan).order_by(desc(ContentPlan.created_at)).limit(1)
         )
-        pending_drafts = drafts.list_pending_summary(limit=5)
-        pending_drafts_count = drafts.count_pending()
-        active_sources_count = sources.count_sources(active_only=True)
-        notion_last_sync = SettingsRepository(session).get("notion_last_sync_at")
-        published_count = int(
-            session.scalar(
-                select(func.count(Publication.id)).where(
-                    Publication.status == "published"
-                )
+        if workspace_id is not None:
+            latest_plan_statement = latest_plan_statement.where(
+                _content_plan_workspace_filter(workspace_id)
             )
-            or 0
+        latest_plan = session.scalar(latest_plan_statement)
+        pending_drafts = drafts.list_pending_summary(
+            limit=5, workspace_id=workspace_id
         )
+        pending_drafts_count = drafts.count_pending(workspace_id=workspace_id)
+        active_sources_count = sources.count_sources(
+            active_only=True, workspace_id=workspace_id
+        )
+        notion_last_sync = SettingsRepository(session).get(
+            "notion_last_sync_at", workspace_id=workspace_id
+        )
+        published_statement = select(func.count(Publication.id)).where(
+            Publication.status == "published"
+        )
+        if workspace_id is not None:
+            published_statement = published_statement.where(
+                _workspace_expr(Publication, workspace_id)
+            )
+        published_count = int(session.scalar(published_statement) or 0)
         return {
-            "workspace_mode": "single",
+            "workspace_mode": "workspace" if workspace_id else "single",
             "latest_market_scan": (
                 _report_summary_payload(latest_market) if latest_market else None
             ),
@@ -693,18 +763,31 @@ def _content_plan_detail_response(
         }
 
 
-def _workspace_settings() -> dict[str, str | None]:
+def _workspace_settings(workspace_id: str | None = None) -> dict[str, str | None]:
     with session_scope() as session:
-        return SettingsRepository(session).get_many(sorted(BUSINESS_SETTING_KEYS))
+        return SettingsRepository(session).get_many(
+            sorted(BUSINESS_SETTING_KEYS),
+            workspace_id=workspace_id,
+        )
 
 
-def _save_workspace_settings(values: dict[str, str | None]) -> dict[str, str | None]:
+def _save_workspace_settings(
+    values: dict[str, str | None],
+    workspace_id: str | None = None,
+) -> dict[str, str | None]:
     with session_scope() as session:
         repository = SettingsRepository(session)
         for key, value in values.items():
             if key in BUSINESS_SETTING_KEYS:
-                repository.set(key, value.strip() if value else None)
-        return repository.get_many(sorted(BUSINESS_SETTING_KEYS))
+                repository.set(
+                    key,
+                    value.strip() if value else None,
+                    workspace_id=workspace_id,
+                )
+        return repository.get_many(
+            sorted(BUSINESS_SETTING_KEYS),
+            workspace_id=workspace_id,
+        )
 
 
 def _active_payload_from_report(
@@ -744,7 +827,11 @@ def _active_payload_from_report(
     }
 
 
-def _resolve_active_report(session: Any, stored: dict[str, str | None]) -> Report | None:
+def _resolve_active_report(
+    session: Any,
+    stored: dict[str, str | None],
+    workspace_id: str | None = None,
+) -> Report | None:
     reports = ReportsRepository(session)
     raw_id = stored.get("active_report_id")
     report = None
@@ -754,37 +841,79 @@ def _resolve_active_report(session: Any, stored: dict[str, str | None]) -> Repor
         report is None
         or report.report_type not in ACTIVE_CONTEXT_REPORT_TYPES
     ):
-        report = reports.latest_report("market_scan")
+        report = reports.latest_report("market_scan", workspace_id=workspace_id)
+    if workspace_id is not None and report is not None:
+        visible = (
+            report.workspace_id == workspace_id
+            or (
+                report.workspace_id is None
+                and workspace_id == DEFAULT_WORKSPACE_ID
+            )
+        )
+        if not visible:
+            return None
     return report
 
 
-def _active_context_data() -> dict[str, Any]:
+def _active_context_data(workspace_id: str | None = None) -> dict[str, Any]:
     with session_scope() as session:
-        stored = SettingsRepository(session).get_many(sorted(ACTIVE_CONTEXT_KEYS))
-        report = _resolve_active_report(session, stored)
+        stored = SettingsRepository(session).get_many(
+            sorted(ACTIVE_CONTEXT_KEYS),
+            workspace_id=workspace_id,
+        )
+        report = _resolve_active_report(session, stored, workspace_id=workspace_id)
         if report is None:
             return {"active": None}
         return {"active": _active_payload_from_report(report, stored)}
 
 
-def _set_active_context(report_id: int | None) -> dict[str, Any]:
+def _set_active_context(
+    report_id: int | None,
+    workspace_id: str | None = None,
+) -> dict[str, Any]:
     with session_scope() as session:
         settings_repo = SettingsRepository(session)
         if report_id is None:
             for key in ACTIVE_CONTEXT_KEYS:
-                settings_repo.set(key, None)
+                settings_repo.set(key, None, workspace_id=workspace_id)
             return {"active": None}
         report = ReportsRepository(session).get_report(report_id)
         if report is None:
             raise HTTPException(status_code=404, detail="Отчёт не найден.")
+        if workspace_id is not None:
+            visible = (
+                report.workspace_id == workspace_id
+                or (
+                    report.workspace_id is None
+                    and workspace_id == DEFAULT_WORKSPACE_ID
+                )
+            )
+            if not visible:
+                raise HTTPException(status_code=404, detail="РћС‚С‡С‘С‚ РЅРµ РЅР°Р№РґРµРЅ.")
         payload = _active_payload_from_report(report, {})
-        settings_repo.set("active_report_id", str(payload["report_id"]))
-        settings_repo.set("active_topic", payload["topic"])
-        settings_repo.set("active_region", payload["region"])
-        settings_repo.set("active_language", payload["language"])
-        settings_repo.set("active_report_type", payload["report_type"])
-        settings_repo.set("active_sources_count", str(payload["sources_count"]))
-        settings_repo.set("active_created_at", payload["created_at"])
+        settings_repo.set(
+            "active_report_id",
+            str(payload["report_id"]),
+            workspace_id=workspace_id,
+        )
+        settings_repo.set("active_topic", payload["topic"], workspace_id=workspace_id)
+        settings_repo.set("active_region", payload["region"], workspace_id=workspace_id)
+        settings_repo.set(
+            "active_language", payload["language"], workspace_id=workspace_id
+        )
+        settings_repo.set(
+            "active_report_type", payload["report_type"], workspace_id=workspace_id
+        )
+        settings_repo.set(
+            "active_sources_count",
+            str(payload["sources_count"]),
+            workspace_id=workspace_id,
+        )
+        settings_repo.set(
+            "active_created_at",
+            payload["created_at"],
+            workspace_id=workspace_id,
+        )
         return {"active": payload}
 
 
@@ -807,8 +936,13 @@ def _infer_chat_action(message: str) -> str | None:
 
 
 @secured_router.get("/dashboard")
-async def dashboard() -> dict[str, Any]:
-    return await asyncio.to_thread(_dashboard_data)
+async def dashboard(
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
+    return await asyncio.to_thread(
+        _dashboard_data,
+        membership.workspace_id if membership is not None else None,
+    )
 
 
 @secured_router.get("/health")
@@ -820,12 +954,16 @@ async def web_health() -> dict[str, str]:
     }
 
 
-async def _run_market_scan_sync(payload: MarketScanRequest) -> dict[str, Any]:
+async def _run_market_scan_sync(
+    payload: MarketScanRequest,
+    workspace_id: str | None = None,
+) -> dict[str, Any]:
     report, sources = await MarketIntelligenceService().run_market_scan(
         niche=payload.niche,
         region_language=payload.region_language,
         competitor_keywords=payload.competitor_keywords,
         output_language=payload.language,
+        workspace_id=workspace_id,
     )
     report_payload = _report_payload(report)
     return {
@@ -904,12 +1042,20 @@ async def market_scan(
 
 
 @secured_router.get("/market-scan/jobs/{job_id}")
-async def market_scan_job(job_id: int) -> dict[str, Any]:
+async def market_scan_job(
+    job_id: int,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
     job = await MarketIntelligenceService().market_scan_job(job_id)
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Задание анализа рынка не найдено.",
+        )
+    if not _visible_in_workspace(job.get("workspace_id"), membership):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Р—Р°РґР°РЅРёРµ Р°РЅР°Р»РёР·Р° СЂС‹РЅРєР° РЅРµ РЅР°Р№РґРµРЅРѕ.",
         )
     return {
         "status": job["status"],
@@ -929,6 +1075,8 @@ async def competitor_report(
     payload: CompetitorReportRequest,
     membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
+    if payload.report_id is not None:
+        await _require_report_visible(payload.report_id, membership)
     report = await MarketIntelligenceService().generate_competitor_report(
         query=payload.query,
         market_report_id=payload.report_id,
@@ -1053,9 +1201,12 @@ async def content_plan_create(
     payload: ContentPlanRequest,
     membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
-    items = await ContentPlanService().generate_weekly_plan(
-        _build_content_plan_context(payload)
-    )
+    if payload.report_id is not None:
+        await _require_report_visible(payload.report_id, membership)
+    context = _build_content_plan_context(payload)
+    if membership is not None:
+        context["workspace_id"] = membership.workspace_id
+    items = await ContentPlanService().generate_weekly_plan(context)
     plan_id = items[0].id if items else None
     if membership is not None:
         for item in items:
@@ -1083,6 +1234,7 @@ async def content_plan_draft(
     item_id: int,
     membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
+    await asyncio.to_thread(_require_content_plan_visible, item_id, membership)
     draft = await DraftService().create_from_plan(item_id)
     if membership is not None:
         await asyncio.to_thread(
@@ -1119,14 +1271,14 @@ async def drafts(
 ) -> dict[str, Any]:
     def load() -> list[Draft]:
         with session_scope() as session:
-            return DraftsRepository(session).list_recent_summary(limit)
+            return DraftsRepository(session).list_recent_summary(
+                limit,
+                workspace_id=membership.workspace_id
+                if membership is not None
+                else None,
+            )
 
     rows = await asyncio.to_thread(load)
-    rows = [
-        row
-        for row in rows
-        if _visible_in_workspace(getattr(row, "workspace_id", None), membership)
-    ]
     return {"items": [_draft_summary_payload(row) for row in rows]}
 
 
@@ -1134,7 +1286,9 @@ async def drafts(
 async def update_draft(
     draft_id: int,
     payload: DraftActionRequest,
+    membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
+    await asyncio.to_thread(_require_draft_visible, draft_id, membership)
     service = DraftService()
     if payload.action == "regenerate":
         draft = await service.regenerate(draft_id)
@@ -1159,33 +1313,42 @@ async def reports(
     limit: int = Query(default=50, ge=1, le=200),
     membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
-    rows = await ReportService().list_latest_summary(limit)
-    rows = [
-        row
-        for row in rows
-        if _visible_in_workspace(getattr(row, "workspace_id", None), membership)
-    ]
+    rows = await ReportService().list_latest_summary(
+        limit,
+        workspace_id=membership.workspace_id if membership is not None else None,
+    )
     return {"items": [_report_summary_payload(row) for row in rows]}
 
 
 @secured_router.get("/reports/{report_id}")
 async def report(
     report_id: int,
+    language: Literal["ru", "en", "kk"] = Query(default="ru"),
     membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
-    row = await ReportService().get_report(report_id)
+    service = ReportService()
+    row = await service.get_report(report_id)
     if row is None or not _visible_in_workspace(
         getattr(row, "workspace_id", None), membership
     ):
         raise HTTPException(status_code=404, detail="Отчёт не найден.")
-    return {"report": _report_payload(row)}
+    try:
+        localized = await service.localized_report(row, language)
+    except AIServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    return {"report": _report_payload(localized)}
 
 
 @secured_router.post("/reports/{report_id}/content-plan-options")
 async def report_content_plan_options(
     report_id: int,
     payload: ContentPlanOptionsRequest,
+    membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
+    await _require_report_visible(report_id, membership)
     try:
         options = await ContentPlanService().generate_content_plan_options(
             report_id,
@@ -1199,20 +1362,36 @@ async def report_content_plan_options(
 @secured_router.get("/sources")
 async def sources(
     active_only: bool = Query(default=False),
+    membership: Membership | None = Depends(current_membership),
 ) -> dict[str, Any]:
-    rows = await SourceAnalysisService().list_sources(active_only=active_only)
+    rows = await SourceAnalysisService().list_sources(
+        active_only=active_only,
+        workspace_id=membership.workspace_id if membership is not None else None,
+    )
     return {"items": [_source_payload(row) for row in rows]}
 
 
 @secured_router.post("/sources")
-async def add_source(payload: AddSourceRequest) -> dict[str, Any]:
-    source = await SourceAnalysisService().add_source(**payload.model_dump())
+async def add_source(
+    payload: AddSourceRequest,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
+    source = await SourceAnalysisService().add_source(
+        **payload.model_dump(),
+        workspace_id=membership.workspace_id if membership is not None else None,
+    )
     return {"status": "completed", "source": _source_payload(source)}
 
 
 @secured_router.post("/sources/discover")
-async def discover_sources(payload: DiscoverSourcesRequest) -> dict[str, Any]:
-    rows = await SourceDiscoveryService().discover_sources(**payload.model_dump())
+async def discover_sources(
+    payload: DiscoverSourcesRequest,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
+    rows = await SourceDiscoveryService().discover_sources(
+        **payload.model_dump(),
+        workspace_id=membership.workspace_id if membership is not None else None,
+    )
     return {
         "status": "completed",
         "items": [_source_payload(row) for row in rows],
@@ -1220,8 +1399,12 @@ async def discover_sources(payload: DiscoverSourcesRequest) -> dict[str, Any]:
 
 
 @secured_router.post("/sources/monitor")
-async def monitor_sources() -> dict[str, Any]:
-    report_row, items = await SourceDiscoveryService().monitor_active_sources()
+async def monitor_sources(
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
+    report_row, items = await SourceDiscoveryService().monitor_active_sources(
+        membership.workspace_id if membership is not None else None
+    )
     return {
         "status": "completed",
         "report": _report_payload(report_row),
@@ -1230,15 +1413,24 @@ async def monitor_sources() -> dict[str, Any]:
 
 
 @secured_router.post("/notion/sync")
-async def notion_sync(payload: NotionSyncRequest) -> dict[str, Any]:
+async def notion_sync(
+    payload: NotionSyncRequest,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
     if payload.target == "report":
         if payload.target_id is None:
             raise HTTPException(status_code=422, detail="Укажите ID отчёта.")
+        await _require_report_visible(payload.target_id, membership)
         url = await ReportService().sync_report_to_notion(payload.target_id)
         return {"status": "completed", "target": "report", "url": url}
     if payload.target == "draft":
         if payload.target_id is None:
             raise HTTPException(status_code=422, detail="Укажите ID черновика.")
+        await asyncio.to_thread(
+            _require_draft_visible,
+            payload.target_id,
+            membership,
+        )
         url = await DraftService().ensure_notion(payload.target_id)
         return {"status": "completed", "target": "draft", "url": url}
     counts = await NotionService().sync_recent_data()
@@ -1246,27 +1438,57 @@ async def notion_sync(payload: NotionSyncRequest) -> dict[str, Any]:
 
 
 @secured_router.get("/context/active")
-async def active_context() -> dict[str, Any]:
-    return await asyncio.to_thread(_active_context_data)
+async def active_context(
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
+    return await asyncio.to_thread(
+        _active_context_data,
+        membership.workspace_id if membership is not None else None,
+    )
 
 
 @secured_router.patch("/context/active")
-async def update_active_context(payload: ActiveContextRequest) -> dict[str, Any]:
-    return await asyncio.to_thread(_set_active_context, payload.active_report_id)
+async def update_active_context(
+    payload: ActiveContextRequest,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
+    return await asyncio.to_thread(
+        _set_active_context,
+        payload.active_report_id,
+        membership.workspace_id if membership is not None else None,
+    )
 
 
 @secured_router.get("/settings")
-async def settings() -> dict[str, Any]:
+async def settings(
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
+    job = {"workspace_id": membership.workspace_id if membership is not None else None}
+    if not _visible_in_workspace(job.get("workspace_id"), membership):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Р—Р°РґР°РЅРёРµ Р°РЅР°Р»РёР·Р° СЂС‹РЅРєР° РЅРµ РЅР°Р№РґРµРЅРѕ.",
+        )
     return {
-        "workspace_mode": "single",
-        "settings": await asyncio.to_thread(_workspace_settings),
+        "workspace_mode": "workspace" if membership is not None else "single",
+        "settings": await asyncio.to_thread(
+            _workspace_settings,
+            membership.workspace_id if membership is not None else None,
+        ),
     }
 
 
 @secured_router.patch("/settings")
-async def update_settings(payload: WorkspaceSettingsRequest) -> dict[str, Any]:
+async def update_settings(
+    payload: WorkspaceSettingsRequest,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
     values = payload.model_dump()
-    saved = await asyncio.to_thread(_save_workspace_settings, values)
+    saved = await asyncio.to_thread(
+        _save_workspace_settings,
+        values,
+        membership.workspace_id if membership is not None else None,
+    )
     return {"status": "completed", "settings": saved}
 
 
@@ -1320,6 +1542,8 @@ async def chat(
     if action is None and report_id is not None:
         action = "ask"
     if action == "ask":
+        if report_id is not None:
+            await _require_report_visible(report_id, membership)
         if report_id is None:
             raise HTTPException(status_code=400, detail="Сначала выберите отчёт.")
         try:
@@ -1337,6 +1561,8 @@ async def chat(
             "result": {"answer": answer},
         }
     if action == "ideas":
+        if report_id is not None:
+            await _require_report_visible(report_id, membership)
         if report_id is None:
             raise HTTPException(status_code=400, detail="Сначала выберите отчёт.")
         try:
@@ -1359,7 +1585,12 @@ async def chat(
                 competitor_keywords=str(context.get("competitor_keywords") or ""),
                 language=payload.language,
             )
-            result = await _run_market_scan_sync(request)
+            result = await _run_market_scan_sync(
+                request,
+                workspace_id=membership.workspace_id
+                if membership is not None
+                else None,
+            )
         elif action == "competitors":
             result = await competitor_report(
                 CompetitorReportRequest(
@@ -1406,9 +1637,9 @@ async def chat(
         elif action == "reports":
             result = await reports(limit=50, membership=membership)
         elif action == "sources":
-            result = await sources(active_only=False)
+            result = await sources(active_only=False, membership=membership)
         elif action == "notion_sync":
-            result = await notion_sync(NotionSyncRequest())
+            result = await notion_sync(NotionSyncRequest(), membership=membership)
         else:
             return {
                 "status": "needs_action",

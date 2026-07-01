@@ -51,13 +51,13 @@ export default function ReportPage() {
     setError("");
     try {
       const response = await apiRequest<{ report: Report }>(
-        `/reports/${params.id}`,
+        `/reports/${params.id}?language=${encodeURIComponent(locale)}`,
       );
       setReport(response.report);
     } catch (value) {
       setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
     }
-  }, [params.id, t]);
+  }, [locale, params.id, t]);
 
   useEffect(() => {
     void load();

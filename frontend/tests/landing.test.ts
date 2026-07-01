@@ -15,6 +15,10 @@ const landingScript = readFileSync(
   path.join(frontendRoot, "public", "landing", "main.js"),
   "utf8",
 );
+const landingStyles = readFileSync(
+  path.join(frontendRoot, "public", "landing", "styles.css"),
+  "utf8",
+);
 
 describe("public landing page", () => {
   it("renders the supplied landing source at the root route", () => {
@@ -54,5 +58,12 @@ describe("public landing page", () => {
     expect(landingScript).toContain("fetch('/api/billing/checkout'");
     expect(landingScript).toContain("window.location.assign(`/register${query}`)");
     expect(landingScript).toContain("response.status === 401");
+  });
+
+  it("keeps pricing anchor below the fixed navigation", () => {
+    expect(landingStyles).toContain("scroll-padding-top: 92px");
+    expect(landingStyles).toContain("scroll-margin-top: 92px");
+    expect(landingStyles).toContain(".popular-badge { position: absolute; top: 18px;");
+    expect(landingStyles).not.toContain(".popular-badge { position: absolute; top: -");
   });
 });

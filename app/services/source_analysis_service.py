@@ -48,11 +48,13 @@ class SourceAnalysisService:
         category: str,
         priority: str,
         check_frequency: str,
+        workspace_id: str | None = None,
     ) -> Source:
         def save() -> Source:
             with session_scope() as session:
                 return SourcesRepository(session).create_source(
                     name=name.strip(),
+                    workspace_id=workspace_id,
                     source_type=source_type.strip(),
                     url=url.strip() or None,
                     category=category.strip(),
@@ -69,17 +71,26 @@ class SourceAnalysisService:
             logger.warning("Source %s could not sync to Notion.", source.id)
         return source
 
-    async def list_sources(self, *, active_only: bool = True) -> list[Source]:
+    async def list_sources(
+        self, *, active_only: bool = True, workspace_id: str | None = None
+    ) -> list[Source]:
         def load() -> list[Source]:
             with session_scope() as session:
-                return SourcesRepository(session).list_sources(active_only=active_only)
+                return SourcesRepository(session).list_sources(
+                    active_only=active_only,
+                    workspace_id=workspace_id,
+                )
 
         return await asyncio.to_thread(load)
 
-    async def find_source(self, value: str) -> Source | None:
+    async def find_source(
+        self, value: str, workspace_id: str | None = None
+    ) -> Source | None:
         def load() -> Source | None:
             with session_scope() as session:
-                return SourcesRepository(session).find(value)
+                return SourcesRepository(session).find(
+                    value, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 

@@ -17,6 +17,7 @@ from app.models import (
 )
 from app.repositories.market_scan_jobs_repo import MarketScanJobsRepository
 from app.repositories.reports_repo import ReportsRepository
+from app.repositories.settings_repo import SettingsRepository
 from app.services.ai_service import AIService
 from app.services.market_context import build_market_context
 from app.services.notion_service import NotionService
@@ -195,7 +196,12 @@ class ContentPlanService:
         thresholds = await asyncio.to_thread(self._load_thresholds)
         self._validate_mix(normalized, thresholds)
 
-        items = await asyncio.to_thread(self._save_plan_items, normalized)
+        workspace_id = data.get("workspace_id")
+        items = await asyncio.to_thread(
+            self._save_plan_items,
+            normalized,
+            workspace_id,
+        )
         await self._emit_progress(
             progress,
             "Шаг 4/4: сохраняю в контент-календарь Notion...",
@@ -215,6 +221,7 @@ class ContentPlanService:
         self,
         data: dict[str, Any],
     ) -> dict[str, Any]:
+        workspace_id = data.get("workspace_id")
         source_items = data.pop("source_items")
         data["evidence_urls"] = self._deduplicate(
             self._list(data.get("evidence_urls"))
@@ -255,6 +262,7 @@ class ContentPlanService:
             self._save_batch_summaries,
             batch_summaries,
             source_items,
+            workspace_id,
         )
         data["source_items"] = []
         data["source_batch_summaries"] = batch_summaries
@@ -394,6 +402,11 @@ class ContentPlanService:
         with session_scope() as session:
             reports_repo = ReportsRepository(session)
             brief = business_context if isinstance(business_context, dict) else {}
+            workspace_id = (
+                str(brief.get("workspace_id")).strip()
+                if brief.get("workspace_id")
+                else None
+            )
             use_market_context = brief.get("use_market_context", True) is not False
             selected_context = (
                 brief.get("market_context")
@@ -408,10 +421,20 @@ class ContentPlanService:
             latest_market_scan = None
             if selected_report_id:
                 candidate = reports_repo.get_report(int(selected_report_id))
-                if candidate and candidate.report_type == "market_scan":
+                if (
+                    candidate
+                    and candidate.report_type == "market_scan"
+                    and (
+                        workspace_id is None
+                        or candidate.workspace_id == workspace_id
+                    )
+                ):
                     latest_market_scan = candidate
             elif use_market_context and selected_context is None:
-                latest_market_scan = reports_repo.latest_report("market_scan")
+                latest_market_scan = reports_repo.latest_report(
+                    "market_scan",
+                    workspace_id=workspace_id,
+                )
 
             active_market_context = (
                 self._market_context_from_report(latest_market_scan)
@@ -437,8 +460,14 @@ class ContentPlanService:
                 else []
             )
             latest_competitor_report = (
-                reports_repo.latest_report("competitor_report")
-                or reports_repo.latest_report("competitor")
+                reports_repo.latest_report(
+                    "competitor_report",
+                    workspace_id=workspace_id,
+                )
+                or reports_repo.latest_report(
+                    "competitor",
+                    workspace_id=workspace_id,
+                )
             )
             competitor_payload = (
                 latest_competitor_report.raw_json
@@ -455,11 +484,31 @@ class ContentPlanService:
             settings = list(
                 session.scalars(
                     select(Setting)
-                    .where(Setting.key.like("business_%"))
+                    .where(
+                        Setting.key.in_(
+                            [
+                                SettingsRepository.scoped_key(
+                                    key, workspace_id=workspace_id
+                                )
+                                for key in (
+                                    "business_name",
+                                    "business_niche",
+                                    "business_region",
+                                    "business_language",
+                                    "business_brand_tone",
+                                    "business_telegram_channel",
+                                    "business_notion_root",
+                                )
+                            ]
+                        )
+                    )
                     .order_by(Setting.key)
                 )
             )
-            profile = {row.key: row.value for row in settings}
+            profile = {
+                row.key.rsplit(":", 1)[-1]: row.value
+                for row in settings
+            }
             requested_business = (
                 brief.get("business") if isinstance(brief.get("business"), dict) else {}
             )
@@ -487,6 +536,7 @@ class ContentPlanService:
             return {
                 "weekly_objective": business_context
                 or {"note": "No additional brief supplied."},
+                "workspace_id": workspace_id,
                 "current_date": today.isoformat(),
                 "planning_window": {
                     "start": today.isoformat(),
@@ -813,6 +863,7 @@ class ContentPlanService:
     def _save_batch_summaries(
         batch_summaries: list[dict[str, Any]],
         source_items: list[SourceItem],
+        workspace_id: str | None = None,
     ) -> None:
         with session_scope() as session:
             ReportsRepository(session).create_report(
@@ -835,16 +886,22 @@ class ContentPlanService:
                     "source_item_ids": [item.id for item in source_items],
                 },
                 status="ready",
+                workspace_id=workspace_id,
             )
 
     @staticmethod
     def _save_plan_items(
         normalized: list[dict[str, Any]],
+        workspace_id: str | None = None,
     ) -> list[ContentPlan]:
         with session_scope() as session:
             repo = ReportsRepository(session)
             return [
-                repo.create_content_plan_item(item)
+                repo.create_content_plan_item(
+                    {**item, "workspace_id": workspace_id}
+                    if workspace_id
+                    else item
+                )
                 for item in normalized
             ]
 

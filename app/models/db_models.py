@@ -77,6 +77,7 @@ class Source(Base, TimestampMixin):
     __tablename__ = "sources"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     source_type: Mapped[str | None] = mapped_column(Text)
     url: Mapped[str | None] = mapped_column(Text)
@@ -100,6 +101,7 @@ class SourceItem(Base, TimestampMixin):
     __tablename__ = "source_items"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text)
     source_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("sources.id", ondelete="CASCADE")
     )
@@ -174,6 +176,7 @@ class ReviewImport(Base):
     __tablename__ = "reviews_imports"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    workspace_id: Mapped[str | None] = mapped_column(Text)
     title: Mapped[str | None] = mapped_column(Text)
     source_name: Mapped[str | None] = mapped_column(Text)
     raw_text: Mapped[str | None] = mapped_column(Text)

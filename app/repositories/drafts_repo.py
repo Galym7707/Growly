@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session, load_only
 
 from app.models import Approval, Draft, User
+from app.services.workspace_service import DEFAULT_WORKSPACE_ID
 
 
 def _draft_summary_columns():
@@ -28,6 +29,15 @@ def _draft_summary_columns():
 class DraftsRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
+
+    @staticmethod
+    def _workspace_filter(workspace_id: str):
+        if workspace_id == DEFAULT_WORKSPACE_ID:
+            return or_(
+                Draft.workspace_id == workspace_id,
+                Draft.workspace_id.is_(None),
+            )
+        return Draft.workspace_id == workspace_id
 
     def create(
         self,
@@ -60,16 +70,22 @@ class DraftsRepository:
     def get(self, draft_id: int) -> Draft | None:
         return self.session.get(Draft, draft_id)
 
-    def list_pending(self, limit: int = 20) -> list[Draft]:
+    def list_pending(
+        self, limit: int = 20, workspace_id: str | None = None
+    ) -> list[Draft]:
         statement = (
             select(Draft)
             .where(Draft.status == "pending")
             .order_by(desc(Draft.created_at))
             .limit(limit)
         )
+        if workspace_id is not None:
+            statement = statement.where(self._workspace_filter(workspace_id))
         return list(self.session.scalars(statement))
 
-    def list_pending_summary(self, limit: int = 20) -> list[Draft]:
+    def list_pending_summary(
+        self, limit: int = 20, workspace_id: str | None = None
+    ) -> list[Draft]:
         statement = (
             select(Draft)
             .options(_draft_summary_columns())
@@ -77,13 +93,16 @@ class DraftsRepository:
             .order_by(desc(Draft.created_at))
             .limit(limit)
         )
+        if workspace_id is not None:
+            statement = statement.where(self._workspace_filter(workspace_id))
         return list(self.session.scalars(statement))
 
-    def count_pending(self) -> int:
+    def count_pending(self, workspace_id: str | None = None) -> int:
+        statement = select(func.count(Draft.id)).where(Draft.status == "pending")
+        if workspace_id is not None:
+            statement = statement.where(self._workspace_filter(workspace_id))
         return int(
-            self.session.scalar(
-                select(func.count(Draft.id)).where(Draft.status == "pending")
-            )
+            self.session.scalar(statement)
             or 0
         )
 
@@ -112,21 +131,29 @@ class DraftsRepository:
                 latest[plan_id] = draft_id
         return latest
 
-    def list_recent(self, limit: int = 50) -> list[Draft]:
+    def list_recent(
+        self, limit: int = 50, workspace_id: str | None = None
+    ) -> list[Draft]:
+        statement = select(Draft).order_by(desc(Draft.created_at)).limit(limit)
+        if workspace_id is not None:
+            statement = statement.where(self._workspace_filter(workspace_id))
         return list(
-            self.session.scalars(
-                select(Draft).order_by(desc(Draft.created_at)).limit(limit)
-            )
+            self.session.scalars(statement)
         )
 
-    def list_recent_summary(self, limit: int = 50) -> list[Draft]:
+    def list_recent_summary(
+        self, limit: int = 50, workspace_id: str | None = None
+    ) -> list[Draft]:
+        statement = (
+            select(Draft)
+            .options(_draft_summary_columns())
+            .order_by(desc(Draft.created_at))
+            .limit(limit)
+        )
+        if workspace_id is not None:
+            statement = statement.where(self._workspace_filter(workspace_id))
         return list(
-            self.session.scalars(
-                select(Draft)
-                .options(_draft_summary_columns())
-                .order_by(desc(Draft.created_at))
-                .limit(limit)
-            )
+            self.session.scalars(statement)
         )
 
     def set_telegram_message(self, draft: Draft, message_id: int) -> Draft:

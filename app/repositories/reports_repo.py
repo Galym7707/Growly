@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session, joinedload, load_only
 
 from app.models import Approval, ContentPlan, Draft, Publication, Report, ReviewImport
+from app.services.workspace_service import DEFAULT_WORKSPACE_ID
 
 
 def _report_summary_columns():
@@ -31,6 +32,13 @@ class ReportsRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
+    @staticmethod
+    def _workspace_filter(model: Any, workspace_id: str):
+        column = model.workspace_id
+        if workspace_id == DEFAULT_WORKSPACE_ID:
+            return or_(column == workspace_id, column.is_(None))
+        return column == workspace_id
+
     def create_report(
         self,
         *,
@@ -46,6 +54,7 @@ class ReportsRepository:
         evidence: list[Any] | None = None,
         raw_json: dict[str, Any] | None = None,
         status: str = "ready",
+        workspace_id: str | None = None,
     ) -> Report:
         report = Report(
             report_type=report_type,
@@ -61,6 +70,7 @@ class ReportsRepository:
             recommendations_json=recommendations or [],
             raw_json=raw_json,
             status=status,
+            workspace_id=workspace_id,
         )
         self.session.add(report)
         self.session.flush()
@@ -74,46 +84,69 @@ class ReportsRepository:
         self.session.flush()
         return report
 
-    def list_latest(self, limit: int = 10) -> list[Report]:
+    def list_latest(
+        self, limit: int = 10, workspace_id: str | None = None
+    ) -> list[Report]:
+        statement = select(Report).order_by(desc(Report.created_at)).limit(limit)
+        if workspace_id is not None:
+            statement = statement.where(self._workspace_filter(Report, workspace_id))
         return list(
-            self.session.scalars(
-                select(Report).order_by(desc(Report.created_at)).limit(limit)
-            )
+            self.session.scalars(statement)
         )
 
-    def list_latest_summary(self, limit: int = 10) -> list[Report]:
+    def list_latest_summary(
+        self, limit: int = 10, workspace_id: str | None = None
+    ) -> list[Report]:
+        statement = (
+            select(Report)
+            .options(_report_summary_columns())
+            .order_by(desc(Report.created_at))
+            .limit(limit)
+        )
+        if workspace_id is not None:
+            statement = statement.where(self._workspace_filter(Report, workspace_id))
         return list(
-            self.session.scalars(
-                select(Report)
-                .options(_report_summary_columns())
-                .order_by(desc(Report.created_at))
-                .limit(limit)
-            )
+            self.session.scalars(statement)
         )
 
-    def latest_report(self, report_type: str) -> Report | None:
-        return self.session.scalar(
+    def latest_report(
+        self, report_type: str, workspace_id: str | None = None
+    ) -> Report | None:
+        statement = (
             select(Report)
             .where(Report.report_type == report_type)
             .order_by(desc(Report.created_at))
             .limit(1)
         )
-
-    def latest_report_summary(self, report_type: str) -> Report | None:
+        if workspace_id is not None:
+            statement = statement.where(self._workspace_filter(Report, workspace_id))
         return self.session.scalar(
+            statement
+        )
+
+    def latest_report_summary(
+        self, report_type: str, workspace_id: str | None = None
+    ) -> Report | None:
+        statement = (
             select(Report)
             .options(_report_summary_columns())
             .where(Report.report_type == report_type)
             .order_by(desc(Report.created_at))
             .limit(1)
         )
+        if workspace_id is not None:
+            statement = statement.where(self._workspace_filter(Report, workspace_id))
+        return self.session.scalar(
+            statement
+        )
 
     def latest_report_with_status(
         self,
         report_type: str,
         status: str,
+        workspace_id: str | None = None,
     ) -> Report | None:
-        return self.session.scalar(
+        statement = (
             select(Report)
             .where(
                 Report.report_type == report_type,
@@ -121,6 +154,11 @@ class ReportsRepository:
             )
             .order_by(desc(Report.created_at))
             .limit(1)
+        )
+        if workspace_id is not None:
+            statement = statement.where(self._workspace_filter(Report, workspace_id))
+        return self.session.scalar(
+            statement
         )
 
     def update_report(

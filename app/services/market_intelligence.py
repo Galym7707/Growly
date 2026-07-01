@@ -124,6 +124,7 @@ class MarketIntelligenceService:
         *,
         max_results: int | None = None,
         include_raw_content: bool = False,
+        workspace_id: str | None = None,
     ) -> list[SourceItem]:
         results = await asyncio.to_thread(
             self._provider().search,
@@ -131,7 +132,7 @@ class MarketIntelligenceService:
             max_results,
             include_raw_content=include_raw_content,
         )
-        saved = await asyncio.to_thread(self._save_results, results)
+        saved = await asyncio.to_thread(self._save_results, results, workspace_id)
         await self._sync_source_items(saved)
         return saved
 
@@ -145,11 +146,14 @@ class MarketIntelligenceService:
         job_id: int | None = None,
         progress: ProgressCallback | None = None,
         output_language: str | None = None,
+        workspace_id: str | None = None,
     ) -> tuple[Report, list[SourceItem]]:
         logger.info("market_scan_started")
         if job_id is None and user_id is not None:
             job = await self.create_market_scan_job(user_id, niche)
             job_id = job.id
+        if workspace_id is None and job_id is not None:
+            workspace_id = await asyncio.to_thread(self._workspace_id_for_job, job_id)
         await self._set_job_step(
             job_id,
             "Шаг 1/5: ищу источники через Tavily...",
@@ -216,7 +220,11 @@ class MarketIntelligenceService:
             progress,
             "Шаг 3/5: сохраняю источники в Supabase...",
         )
-        saved = await asyncio.to_thread(self._save_results, unique_results)
+        saved = await asyncio.to_thread(
+            self._save_results,
+            unique_results,
+            workspace_id,
+        )
         logger.info("source_items_saved_count=%d", len(saved))
         await self._update_job(
             job_id,
@@ -249,6 +257,7 @@ class MarketIntelligenceService:
                 job_id=job_id,
                 progress=progress,
                 output_language=output_language,
+                workspace_id=workspace_id,
             )
             logger.info("groq_status=ready")
             logger.info("groq_analysis_finished")
@@ -272,6 +281,7 @@ class MarketIntelligenceService:
                 saved,
                 groq_status,
                 region_language,
+                workspace_id,
             )
         await self._update_job(
             job_id,
@@ -454,6 +464,7 @@ class MarketIntelligenceService:
         job_id: int | None = None,
         progress: ProgressCallback | None = None,
         output_language: str | None = None,
+        workspace_id: str | None = None,
     ) -> tuple[Report, list[SourceItem]]:
         analysis, batch_summaries = await self._analyze_source_item_batches(
             " | ".join(queries),
@@ -481,6 +492,7 @@ class MarketIntelligenceService:
                 saved,
                 queries,
                 region_language,
+                workspace_id,
             )
         else:
             report = await asyncio.to_thread(
@@ -1014,10 +1026,15 @@ class MarketIntelligenceService:
         return list(unique.values())
 
     @staticmethod
-    def _save_results(results: list[SearchResult]) -> list[SourceItem]:
+    def _save_results(
+        results: list[SearchResult], workspace_id: str | None = None
+    ) -> list[SourceItem]:
         with session_scope() as session:
             repo = SourcesRepository(session)
-            return [repo.create_search_item(result) for result in results]
+            return [
+                repo.create_search_item(result, workspace_id=workspace_id)
+                for result in results
+            ]
 
     @staticmethod
     def _apply_source_analysis(
@@ -1228,6 +1245,7 @@ class MarketIntelligenceService:
             "status": job.status,
             "current_step": job.current_step,
             "query": job.query,
+            "workspace_id": job.workspace_id,
             "sources_count": job.sources_count,
             "report_id": job.report_id,
             "report_status": report.status if report else None,
@@ -1241,6 +1259,12 @@ class MarketIntelligenceService:
         with session_scope() as session:
             job = MarketScanJobsRepository(session).latest_for_report(report_id)
             return job.id if job else None
+
+    @staticmethod
+    def _workspace_id_for_job(job_id: int) -> str | None:
+        with session_scope() as session:
+            job = MarketScanJobsRepository(session).get(job_id)
+            return job.workspace_id if job else None
 
     @staticmethod
     def _persist_active_context(session: Any, report: Report) -> None:
@@ -1258,24 +1282,37 @@ class MarketIntelligenceService:
             else {}
         )
         repo = SettingsRepository(session)
-        repo.set("active_report_id", str(report.id))
+        workspace_id = getattr(report, "workspace_id", None)
+        repo.set("active_report_id", str(report.id), workspace_id=workspace_id)
         repo.set(
             "active_topic",
             str(context.get("topic") or report.query or "").strip() or None,
+            workspace_id=workspace_id,
         )
         repo.set(
             "active_region",
             str(context.get("region") or "").strip() or None,
+            workspace_id=workspace_id,
         )
         repo.set(
             "active_language",
             str(context.get("language") or "").strip() or None,
+            workspace_id=workspace_id,
         )
-        repo.set("active_report_type", report.report_type or "market_scan")
-        repo.set("active_sources_count", str(report.sources_count or 0))
+        repo.set(
+            "active_report_type",
+            report.report_type or "market_scan",
+            workspace_id=workspace_id,
+        )
+        repo.set(
+            "active_sources_count",
+            str(report.sources_count or 0),
+            workspace_id=workspace_id,
+        )
         repo.set(
             "active_created_at",
             report.created_at.isoformat() if report.created_at else None,
+            workspace_id=workspace_id,
         )
 
     @classmethod
@@ -1286,6 +1323,7 @@ class MarketIntelligenceService:
         source_items: list[SourceItem],
         queries: list[str],
         region_language: str = "",
+        workspace_id: str | None = None,
     ) -> Report:
         body = cls.render_market_scan_report(payload)
         with session_scope() as session:
@@ -1309,6 +1347,7 @@ class MarketIntelligenceService:
                     "groq_status": "ready",
                 },
                 status="ready",
+                workspace_id=workspace_id,
             )
             cls._persist_active_context(session, report)
             return report
@@ -1321,6 +1360,7 @@ class MarketIntelligenceService:
         source_items: list[SourceItem],
         groq_status: str,
         region_language: str = "",
+        workspace_id: str | None = None,
     ) -> Report:
         if groq_status == "rate_limited":
             message = (
@@ -1352,6 +1392,7 @@ class MarketIntelligenceService:
                     "analysis_pending_since": datetime.now(UTC).isoformat(),
                 },
                 status=MARKET_SCAN_PENDING_STATUS,
+                workspace_id=workspace_id,
             )
             cls._persist_active_context(session, report)
             return report

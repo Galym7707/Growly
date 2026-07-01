@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 from datetime import UTC, date, datetime, time, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 from app.database import session_scope
@@ -10,6 +12,7 @@ from app.models import Publication, Report
 from app.repositories.reports_repo import ReportsRepository
 from app.services.ai_service import AIService
 from app.services.notion_service import NotionService
+from app.utils.text import parse_json_response
 from app.utils.errors import AIServiceError, ConfigurationError, NotionServiceError
 
 logger = logging.getLogger(__name__)
@@ -55,17 +58,25 @@ class ReportService:
         self.ai = ai or groq or AIService()
         self.notion = notion or NotionService()
 
-    async def list_latest(self, limit: int = 10) -> list[Report]:
+    async def list_latest(
+        self, limit: int = 10, workspace_id: str | None = None
+    ) -> list[Report]:
         def load() -> list[Report]:
             with session_scope() as session:
-                return ReportsRepository(session).list_latest(limit)
+                return ReportsRepository(session).list_latest(
+                    limit, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 
-    async def list_latest_summary(self, limit: int = 10) -> list[Report]:
+    async def list_latest_summary(
+        self, limit: int = 10, workspace_id: str | None = None
+    ) -> list[Report]:
         def load() -> list[Report]:
             with session_scope() as session:
-                return ReportsRepository(session).list_latest_summary(limit)
+                return ReportsRepository(session).list_latest_summary(
+                    limit, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 
@@ -76,17 +87,25 @@ class ReportService:
 
         return await asyncio.to_thread(load)
 
-    async def latest_report(self, report_type: str) -> Report | None:
+    async def latest_report(
+        self, report_type: str, workspace_id: str | None = None
+    ) -> Report | None:
         def load() -> Report | None:
             with session_scope() as session:
-                return ReportsRepository(session).latest_report(report_type)
+                return ReportsRepository(session).latest_report(
+                    report_type, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 
-    async def latest_report_summary(self, report_type: str) -> Report | None:
+    async def latest_report_summary(
+        self, report_type: str, workspace_id: str | None = None
+    ) -> Report | None:
         def load() -> Report | None:
             with session_scope() as session:
-                return ReportsRepository(session).latest_report_summary(report_type)
+                return ReportsRepository(session).latest_report_summary(
+                    report_type, workspace_id=workspace_id
+                )
 
         return await asyncio.to_thread(load)
 
@@ -132,6 +151,172 @@ class ReportService:
         return f"{_REPORT_IDEAS_HEADER[lang]}\n{body}"
 
     _REPORT_LANGS = ("ru", "en", "kk")
+
+    async def localized_report(self, report: Report, language: str) -> Report:
+        lang = language if language in self._REPORT_LANGS else "ru"
+        source_lang = self._report_language(report)
+        if lang == source_lang:
+            return report
+
+        raw = report.raw_json if isinstance(report.raw_json, dict) else {}
+        cached = self._cached_report_translation(raw, lang)
+        if cached is None:
+            cached = await self._generate_report_translation(report, lang)
+            await asyncio.to_thread(
+                self._save_report_translation,
+                report.id,
+                lang,
+                cached,
+            )
+        return self._apply_report_translation(report, cached)
+
+    async def _generate_report_translation(
+        self,
+        report: Report,
+        language: str,
+    ) -> dict[str, Any]:
+        response = await self.ai.generate_text(
+            "report_translate.md",
+            {
+                "target_language": language,
+                "source_language": self._report_language(report),
+                "title": report.title,
+                "body": report.body or report.report_text,
+                "summary": report.summary,
+                "query": report.query,
+                "structure": self._public_report_structure(report),
+                "recommendations": report.recommendations_json or [],
+            },
+            temperature=0.1,
+            max_tokens=6000,
+        )
+        payload = parse_json_response(response)
+        if not isinstance(payload, dict):
+            raise AIServiceError("The translated report response was not a JSON object.")
+        return self._normalize_report_translation(report, payload)
+
+    @classmethod
+    def _normalize_report_translation(
+        cls,
+        report: Report,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        source_structure = cls._public_report_structure(report)
+        return {
+            "title": cls._optional_string(payload.get("title"), report.title),
+            "body": cls._optional_string(
+                payload.get("body"),
+                report.body or report.report_text,
+            ),
+            "summary": cls._optional_string(payload.get("summary"), report.summary),
+            "query": cls._optional_string(payload.get("query"), report.query),
+            "structure": (
+                payload.get("structure")
+                if isinstance(payload.get("structure"), dict)
+                else source_structure
+            ),
+            "recommendations": (
+                payload.get("recommendations")
+                if isinstance(payload.get("recommendations"), list)
+                else report.recommendations_json or []
+            ),
+        }
+
+    @staticmethod
+    def _optional_string(value: Any, fallback: str | None) -> str | None:
+        if value is None:
+            return fallback
+        text = str(value).strip()
+        return text or fallback
+
+    @staticmethod
+    def _cached_report_translation(
+        raw: dict[str, Any],
+        language: str,
+    ) -> dict[str, Any] | None:
+        translations = raw.get("translations")
+        if not isinstance(translations, dict):
+            return None
+        cached = translations.get(language)
+        return cached if isinstance(cached, dict) else None
+
+    @staticmethod
+    def _report_language(report: Report) -> str:
+        raw = report.raw_json if isinstance(report.raw_json, dict) else {}
+        candidates: list[Any] = [raw.get("language")]
+        market_context = raw.get("market_context")
+        if isinstance(market_context, dict):
+            candidates.append(market_context.get("language"))
+        for candidate in candidates:
+            value = str(candidate or "").strip().lower()
+            if value in ReportService._REPORT_LANGS:
+                return value
+        return "ru"
+
+    @staticmethod
+    def _public_report_structure(report: Report) -> dict[str, Any]:
+        raw = copy.deepcopy(report.raw_json) if isinstance(report.raw_json, dict) else {}
+        raw.pop("translations", None)
+        return raw
+
+    @classmethod
+    def _apply_report_translation(
+        cls,
+        report: Report,
+        translation: dict[str, Any],
+    ) -> Report:
+        body = cls._optional_string(
+            translation.get("body"),
+            report.body or report.report_text,
+        )
+        structure = (
+            translation.get("structure")
+            if isinstance(translation.get("structure"), dict)
+            else cls._public_report_structure(report)
+        )
+        return SimpleNamespace(
+            id=report.id,
+            report_type=report.report_type,
+            title=cls._optional_string(translation.get("title"), report.title),
+            report_text=body,
+            body=body,
+            summary=cls._optional_string(translation.get("summary"), report.summary),
+            query=cls._optional_string(translation.get("query"), report.query),
+            sources_count=report.sources_count,
+            evidence_json=report.evidence_json,
+            recommendations_json=(
+                translation.get("recommendations")
+                if isinstance(translation.get("recommendations"), list)
+                else report.recommendations_json
+            ),
+            raw_json=structure,
+            week_start=report.week_start,
+            week_end=report.week_end,
+            status=report.status,
+            notion_page_id=report.notion_page_id,
+            workspace_id=getattr(report, "workspace_id", None),
+            created_at=report.created_at,
+            updated_at=report.updated_at,
+        )
+
+    @staticmethod
+    def _save_report_translation(
+        report_id: int,
+        language: str,
+        translation: dict[str, Any],
+    ) -> None:
+        with session_scope() as session:
+            report = ReportsRepository(session).get_report(report_id)
+            if report is None:
+                return
+            raw = dict(report.raw_json or {})
+            translations = raw.get("translations")
+            if not isinstance(translations, dict):
+                translations = {}
+            translations[language] = translation
+            raw["translations"] = translations
+            report.raw_json = raw
+            session.flush()
 
     @staticmethod
     def _report_chat_context(

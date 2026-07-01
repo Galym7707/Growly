@@ -451,7 +451,11 @@ async def test_market_scan_saves_before_groq_and_syncs_after_failure(
         notion=FakeNotion(),  # type: ignore[arg-type]
     )
 
-    def save_results(results: list[SearchResult]) -> list[SourceItem]:
+    def save_results(
+        results: list[SearchResult],
+        workspace_id: str | None = None,
+    ) -> list[SourceItem]:
+        del workspace_id
         events.append("save")
         return [
             SourceItem(
@@ -471,7 +475,9 @@ async def test_market_scan_saves_before_groq_and_syncs_after_failure(
         source_items: list[SourceItem],
         groq_status: str,
         region_language: str,
+        workspace_id: str | None = None,
     ) -> Report:
+        del workspace_id
         events.append("partial_report")
         return Report(
             id=99,

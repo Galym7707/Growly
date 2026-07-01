@@ -178,12 +178,12 @@ async def test_content_plan_with_33_sources_uses_batches_without_raw_json(
     monkeypatch.setattr(
         service,
         "_save_batch_summaries",
-        lambda summaries, items: saved_summaries.extend(summaries),
+        lambda summaries, items, workspace_id=None: saved_summaries.extend(summaries),
     )
     monkeypatch.setattr(
         service,
         "_save_plan_items",
-        lambda rows: [
+        lambda rows, workspace_id=None: [
             ContentPlan(id=index, **row)
             for index, row in enumerate(rows, start=1)
         ],
@@ -255,7 +255,7 @@ async def test_content_plan_413_retries_with_report_summary_only(
     monkeypatch.setattr(
         service,
         "_save_plan_items",
-        lambda rows: [
+        lambda rows, workspace_id=None: [
             ContentPlan(id=index, **row)
             for index, row in enumerate(rows, start=1)
         ],

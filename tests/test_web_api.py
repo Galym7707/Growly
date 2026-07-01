@@ -70,7 +70,8 @@ def test_reports_endpoint_serializes_structured_report(monkeypatch) -> None:
         updated_at=now,
     )
 
-    async def list_latest_summary(self, limit: int = 10):
+    async def list_latest_summary(self, limit: int = 10, workspace_id=None):
+        assert workspace_id is None
         assert limit == 50
         return [report]
 
@@ -86,6 +87,63 @@ def test_reports_endpoint_serializes_structured_report(monkeypatch) -> None:
     assert payload["id"] == 7
     assert payload["body"] is None
     assert payload["structure"] == {}
+
+
+def test_report_endpoint_returns_requested_translation(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "growly_web_api_key", None)
+    now = datetime.now(UTC)
+    source = SimpleNamespace(
+        id=7,
+        report_type="market_scan",
+        title="РђРЅР°Р»РёР· СЂС‹РЅРєР°",
+        body="РўРµРєСЃС‚",
+        report_text="РўРµРєСЃС‚",
+        summary="РљСЂР°С‚РєРёР№ РІС‹РІРѕРґ",
+        query="СЂС‹РЅРѕРє",
+        sources_count=3,
+        evidence_json=["https://example.com"],
+        recommendations_json=[],
+        raw_json={"audience_pains": ["РќРµС‚ РІСЂРµРјРµРЅРё"]},
+        week_start=None,
+        week_end=None,
+        status="ready",
+        notion_page_id=None,
+        workspace_id=None,
+        created_at=now,
+        updated_at=now,
+    )
+    translated = SimpleNamespace(
+        **{
+            **source.__dict__,
+            "summary": "Short conclusion",
+            "body": "Translated body",
+            "report_text": "Translated body",
+            "raw_json": {"audience_pains": ["No time"]},
+        }
+    )
+    captured: dict[str, str] = {}
+
+    async def get_report(self, report_id: int):
+        assert report_id == 7
+        return source
+
+    async def localized_report(self, report, language: str):
+        assert report is source
+        captured["language"] = language
+        return translated
+
+    monkeypatch.setattr("app.web_api.ReportService.get_report", get_report)
+    monkeypatch.setattr("app.web_api.ReportService.localized_report", localized_report)
+
+    response = TestClient(app).get("/api/reports/7?language=en")
+
+    assert response.status_code == 200
+    payload = response.json()["report"]
+    assert captured == {"language": "en"}
+    assert payload["summary"] == "Short conclusion"
+    assert payload["body"] == "Translated body"
+    assert payload["structure"]["audience_pains"] == ["No time"]
 
 
 def test_market_scan_starts_background_job_without_waiting(monkeypatch) -> None:
