@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from app.config import get_settings
 from app.main import app
@@ -71,7 +72,7 @@ def test_reports_endpoint_serializes_structured_report(monkeypatch) -> None:
     )
 
     async def list_latest_summary(self, limit: int = 10, workspace_id=None):
-        assert workspace_id is None
+        assert workspace_id == "default"
         assert limit == 50
         return [report]
 
@@ -87,6 +88,28 @@ def test_reports_endpoint_serializes_structured_report(monkeypatch) -> None:
     assert payload["id"] == 7
     assert payload["body"] is None
     assert payload["structure"] == {}
+
+
+def test_reports_endpoint_rejects_missing_user_when_api_key_is_configured(
+    monkeypatch,
+) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "growly_web_api_key", SecretStr("server-key"))
+
+    async def list_latest_summary(self, limit: int = 10, workspace_id=None):
+        raise AssertionError("unauthenticated web requests must not read reports")
+
+    monkeypatch.setattr(
+        "app.web_api.ReportService.list_latest_summary",
+        list_latest_summary,
+    )
+
+    response = TestClient(app).get(
+        "/api/reports",
+        headers={"X-Growly-API-Key": "server-key"},
+    )
+
+    assert response.status_code == 401
 
 
 def test_report_endpoint_returns_requested_translation(monkeypatch) -> None:
@@ -156,9 +179,10 @@ def test_market_scan_starts_background_job_without_waiting(monkeypatch) -> None:
     )
     scheduled: dict[str, object] = {}
 
-    async def create_market_scan_job(self, user_id, query):
+    async def create_market_scan_job(self, user_id, query, workspace_id=None):
         assert user_id is None
         assert query == "delivery"
+        assert workspace_id == "default"
         return job
 
     def schedule(service, job_id, payload):
@@ -375,7 +399,8 @@ def test_content_plans_detail_uses_real_backend_response(monkeypatch) -> None:
     settings = get_settings()
     monkeypatch.setattr(settings, "growly_web_api_key", None)
 
-    def detail(plan_id: int):
+    def detail(plan_id: int, workspace_id=None):
+        assert workspace_id == "default"
         return {
             "plan_id": plan_id,
             "items": [{"id": plan_id, "topic": "Real item"}],

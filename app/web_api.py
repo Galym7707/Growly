@@ -109,13 +109,26 @@ def current_membership(
 ) -> Membership | None:
     """Resolve the caller's workspace membership.
 
-    Returns ``None`` for the legacy/unauthenticated path (no verified email
-    forwarded by the proxy), which leaves existing single-tenant behaviour
-    untouched. When an email *is* present, an authenticated non-member is
-    denied (403) so they can never see another workspace's data.
+    Production web traffic must include the verified email forwarded by the
+    Next.js proxy. Missing email is only tolerated for local/dev single-tenant
+    runs where no server-to-server API key is configured.
     """
     if not email:
-        return None
+        settings = get_settings()
+        api_key = settings.growly_web_api_key
+        key_configured = bool(api_key and api_key.get_secret_value().strip())
+        if key_configured or settings.environment.strip().lower() == "production":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Требуется вход в Growly.",
+            )
+        return Membership(
+            member_id=0,
+            workspace_id=(x_growly_workspace_id or "").strip() or DEFAULT_WORKSPACE_ID,
+            email="local@growly.local",
+            role="owner",
+            status="active",
+        )
     return WorkspaceService().require_membership(email, x_growly_workspace_id)
 
 
