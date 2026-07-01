@@ -448,11 +448,11 @@ a { color: inherit; }
 .cta-card::before { content: ''; position: absolute; top: -120px; left: 50%; transform: translateX(-50%); width: 420px; height: 420px; background: radial-gradient(circle, rgba(139,92,246,0.22), transparent 70%); pointer-events: none; }
 .cta-h2 { font-family: var(--font-display); font-size: clamp(30px, 4vw, 44px); font-weight: 800; color: #fff; letter-spacing: -0.02em; margin-bottom: 16px; position: relative; }
 .cta-sub { font-size: 16px; color: rgba(255,255,255,0.55); margin-bottom: 36px; position: relative; }
-.cta-form { display: flex; gap: 10px; max-width: 420px; margin: 0 auto; position: relative; }
+.cta-form { display: flex; justify-content: center; max-width: 420px; margin: 0 auto; position: relative; }
 .cta-input { flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 9px; padding: 13px 16px; color: #fff; font-size: 14px; font-family: var(--font-body); outline: none; transition: border-color 0.2s; }
 .cta-input::placeholder { color: rgba(255,255,255,0.35); }
 .cta-input:focus { border-color: var(--purple); }
-.cta-submit { background: var(--grad); color: #fff; border: none; padding: 13px 22px; border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font-body); white-space: nowrap; transition: filter 0.2s; }
+.cta-submit { background: var(--grad); color: #fff; border: none; min-width: 240px; padding: 13px 22px; border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font-body); white-space: nowrap; transition: filter 0.2s; }
 .cta-submit:hover { filter: brightness(1.1); }
 .cta-note { font-size: 12px; color: rgba(255,255,255,0.3); margin-top: 16px; position: relative; }
 
