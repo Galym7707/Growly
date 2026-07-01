@@ -1,304 +1,711 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Growly - Marketing plans and posts for your business</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/landing/styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Growly — AI Content Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Clash+Display:wght@500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/landing/styles.css">
 </head>
 <body>
-  <nav class="nav">
-    <a class="brand" href="#hero" aria-label="Growly">
-      <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 32 32" width="28" height="28" fill="none">
-          <rect x="4" y="18" width="4" height="8" rx="2" fill="currentColor"></rect>
-          <rect x="10" y="13" width="4" height="13" rx="2" fill="currentColor"></rect>
-          <rect x="16" y="7" width="4" height="19" rx="2" fill="currentColor"></rect>
-          <rect x="22" y="11" width="4" height="15" rx="2" fill="currentColor"></rect>
-          <path d="M4 24c5.5 2.7 9.8 1.6 12.8-3.5C19.4 16 21 9.9 27 7" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"></path>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="nav-logo">
+      <span class="growly-icon">
+        <svg class="logo-mark-svg" width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <defs>
+            <linearGradient id="navgrad" x1="1" y1="27" x2="30" y2="2" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#EC4899"/>
+              <stop offset="50%" stop-color="#A855F7"/>
+              <stop offset="100%" stop-color="#7C3AED"/>
+            </linearGradient>
+          </defs>
+          <rect x="3" y="19" width="3.4" height="6.5" rx="1.4" fill="url(#navgrad)"/>
+          <rect x="9" y="14.5" width="3.4" height="11" rx="1.4" fill="url(#navgrad)"/>
+          <rect x="15" y="9" width="3.4" height="16.5" rx="1.4" fill="url(#navgrad)"/>
+          <rect x="21" y="12" width="3.4" height="13.5" rx="1.4" fill="url(#navgrad)"/>
+          <path d="M2 23 C4.5 27.5, 9.5 27.5, 12.5 23.5 C15.5 19.5, 18.5 10.5, 22.5 9.3 C24.5 8.7, 26.5 9.8, 28.5 12.8" stroke="url(#navgrad)" stroke-width="2.1" stroke-linecap="round" fill="none"/>
+          <path d="M26.5 1.5 L27.6 4.6 L30.5 5.7 L27.6 6.8 L26.5 9.9 L25.4 6.8 L22.5 5.7 L25.4 4.6 Z" fill="url(#navgrad)"/>
         </svg>
       </span>
-      <span>Growly</span>
-    </a>
-
+      <span class="logo-text">Growly</span>
+    </div>
     <div class="nav-links">
-      <a href="#capabilities" data-i18n="nav.capabilities">Capabilities</a>
+      <a href="#stack" data-i18n="nav.capabilities">Capabilities</a>
       <a href="#workflow" data-i18n="nav.workflow">How it works</a>
-      <a href="#team" data-i18n="nav.team">Teams</a>
+      <a href="#cases" data-i18n="nav.cases">Who it is for</a>
       <a href="#pricing" data-i18n="nav.pricing">Pricing</a>
     </div>
-
-    <div class="nav-actions">
-      <div class="lang-switch" aria-label="Language">
-        <button class="lang-btn" data-lang="ru" type="button">RU</button>
-        <button class="lang-btn active" data-lang="en" type="button">EN</button>
-        <button class="lang-btn" data-lang="kk" type="button">KK</button>
+    <div class="nav-right">
+      <div class="lang-switch">
+        <button class="lang-btn" data-lang="ru">RU</button>
+        <button class="lang-btn active" data-lang="en">EN</button>
+        <button class="lang-btn" data-lang="kk">KK</button>
       </div>
-      <a class="nav-login" href="/login" data-i18n="nav.login">Log in</a>
-      <a class="nav-cta" href="/register" data-i18n="nav.register">Create account</a>
+      <a href="/login" class="nav-login" data-i18n="nav.login">Log in</a>
+      <a href="/register" class="nav-cta" data-i18n="nav.cta">Open Growly</a>
     </div>
-  </nav>
+  </div>
+</nav>
 
-  <main>
-    <section class="hero" id="hero">
-      <div class="hero-copy">
-        <p class="badge fade-up" data-i18n="hero.badge">AI marketing workspace</p>
-        <h1 class="hero-h1 fade-up" data-i18n="hero.title">Marketing plans and posts for your business.</h1>
-        <p class="hero-sub fade-up" data-i18n="hero.sub">Growly studies your market, finds content ideas, builds a plan, and prepares posts your team can use.</p>
-        <div class="hero-actions fade-up">
-          <a class="hero-primary" href="/register" data-i18n="hero.primary">Create account</a>
-          <a class="hero-secondary" href="#workflow" data-i18n="hero.secondary">See how it works</a>
-        </div>
-      </div>
-
-      <div class="product-mockup fade-up" aria-label="Growly workspace preview">
-        <div class="mock-sidebar">
-          <span class="mock-logo">G</span>
-          <span></span>
-          <span class="active"></span>
-          <span></span>
-          <span></span>
-        </div>
-        <div class="mock-main">
-          <div class="mock-top">
-            <span data-i18n="mock.today">Today</span>
-            <strong>Growly</strong>
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-bg-arc"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-inner">
+    <div class="hero-left">
+      <div class="eyebrow fade-up" data-i18n="hero.eyebrow">MARKETING WORKSPACE</div>
+      <h1 class="hero-h1 fade-up" data-i18n="hero.headline">From competitor signals to publish‑ready content.</h1>
+      <p class="hero-sub fade-up" data-i18n="hero.sub">Growly tracks competitors, reads market signals, and turns them into a ready content plan — research, planning and publishing in one workflow.</p>
+      <div class="hero-actions fade-up">
+        <div class="swipe-cta" id="swipeCta" role="button" tabindex="0">
+          <div class="swipe-arrow-track" id="swipeArrow">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 9h10M9 4l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
-          <div class="mock-action">
-            <span data-i18n="mock.next">Next action</span>
-            <h2 data-i18n="mock.action">Create content plan</h2>
-            <button type="button" data-i18n="mock.button">Open plan</button>
-          </div>
-          <div class="mock-grid">
-            <article>
-              <span data-i18n="mock.report">Latest report</span>
-              <strong data-i18n="mock.ready">Ready</strong>
-            </article>
-            <article>
-              <span data-i18n="mock.drafts">Drafts</span>
-              <strong data-i18n="mock.waiting">3 posts waiting</strong>
-            </article>
-            <article class="wide">
-              <span data-i18n="mock.integrations">Integrations</span>
-              <strong data-i18n="mock.instagram">Instagram connected</strong>
-            </article>
+          <div class="swipe-label" data-i18n="hero.cta_primary">Join the waitlist</div>
+          <div class="swipe-email-form">
+            <input class="swipe-email-input" type="email" id="swipeEmailInput" data-i18n-placeholder="hero.cta_placeholder" placeholder="your@email.com">
           </div>
         </div>
+        <a href="#stack" class="btn-ghost">
+          <span data-i18n="hero.cta_secondary">Explore capabilities</span>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
       </div>
-    </section>
+    </div>
 
-    <section class="platforms" aria-label="Supported tools">
-      <p data-i18n="platforms.title">Works with the tools your team already uses</p>
-      <div class="platform-row">
-        <span>Instagram</span>
-        <span>Threads</span>
-        <span>Telegram</span>
-        <span>TikTok</span>
-        <span>YouTube Shorts</span>
-        <span>LinkedIn</span>
-        <span>Notion</span>
-        <span>Google Sheets</span>
-      </div>
-    </section>
-
-    <section class="section workflow-section" id="workflow">
-      <div class="section-head">
-        <p class="eyebrow" data-i18n="workflow.eyebrow">Workflow</p>
-        <h2 data-i18n="workflow.title">How Growly works</h2>
-      </div>
-      <div class="steps-grid">
-        <article class="fade-up">
-          <span>01</span>
-          <h3 data-i18n="workflow.step1.title">Describe your business</h3>
-          <p data-i18n="workflow.step1.text">Tell Growly what you sell, where you work, and who your customers are.</p>
-        </article>
-        <article class="fade-up">
-          <span>02</span>
-          <h3 data-i18n="workflow.step2.title">Get a market report</h3>
-          <p data-i18n="workflow.step2.text">Growly checks competitors, sources, trends, and customer questions.</p>
-        </article>
-        <article class="fade-up">
-          <span>03</span>
-          <h3 data-i18n="workflow.step3.title">Build a content plan</h3>
-          <p data-i18n="workflow.step3.text">The system turns the report into topics, dates, formats, and goals.</p>
-        </article>
-        <article class="fade-up">
-          <span>04</span>
-          <h3 data-i18n="workflow.step4.title">Prepare posts</h3>
-          <p data-i18n="workflow.step4.text">Generate drafts, images, captions, and publishing notes.</p>
-        </article>
-        <article class="fade-up">
-          <span>05</span>
-          <h3 data-i18n="workflow.step5.title">Share with your team</h3>
-          <p data-i18n="workflow.step5.text">Invite teammates so everyone knows what to review, edit, and publish.</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="section capabilities-section" id="capabilities">
-      <div class="section-head">
-        <p class="eyebrow" data-i18n="capabilities.eyebrow">Capabilities</p>
-        <h2 data-i18n="capabilities.title">Everything for content teams in one place.</h2>
-      </div>
-      <div class="capability-tabs" role="tablist" aria-label="Capabilities">
-        <button class="capability-tab active" data-tab="research" type="button" data-i18n="capabilities.research.tab">Research</button>
-        <button class="capability-tab" data-tab="planning" type="button" data-i18n="capabilities.planning.tab">Planning</button>
-        <button class="capability-tab" data-tab="drafts" type="button" data-i18n="capabilities.drafts.tab">Drafts</button>
-        <button class="capability-tab" data-tab="publishing" type="button" data-i18n="capabilities.publishing.tab">Publishing</button>
-        <button class="capability-tab" data-tab="team" type="button" data-i18n="capabilities.team.tab">Team</button>
-      </div>
-      <div class="capability-panel active" data-panel="research">
-        <div>
-          <h3 data-i18n="capabilities.research.title">Market and competitor analysis</h3>
-          <p data-i18n="capabilities.research.text">Understand offers, content gaps, trends, and customer questions before planning content.</p>
-        </div>
-      </div>
-      <div class="capability-panel" data-panel="planning">
-        <div>
-          <h3 data-i18n="capabilities.planning.title">Content calendar built from real sources</h3>
-          <p data-i18n="capabilities.planning.text">Turn research into topics, dates, formats, goals, and owner assignments.</p>
-        </div>
-      </div>
-      <div class="capability-panel" data-panel="drafts">
-        <div>
-          <h3 data-i18n="capabilities.drafts.title">Posts, captions and creative briefs</h3>
-          <p data-i18n="capabilities.drafts.text">Prepare usable drafts for your brand voice with notes for visuals and channels.</p>
-        </div>
-      </div>
-      <div class="capability-panel" data-panel="publishing">
-        <div>
-          <h3 data-i18n="capabilities.publishing.title">Prepare posts for Instagram, Threads, Telegram and more</h3>
-          <p data-i18n="capabilities.publishing.text">Keep approvals and publishing packages together so teams do not copy work between tools.</p>
-        </div>
-      </div>
-      <div class="capability-panel" data-panel="team">
-        <div>
-          <h3 data-i18n="capabilities.team.title">Invite your team, assign tasks and share progress</h3>
-          <p data-i18n="capabilities.team.text">Give owners, editors, and viewers the same source of truth for content work.</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="team-section" id="team">
-      <div class="team-copy fade-up">
-        <p class="eyebrow" data-i18n="team.eyebrow">Teams</p>
-        <h2 data-i18n="team.title">Share the plan with your team.</h2>
-        <p data-i18n="team.text">Invite teammates to the same workspace. Owners, editors and viewers see the reports, plans, drafts and next actions they need.</p>
-      </div>
-      <div class="team-list fade-up">
-        <span data-i18n="team.bullet1">Invite by email</span>
-        <span data-i18n="team.bullet2">Viewer, editor and admin roles</span>
-        <span data-i18n="team.bullet3">Tasks from content plans</span>
-        <span data-i18n="team.bullet4">One workspace per client or business</span>
-      </div>
-    </section>
-
-    <section class="section pricing-section" id="pricing">
-      <div class="section-head center">
-        <p class="eyebrow" data-i18n="pricing.eyebrow">Pricing</p>
-        <h2 data-i18n="pricing.title">Simple pricing for growing teams.</h2>
-      </div>
-      <div class="pricing-grid">
-        <article class="price-card fade-up">
-          <div>
-            <h3 data-i18n="pricing.free.name">Free</h3>
-            <p data-i18n="pricing.free.benefit">Start planning with one business.</p>
+    <div class="hero-right fade-up">
+      <div class="device-frame tilt-card" id="deviceTilt">
+        <div class="device-sidebar">
+          <span class="growly-icon">
+            <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+              <defs>
+                <linearGradient id="sidegrad" x1="1" y1="27" x2="30" y2="2" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stop-color="#EC4899"/><stop offset="50%" stop-color="#A855F7"/><stop offset="100%" stop-color="#7C3AED"/>
+                </linearGradient>
+              </defs>
+              <rect x="3" y="19" width="3.4" height="6.5" rx="1.4" fill="url(#sidegrad)"/>
+              <rect x="9" y="14.5" width="3.4" height="11" rx="1.4" fill="url(#sidegrad)"/>
+              <rect x="15" y="9" width="3.4" height="16.5" rx="1.4" fill="url(#sidegrad)"/>
+              <rect x="21" y="12" width="3.4" height="13.5" rx="1.4" fill="url(#sidegrad)"/>
+              <path d="M2 23 C4.5 27.5, 9.5 27.5, 12.5 23.5 C15.5 19.5, 18.5 10.5, 22.5 9.3 C24.5 8.7, 26.5 9.8, 28.5 12.8" stroke="url(#sidegrad)" stroke-width="2.1" stroke-linecap="round" fill="none"/>
+              <path d="M26.5 1.5 L27.6 4.6 L30.5 5.7 L27.6 6.8 L26.5 9.9 L25.4 6.8 L22.5 5.7 L25.4 4.6 Z" fill="url(#sidegrad)"/>
+            </svg>
+          </span>
+          <div class="device-rail">
+            <div class="rail-item active"></div>
+            <div class="rail-item"></div>
+            <div class="rail-item"></div>
+            <div class="rail-item"></div>
+            <div class="rail-item"></div>
           </div>
-          <div class="price">$0 <span data-i18n="pricing.free.period">forever</span></div>
-          <ul>
-            <li data-i18n="pricing.free.f1">1 business workspace</li>
-            <li data-i18n="pricing.free.f2">Limited market reports</li>
-            <li data-i18n="pricing.free.f3">Limited content plan</li>
-            <li data-i18n="pricing.free.f4">Manual publishing only</li>
-            <li data-i18n="pricing.free.f5">Basic sharing</li>
-          </ul>
-          <a class="price-btn secondary" href="/register" data-i18n="pricing.free.cta">Create account</a>
-        </article>
-
-        <article class="price-card fade-up">
-          <div>
-            <h3 data-i18n="pricing.starter.name">Starter</h3>
-            <p data-i18n="pricing.starter.benefit">For one business that needs steady content.</p>
+        </div>
+        <div class="device-main">
+          <div class="device-toprow">
+            <span class="device-label" data-i18n="hero.device.workspace">Workspace</span>
+            <span class="device-status-pill">
+              <span class="pulse-dot"></span>
+              <span data-i18n="hero.device.systemready">System ready</span>
+            </span>
           </div>
-          <div class="price">$19 <span data-i18n="pricing.month">per month</span></div>
-          <ul>
-            <li data-i18n="pricing.starter.f1">1 business workspace</li>
-            <li data-i18n="pricing.starter.f2">Market reports</li>
-            <li data-i18n="pricing.starter.f3">Content plan</li>
-            <li data-i18n="pricing.starter.f4">Drafts</li>
-            <li data-i18n="pricing.starter.f5">Manual publishing package</li>
-            <li data-i18n="pricing.starter.f6">Basic team sharing</li>
-          </ul>
-          <button class="price-btn primary" data-checkout-plan="starter" type="button" data-i18n="pricing.starter.cta">Start with Starter</button>
-        </article>
+          <div class="device-today" data-i18n="hero.device.today">Today</div>
 
-        <article class="price-card featured fade-up">
-          <div>
-            <span class="plan-badge" data-i18n="pricing.pro.badge">Popular</span>
-            <h3 data-i18n="pricing.pro.name">Pro</h3>
-            <p data-i18n="pricing.pro.benefit">For teams managing several channels.</p>
+          <div class="device-nextaction">
+            <div class="device-tag" data-i18n="hero.device.nextaction">NEXT ACTION</div>
+            <div class="device-action-title" data-i18n="hero.device.actiontitle">Run competitor scan</div>
+            <p class="device-action-desc" data-i18n="hero.device.actiondesc">Enter a niche and region. Growly saves sources before analysis begins.</p>
+            <button class="device-btn-green" data-i18n="hero.device.newanalysis">New analysis</button>
           </div>
-          <div class="price">$49 <span data-i18n="pricing.month">per month</span></div>
-          <ul>
-            <li data-i18n="pricing.pro.f1">3 business workspaces</li>
-            <li data-i18n="pricing.pro.f2">More reports</li>
-            <li data-i18n="pricing.pro.f3">Content calendar</li>
-            <li data-i18n="pricing.pro.f4">AI drafts</li>
-            <li data-i18n="pricing.pro.f5">Integrations</li>
-            <li data-i18n="pricing.pro.f6">Team sharing</li>
-            <li data-i18n="pricing.pro.f7">Scheduled publishing when available</li>
-          </ul>
-          <button class="price-btn primary" data-checkout-plan="pro" type="button" data-i18n="pricing.pro.cta">Choose Pro</button>
-        </article>
 
-        <article class="price-card fade-up">
-          <div>
-            <h3 data-i18n="pricing.agency.name">Agency</h3>
-            <p data-i18n="pricing.agency.benefit">For client workspaces and larger teams.</p>
+          <div class="device-statrow">
+            <div class="device-stat">
+              <div class="ds-label" data-i18n="hero.device.latestreport">Latest report</div>
+              <div class="ds-value" data-i18n="hero.device.waiting">Waiting for data</div>
+              <div class="ds-sub" data-i18n="hero.device.appears">Appears after first scan</div>
+            </div>
+            <div class="device-stat">
+              <div class="ds-label" data-i18n="hero.device.contentplan">Content plan</div>
+              <div class="ds-value" data-i18n="hero.device.notcreated">Not created</div>
+              <div class="ds-sub" data-i18n="hero.device.builtfrom">Built from saved sources</div>
+            </div>
           </div>
-          <div class="price">$99 <span data-i18n="pricing.month">per month</span></div>
-          <ul>
-            <li data-i18n="pricing.agency.f1">10 business workspaces</li>
-            <li data-i18n="pricing.agency.f2">Client workspaces</li>
-            <li data-i18n="pricing.agency.f3">Team members</li>
-            <li data-i18n="pricing.agency.f4">Advanced publishing</li>
-            <li data-i18n="pricing.agency.f5">Priority support</li>
-            <li data-i18n="pricing.agency.f6">Agency reporting workflow</li>
-          </ul>
-          <button class="price-btn primary" data-checkout-plan="agency" type="button" data-i18n="pricing.agency.cta">Choose Agency</button>
-        </article>
+
+          <div class="device-table">
+            <div class="dt-header">
+              <span data-i18n="hero.device.task">Task</span>
+              <span data-i18n="hero.device.status">Status</span>
+              <span data-i18n="hero.device.data">Data</span>
+            </div>
+            <div class="dt-row">
+              <span data-i18n="hero.device.competitorscan">Competitor scan</span>
+              <span class="dt-status" data-i18n="hero.device.notstarted">Not started</span>
+              <span data-i18n="hero.device.no">No</span>
+            </div>
+            <div class="dt-row">
+              <span data-i18n="hero.device.telegramsync">Telegram bot sync</span>
+              <span class="dt-status dt-configured" data-i18n="hero.device.configured">Configured</span>
+              <span data-i18n="hero.device.server">Server</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <p class="checkout-message" id="checkoutMessage" role="status" aria-live="polite"></p>
-    </section>
+    </div>
+  </div>
+</section>
 
-    <section class="final-cta">
-      <h2 data-i18n="cta.title">Start with your next content plan.</h2>
-      <div>
-        <a class="hero-primary" href="/register" data-i18n="cta.primary">Create account</a>
-        <a class="hero-secondary" href="/login" data-i18n="cta.secondary">Log in</a>
+<!-- COUNTDOWN CARD -->
+<section class="countdown-section fade-up">
+  <div class="countdown-card">
+    <div class="countdown-glow"></div>
+    <div class="countdown-left">
+      <div class="countdown-eyebrow" data-i18n="countdown.eyebrow">LAUNCHING SOON</div>
+      <h2 class="countdown-title" data-i18n="countdown.title">Early access opens in 7 days.</h2>
+      <p class="countdown-sub" data-i18n="countdown.sub">Join the waitlist and be first through the door. Early members get 40% off for 6 months.</p>
+      <a href="#waitlist" class="countdown-btn" data-i18n="countdown.button">Secure your spot</a>
+    </div>
+    <div class="countdown-timer-row">
+      <div class="countdown-unit"><div class="countdown-num" id="td">07</div><div class="countdown-label" data-i18n="countdown.days">Days</div></div>
+      <div class="countdown-sep">:</div>
+      <div class="countdown-unit"><div class="countdown-num" id="th">00</div><div class="countdown-label" data-i18n="countdown.hours">Hours</div></div>
+      <div class="countdown-sep">:</div>
+      <div class="countdown-unit"><div class="countdown-num" id="tm">00</div><div class="countdown-label" data-i18n="countdown.mins">Mins</div></div>
+      <div class="countdown-sep">:</div>
+      <div class="countdown-unit"><div class="countdown-num" id="ts">00</div><div class="countdown-label" data-i18n="countdown.secs">Secs</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- LOGO LOOP (real logos) -->
+<section class="logoloop-section">
+  <div class="logoloop-label" data-i18n="logos.label">Built to monitor and publish across</div>
+  <div class="logoloop-track">
+    <div class="logoloop-inner" id="logoLoopInner">
+      <!-- populated by JS, duplicated for seamless loop -->
+    </div>
+  </div>
+</section>
+
+<!-- WORKFLOW (redesigned, no problem section) -->
+<section class="workflow-section" id="workflow">
+  <div class="workflow-glow"></div>
+  <div class="section-inner">
+    <div class="workflow-head">
+      <div class="eyebrow eyebrow-dark fade-up" data-i18n="workflow.eyebrow">WORKFLOW</div>
+      <h2 class="section-h2 dark fade-up" data-i18n="workflow.headline">Every output stays connected to evidence.</h2>
+      <p class="section-sub dark fade-up" data-i18n="workflow.sub">Growly saves discovered sources first, analyzes them, and only then builds plans and drafts.</p>
+    </div>
+    <div class="wf-steps-row stagger-parent fade-up">
+      <div class="wf-step-card stagger-child">
+        <div class="wf-step-num">01</div>
+        <div class="wf-step-icon"><svg viewBox="0 0 20 20" fill="none"><path d="M9 16a7 7 0 100-14 7 7 0 000 14z" stroke="#C9A6F5" stroke-width="1.6"/><path d="M14.5 14.5L18 18" stroke="#C9A6F5" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        <div class="wf-step-title" data-i18n="workflow.step1">Enter the niche and region</div>
+        <div class="wf-step-desc" data-i18n="workflow.step1desc">Tell Growly your market and where your audience is.</div>
       </div>
-    </section>
-  </main>
+      <div class="wf-step-card stagger-child">
+        <div class="wf-step-num">02</div>
+        <div class="wf-step-icon"><svg viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h8" stroke="#C9A6F5" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        <div class="wf-step-title" data-i18n="workflow.step2">Review collected sources</div>
+        <div class="wf-step-desc" data-i18n="workflow.step2desc">Every source is saved and verifiable before analysis.</div>
+      </div>
+      <div class="wf-step-card stagger-child">
+        <div class="wf-step-num">03</div>
+        <div class="wf-step-icon"><svg viewBox="0 0 20 20" fill="none"><path d="M3 16V9M9 16V4M15 16v-6" stroke="#C9A6F5" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        <div class="wf-step-title" data-i18n="workflow.step3">Get a competitor report</div>
+        <div class="wf-step-desc" data-i18n="workflow.step3desc">A clear breakdown of offers, gaps, and momentum.</div>
+      </div>
+      <div class="wf-step-card stagger-child">
+        <div class="wf-step-num">04</div>
+        <div class="wf-step-icon"><svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#C9A6F5" stroke-width="1.6"/><path d="M7 8h6M7 11h6M7 14h3" stroke="#C9A6F5" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+        <div class="wf-step-title" data-i18n="workflow.step4">Build a content plan</div>
+        <div class="wf-step-desc" data-i18n="workflow.step4desc">Topics, formats and dates — ready in one view.</div>
+      </div>
+      <div class="wf-step-card stagger-child">
+        <div class="wf-step-num">05</div>
+        <div class="wf-step-icon"><svg viewBox="0 0 20 20" fill="none"><path d="M4 10l4 4 8-9" stroke="#C9A6F5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="wf-step-title" data-i18n="workflow.step5">Prepare and approve posts</div>
+        <div class="wf-step-desc" data-i18n="workflow.step5desc">Approve in Telegram and it publishes itself.</div>
+      </div>
+    </div>
+  </div>
+</section>
 
-  <footer class="footer">
-    <a class="brand" href="#hero" aria-label="Growly">
-      <span class="brand-mark" aria-hidden="true">G</span>
-      <span>Growly</span>
-    </a>
-    <nav>
-      <a href="#capabilities" data-i18n="footer.product">Product</a>
-      <a href="#pricing" data-i18n="footer.pricing">Pricing</a>
-      <a href="/login" data-i18n="footer.login">Login</a>
-      <a href="/register" data-i18n="footer.register">Create account</a>
-      <a href="/privacy" data-i18n="footer.privacy">Privacy</a>
-      <a href="/terms" data-i18n="footer.terms">Terms</a>
-    </nav>
-  </footer>
+<!-- THE FULL STACK (tabbed) -->
+<section class="stack-section" id="stack">
+  <div class="section-inner">
+    <div class="stack-head">
+      <div class="eyebrow fade-up" data-i18n="stack.eyebrow">WHAT GROWLY DOES</div>
+      <h2 class="section-h2 fade-up" data-i18n="stack.headline">The full stack. Built for content teams.</h2>
+    </div>
 
-  <script src="/landing/i18n.js"></script>
-  <script src="/landing/main.js"></script>
+    <div class="stack-tabs fade-up">
+      <button class="stack-tab active" data-tab="intelligence" data-i18n="stack.tab1">Intelligence</button>
+      <button class="stack-tab" data-tab="creation" data-i18n="stack.tab2">Content Creation</button>
+      <button class="stack-tab" data-tab="publishing" data-i18n="stack.tab3">Publishing</button>
+      <button class="stack-tab" data-tab="reporting" data-i18n="stack.tab4">Reporting</button>
+    </div>
+
+    <!-- INTELLIGENCE PANEL -->
+    <div class="stack-panel active fade-up" data-panel="intelligence">
+      <div class="stack-main-card glow-spot">
+        <div class="stack-main-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M11 19a8 8 0 100-16 8 8 0 000 16z" stroke="currentColor" stroke-width="1.8"/><path d="M17.5 17.5L22 22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="stack-main-title" data-i18n="stack.intel.title">Competitor Intelligence</div>
+        <p class="stack-main-desc" data-i18n="stack.intel.desc">Track every competitor across social media and their website. See what they publish, what performs best, what they're missing — and get a full report delivered automatically.</p>
+        <div class="stack-tags">
+          <span class="stack-tag-pill" data-i18n="stack.intel.tag1">9+ platforms</span>
+          <span class="stack-tag-pill" data-i18n="stack.intel.tag2">Daily sync</span>
+          <span class="stack-tag-pill" data-i18n="stack.intel.tag3">Weekly reports</span>
+          <span class="stack-tag-pill" data-i18n="stack.intel.tag4">Content gap detection</span>
+        </div>
+      </div>
+      <div class="stack-side stagger-parent">
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-pink"><svg viewBox="0 0 20 20" fill="none"><path d="M9 16a7 7 0 100-14 7 7 0 000 14z" stroke="currentColor" stroke-width="1.6"/><path d="M14.5 14.5L18 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.intel.side1.title">Competitor Monitoring</div>
+            <div class="stack-side-desc" data-i18n="stack.intel.side1.desc">Track all channels, daily</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-amber"><svg viewBox="0 0 20 20" fill="none"><path d="M3 17V9M9 17V3M15 17v-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.intel.side2.title">Weekly Reports</div>
+            <div class="stack-side-desc" data-i18n="stack.intel.side2.desc">Automated Monday digest</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-green"><svg viewBox="0 0 20 20" fill="none"><path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.intel.side3.title">Content Gap Detection</div>
+            <div class="stack-side-desc" data-i18n="stack.intel.side3.desc">Topics competitors miss</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-blue"><svg viewBox="0 0 20 20" fill="none"><path d="M3 14l4-5 3 3 7-8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.intel.side4.title">Trend Detection</div>
+            <div class="stack-side-desc" data-i18n="stack.intel.side4.desc">Catch trends 2–3 weeks early</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENT CREATION PANEL -->
+    <div class="stack-panel" data-panel="creation">
+      <div class="stack-main-card glow-spot">
+        <div class="stack-main-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20l1.5-5L17 3.5a2 2 0 012.8 0l.7.7a2 2 0 010 2.8L9 18.5 4 20z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+        <div class="stack-main-title" data-i18n="stack.create.title">AI Draft Generation</div>
+        <p class="stack-main-desc" data-i18n="stack.create.desc">Growly writes posts in your brand voice from a brief, keeps every version until you approve, and adapts the same idea across formats automatically.</p>
+        <div class="stack-tags">
+          <span class="stack-tag-pill" data-i18n="stack.create.tag1">5 content types</span>
+          <span class="stack-tag-pill" data-i18n="stack.create.tag2">Brand voice</span>
+          <span class="stack-tag-pill" data-i18n="stack.create.tag3">Version history</span>
+          <span class="stack-tag-pill" data-i18n="stack.create.tag4">CRM case machine</span>
+        </div>
+      </div>
+      <div class="stack-side stagger-parent">
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-purple"><svg viewBox="0 0 20 20" fill="none"><path d="M3 6h14M3 10h14M3 14h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.create.side1.title">Brief to Draft</div>
+            <div class="stack-side-desc" data-i18n="stack.create.side1.desc">Ready posts in minutes</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-pink"><svg viewBox="0 0 20 20" fill="none"><path d="M10 17a7 7 0 100-14 7 7 0 000 14z" stroke="currentColor" stroke-width="1.6"/><path d="M10 6v4l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.create.side2.title">Version History</div>
+            <div class="stack-side-desc" data-i18n="stack.create.side2.desc">Nothing gets lost in edits</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-green"><svg viewBox="0 0 20 20" fill="none"><rect x="3" y="4" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M3 8h14" stroke="currentColor" stroke-width="1.6"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.create.side3.title">CRM Case Machine</div>
+            <div class="stack-side-desc" data-i18n="stack.create.side3.desc">Closed deals become case studies</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-amber"><svg viewBox="0 0 20 20" fill="none"><path d="M10 3v14M3 10h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.create.side4.title">Multi-format Adapt</div>
+            <div class="stack-side-desc" data-i18n="stack.create.side4.desc">One idea, every platform</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- PUBLISHING PANEL -->
+    <div class="stack-panel" data-panel="publishing">
+      <div class="stack-main-card glow-spot">
+        <div class="stack-main-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 11l18-8-8 18-2-8-8-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+        <div class="stack-main-title" data-i18n="stack.publish.title">Approve and Publish</div>
+        <p class="stack-main-desc" data-i18n="stack.publish.desc">Review every draft inside your Telegram approval bot. Once you approve it, Growly schedules and publishes automatically — no copy-pasting between apps.</p>
+        <div class="stack-tags">
+          <span class="stack-tag-pill" data-i18n="stack.publish.tag1">Telegram approval</span>
+          <span class="stack-tag-pill" data-i18n="stack.publish.tag2">Auto-scheduling</span>
+          <span class="stack-tag-pill" data-i18n="stack.publish.tag3">Multi-platform</span>
+          <span class="stack-tag-pill" data-i18n="stack.publish.tag4">One-click publish</span>
+        </div>
+      </div>
+      <div class="stack-side stagger-parent">
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-blue"><svg viewBox="0 0 20 20" fill="none"><path d="M2 10l4-7 12 7-12 7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.publish.side1.title">Telegram Approval Bot</div>
+            <div class="stack-side-desc" data-i18n="stack.publish.side1.desc">Approve from your phone</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-purple"><svg viewBox="0 0 20 20" fill="none"><rect x="3" y="4" width="14" height="13" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M3 8h14M7 2v4M13 2v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.publish.side2.title">Auto-Scheduling</div>
+            <div class="stack-side-desc" data-i18n="stack.publish.side2.desc">Best time, every time</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-pink"><svg viewBox="0 0 20 20" fill="none"><circle cx="6" cy="10" r="2.4" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="5" r="2.4" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="15" r="2.4" stroke="currentColor" stroke-width="1.6"/><path d="M8.1 8.8l3.8-2.6M8.1 11.2l3.8 2.6" stroke="currentColor" stroke-width="1.6"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.publish.side3.title">Multi-Platform Push</div>
+            <div class="stack-side-desc" data-i18n="stack.publish.side3.desc">One approval, every channel</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-green"><svg viewBox="0 0 20 20" fill="none"><path d="M4 10l4 4 8-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.publish.side4.title">One-Click Publish</div>
+            <div class="stack-side-desc" data-i18n="stack.publish.side4.desc">No copy-pasting, ever</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- REPORTING PANEL -->
+    <div class="stack-panel" data-panel="reporting">
+      <div class="stack-main-card glow-spot">
+        <div class="stack-main-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20V10M11 20V4M18 20v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="stack-main-title" data-i18n="stack.report.title">Performance Reports</div>
+        <p class="stack-main-desc" data-i18n="stack.report.desc">A weekly report with findings, tables, sources, risks, and concrete next actions — delivered automatically so nobody has to build a deck.</p>
+        <div class="stack-tags">
+          <span class="stack-tag-pill" data-i18n="stack.report.tag1">Weekly digest</span>
+          <span class="stack-tag-pill" data-i18n="stack.report.tag2">Source-linked</span>
+          <span class="stack-tag-pill" data-i18n="stack.report.tag3">Risk flags</span>
+          <span class="stack-tag-pill" data-i18n="stack.report.tag4">Notion sync</span>
+        </div>
+      </div>
+      <div class="stack-side stagger-parent">
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-amber"><svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M6 13l3-4 2 2 3-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.report.side1.title">Weekly Digest</div>
+            <div class="stack-side-desc" data-i18n="stack.report.side1.desc">Lands every Monday</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-blue"><svg viewBox="0 0 20 20" fill="none"><path d="M7 10a3 3 0 116 0v0a3 3 0 11-6 0" stroke="currentColor" stroke-width="1.6"/><path d="M9 7l-2-2M11 13l2 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.report.side2.title">Source-Linked</div>
+            <div class="stack-side-desc" data-i18n="stack.report.side2.desc">Every claim traces back</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-pink"><svg viewBox="0 0 20 20" fill="none"><path d="M10 3l7 12H3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 8.5v3M10 14h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.report.side3.title">Risk Flags</div>
+            <div class="stack-side-desc" data-i18n="stack.report.side3.desc">Know what needs attention</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="stack-side-card stagger-child">
+          <div class="stack-side-icon ssi-purple"><svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.6"/><path d="M7 7h6M7 10h6M7 13h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+          <div class="stack-side-text">
+            <div class="stack-side-title" data-i18n="stack.report.side4.title">Notion Sync</div>
+            <div class="stack-side-desc" data-i18n="stack.report.side4.desc">Reports land where you work</div>
+          </div>
+          <svg class="stack-side-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRODUCT PREVIEW -->
+<section class="preview-section" id="preview">
+  <div class="section-inner">
+    <div class="eyebrow fade-up" data-i18n="preview.eyebrow">PRODUCT PREVIEW</div>
+    <h2 class="section-h2 fade-up" data-i18n="preview.headline">Everything your team needs in one view.</h2>
+    <p class="section-sub fade-up" data-i18n="preview.sub">Built for marketers who want results, not dashboards to babysit.</p>
+
+    <div class="big-dashboard fade-up">
+      <div class="bd-topbar">
+        <span class="bd-dot bd-r"></span>
+        <span class="bd-dot bd-y"></span>
+        <span class="bd-dot bd-g"></span>
+        <span class="bd-url" data-i18n="preview.url">growly.ai — Competitive Intelligence</span>
+      </div>
+      <div class="bd-body">
+        <div class="bd-sidebar">
+          <div class="bd-sidebar-section">
+            <div class="bds-label" data-i18n="preview.sidebar.main">MAIN</div>
+            <div class="bd-nav active" data-i18n="preview.sidebar.overview">Overview</div>
+            <div class="bd-nav" data-i18n="preview.sidebar.live">Live tracking</div>
+          </div>
+          <div class="bd-sidebar-section">
+            <div class="bds-label" data-i18n="preview.sidebar.intel">INTELLIGENCE</div>
+            <div class="bd-nav" data-i18n="preview.sidebar.competitors">Competitors</div>
+            <div class="bd-nav" data-i18n="preview.sidebar.signals">Signals</div>
+            <div class="bd-nav" data-i18n="preview.sidebar.contentplan">Content plan</div>
+          </div>
+          <div class="bd-sidebar-section">
+            <div class="bds-label" data-i18n="preview.sidebar.publish">PUBLISH</div>
+            <div class="bd-nav" data-i18n="preview.sidebar.schedule">Schedule</div>
+            <div class="bd-nav" data-i18n="preview.sidebar.published">Published</div>
+          </div>
+        </div>
+        <div class="bd-main">
+          <div class="bd-stats stagger-parent">
+            <div class="bd-stat stagger-child">
+              <div class="bs-label" data-i18n="preview.stats.sources">Sources tracked</div>
+              <div class="bs-val" data-count="24" data-decimals="0">0</div>
+            </div>
+            <div class="bd-stat stagger-child">
+              <div class="bs-label" data-i18n="preview.stats.signals">Signals detected</div>
+              <div class="bs-val" data-count="183" data-decimals="0">0</div>
+            </div>
+            <div class="bd-stat stagger-child">
+              <div class="bs-label" data-i18n="preview.stats.drafts">Drafts generated</div>
+              <div class="bs-val" data-count="32" data-decimals="0">0</div>
+            </div>
+            <div class="bd-stat stagger-child">
+              <div class="bs-label" data-i18n="preview.stats.score">Content score</div>
+              <div class="bs-val" data-count="8.7" data-decimals="1">0</div>
+            </div>
+          </div>
+          <div class="bd-grid2">
+            <div class="bd-card">
+              <div class="bdc-title" data-i18n="preview.activity.title">Competitor activity this week</div>
+              <div class="bdc-row"><span data-i18n="preview.activity.row1">Competitor Rival</span><span class="bdc-up">↑ 41%</span></div>
+              <div class="bdc-row"><span data-i18n="preview.activity.row2">MarketWin</span><span class="bdc-up">↑ 18%</span></div>
+              <div class="bdc-row"><span data-i18n="preview.activity.row3">GrowthHub</span><span class="bdc-down">↓ 7%</span></div>
+            </div>
+            <div class="bd-card">
+              <div class="bdc-title" data-i18n="preview.ai.title">AI recommendations</div>
+              <p class="bdc-text" data-i18n="preview.ai.text1">Post a case study this week — competitors haven't covered your Q2 wins yet.</p>
+              <p class="bdc-text" data-i18n="preview.ai.text2">Gap detected: no one is covering pricing objections. First‑mover opportunity.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHO IT'S FOR -->
+<section class="cases-section" id="cases">
+  <div class="section-inner">
+    <div class="eyebrow fade-up" data-i18n="cases.eyebrow">WHO IT IS FOR</div>
+    <h2 class="section-h2 fade-up" data-i18n="cases.headline">For teams that need a managed content process.</h2>
+
+    <div class="cases-grid stagger-parent fade-up">
+      <div class="case-card stagger-child glow-spot">
+        <h3 data-i18n="cases.card1.title">Small business</h3>
+        <p data-i18n="cases.card1.desc">Understand the market and ship content regularly without a separate department.</p>
+      </div>
+      <div class="case-card stagger-child glow-spot">
+        <h3 data-i18n="cases.card2.title">Marketer</h3>
+        <p data-i18n="cases.card2.desc">Gather insights, arguments, and a plan in one workspace — without ten open tabs.</p>
+      </div>
+      <div class="case-card stagger-child glow-spot">
+        <h3 data-i18n="cases.card3.title">Agency</h3>
+        <p data-i18n="cases.card3.desc">Run research, approval, and reporting on one consistent structure for every client.</p>
+      </div>
+      <div class="case-card stagger-child glow-spot">
+        <h3 data-i18n="cases.card4.title">Social media teams</h3>
+        <p data-i18n="cases.card4.desc">Connect competitor analysis directly to practical topics and ready drafts.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING (interactive) -->
+<section class="pricing-section" id="pricing">
+  <div class="pricing-glow"></div>
+  <div class="section-inner">
+    <div class="pricing-head">
+      <div class="eyebrow fade-up" data-i18n="pricing.eyebrow">PRICING</div>
+      <h2 class="section-h2 dark fade-up" data-i18n="pricing.headline" style="margin-left:auto;margin-right:auto;">Simple, transparent pricing.</h2>
+      <p class="pricing-caption fade-up" data-i18n="pricing.caption">Your content team, for the price of one post boost.</p>
+      <p class="pricing-subcaption fade-up" data-i18n="pricing.subcaption">Early waitlist members lock in 40% off for 6 months.</p>
+    </div>
+
+    <div class="pricing-grid stagger-parent fade-up">
+      <div class="price-card stagger-child glow-spot">
+        <div class="price-plan" data-i18n="pricing.starter.name">Starter</div>
+        <div class="price-amount">$19</div>
+        <div class="price-period" data-i18n="pricing.starter.period">per month</div>
+        <hr>
+        <div class="price-feat"><span class="check">✓</span><span data-i18n="pricing.starter.f1">5 competitor sources</span></div>
+        <div class="price-feat"><span class="check">✓</span><span data-i18n="pricing.starter.f2">Weekly content plan</span></div>
+        <div class="price-feat"><span class="check">✓</span><span data-i18n="pricing.starter.f3">8 AI drafts / month</span></div>
+        <div class="price-feat dim"><span class="cross">✗</span><span data-i18n="pricing.starter.f4">CRM integration</span></div>
+        <button class="price-btn ghost" data-checkout-plan="starter" type="button" data-i18n="pricing.cta">Join waitlist</button>
+      </div>
+      <div class="price-card popular stagger-child glow-spot">
+        <div class="popular-badge" data-i18n="pricing.popular">MOST POPULAR</div>
+        <div class="price-plan" data-i18n="pricing.growth.name">Growth</div>
+        <div class="price-amount accent">$49</div>
+        <div class="price-period" data-i18n="pricing.growth.period">per month</div>
+        <hr>
+        <div class="price-feat"><span class="check">✓</span><span data-i18n="pricing.growth.f1">25 competitor sources</span></div>
+        <div class="price-feat"><span class="check">✓</span><span data-i18n="pricing.growth.f2">Unlimited AI drafts</span></div>
+        <div class="price-feat"><span class="check">✓</span><span data-i18n="pricing.growth.f3">CRM case machine</span></div>
+        <div class="price-feat"><span class="check">✓</span><span data-i18n="pricing.growth.f4">Weekly performance reports</span></div>
+        <button class="price-btn primary" data-checkout-plan="pro" type="button" data-i18n="pricing.cta">Join waitlist</button>
+      </div>
+      <div class="price-card stagger-child glow-spot">
+        <div class="price-plan" data-i18n="pricing.scale.name">Custom</div>
+        <div class="price-amount">—</div>
+        <div class="price-period" data-i18n="pricing.scale.period">talk to us</div>
+        <hr>
+        <div class="price-feat"><span class="check">✓</span><span data-i18n="pricing.scale.f1">Unlimited sources</span></div>
+        <div class="price-feat"><span class="check">✓</span><span data-i18n="pricing.scale.f2">Real-time monitoring</span></div>
+        <div class="price-feat"><span class="check">✓</span><span data-i18n="pricing.scale.f3">Multi-brand support</span></div>
+        <div class="price-feat"><span class="check">✓</span><span data-i18n="pricing.scale.f4">Dedicated onboarding</span></div>
+        <button class="price-btn ghost" data-checkout-plan="agency" type="button" data-i18n="pricing.contact">Talk to us</button>
+      </div>
+    </div>
+    <p class="checkout-message" id="checkoutMessage" role="status" aria-live="polite"></p>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq-section" id="faq">
+  <div class="section-inner faq-grid">
+    <div class="faq-left">
+      <div class="eyebrow eyebrow-dark fade-up" data-i18n="faq.eyebrow">FAQ</div>
+      <h2 class="faq-headline fade-up"><span data-i18n="faq.headline_p1">The honest answers</span> <em data-i18n="faq.headline_p2">most founders ask first.</em></h2>
+      <p class="faq-contact fade-up" data-i18n="faq.contact">Didn't find yours? Email <a href="mailto:whoisnelya@mail.ru">whoisnelya@mail.ru</a> — Nelya replies personally.</p>
+    </div>
+    <div class="faq-list fade-up">
+      <div class="faq-item">
+        <button class="faq-q"><span data-i18n="faq.q1">Is this just an AI writing tool?</span><span class="faq-arrow">+</span></button>
+        <div class="faq-a"><p data-i18n="faq.a1">No. Writing is one piece. Growly also monitors competitors, reads reviews, builds the content plan, and publishes after your approval. Most tools stop at the draft.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q"><span data-i18n="faq.q2">What platforms does Growly monitor?</span><span class="faq-arrow">+</span></button>
+        <div class="faq-a"><p data-i18n="faq.a2">Instagram, Threads, LinkedIn, X, TikTok, Telegram, and Google search results. We're adding more based on waitlist requests.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q"><span data-i18n="faq.q3">How quickly do I get my first content plan?</span><span class="faq-arrow">+</span></button>
+        <div class="faq-a"><p data-i18n="faq.a3">Connect your sources and Growly delivers your first competitor report and content plan within 24 hours.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q"><span data-i18n="faq.q4">Does Growly publish content automatically?</span><span class="faq-arrow">+</span></button>
+        <div class="faq-a"><p data-i18n="faq.a4">Yes, but only after your approval. Your team reviews drafts inside Growly. Once you approve a post, it's scheduled and published automatically. No copy-pasting.</p></div>
+      </div>
+      <a href="#" class="faq-more" data-i18n="faq.more">More questions →</a>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="final-cta" id="waitlist">
+  <div class="cta-card fade-up">
+    <h2 class="cta-h2" data-i18n="cta.headline">Start with your first market scan.</h2>
+    <p class="cta-sub" data-i18n="cta.sub">Join founders and marketing teams already on the waitlist.</p>
+    <div class="cta-form">
+      <input class="cta-input" type="email" data-i18n-placeholder="cta.placeholder" placeholder="your@email.com">
+      <button class="cta-submit" type="button" data-register-target="/register" data-i18n="cta.button">Open workspace</button>
+    </div>
+    <p class="cta-note" data-i18n="cta.note">No spam. No credit card. Cancel anytime.</p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="section-inner">
+    <div class="footer-grid">
+      <div class="footer-brand-block">
+        <div class="footer-logo">
+          <span class="growly-icon">
+            <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+              <defs>
+                <linearGradient id="footgrad" x1="1" y1="27" x2="30" y2="2" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stop-color="#EC4899"/><stop offset="50%" stop-color="#A855F7"/><stop offset="100%" stop-color="#7C3AED"/>
+                </linearGradient>
+              </defs>
+              <rect x="3" y="19" width="3.4" height="6.5" rx="1.4" fill="url(#footgrad)"/>
+              <rect x="9" y="14.5" width="3.4" height="11" rx="1.4" fill="url(#footgrad)"/>
+              <rect x="15" y="9" width="3.4" height="16.5" rx="1.4" fill="url(#footgrad)"/>
+              <rect x="21" y="12" width="3.4" height="13.5" rx="1.4" fill="url(#footgrad)"/>
+              <path d="M2 23 C4.5 27.5, 9.5 27.5, 12.5 23.5 C15.5 19.5, 18.5 10.5, 22.5 9.3 C24.5 8.7, 26.5 9.8, 28.5 12.8" stroke="url(#footgrad)" stroke-width="2.1" stroke-linecap="round" fill="none"/>
+              <path d="M26.5 1.5 L27.6 4.6 L30.5 5.7 L27.6 6.8 L26.5 9.9 L25.4 6.8 L22.5 5.7 L25.4 4.6 Z" fill="url(#footgrad)"/>
+            </svg>
+          </span>
+          <span class="logo-text">Growly</span>
+        </div>
+        <p class="footer-tagline" data-i18n="footer.tagline">Analytics, content and approval in one system — built for teams that ship every week.</p>
+        <div class="footer-location">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 13s5-4.5 5-8a5 5 0 10-10 0c0 3.5 5 8 5 8z" stroke="currentColor" stroke-width="1.3"/><circle cx="7" cy="5" r="1.6" stroke="currentColor" stroke-width="1.3"/></svg>
+          <span data-i18n="footer.location">Almaty, Kazakhstan</span>
+        </div>
+      </div>
+
+      <div class="footer-col">
+        <div class="footer-col-title" data-i18n="footer.product">PRODUCT</div>
+        <a href="#stack" data-i18n="footer.link_capabilities">Capabilities</a>
+        <a href="#workflow" data-i18n="footer.link_workflow">How it works</a>
+        <a href="#pricing" data-i18n="footer.link_pricing">Pricing</a>
+        <a href="#faq" data-i18n="footer.link_faq">FAQ</a>
+      </div>
+
+      <div class="footer-col">
+        <div class="footer-col-title" data-i18n="footer.company">COMPANY</div>
+        <a href="#cases" data-i18n="footer.link_cases">Who it's for</a>
+        <a href="/login" data-i18n="footer.login">Login</a>
+        <a href="/register" data-i18n="footer.register">Create account</a>
+        <a href="mailto:whoisnelya@mail.ru" data-i18n="footer.link_contact">Contact</a>
+      </div>
+
+      <div class="footer-col">
+        <div class="footer-col-title" data-i18n="footer.follow">FOLLOW</div>
+        <div class="footer-social">
+          <a href="https://t.me/whoisnelya" target="_blank" aria-label="Telegram"><svg viewBox="0 0 24 24" fill="none"><path d="M21 4L3 11.5l6 2 1.5 5.5 3-3.5 4.5 3L21 4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></a>
+          <a href="#" aria-label="LinkedIn"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.4"/><path d="M7.5 10v6M7.5 7.5v.01M12 16v-3.5c0-1.5 1-2.5 2.3-2.5 1.2 0 2.2 1 2.2 2.5V16" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></a>
+          <a href="#" aria-label="X"><svg viewBox="0 0 24 24" fill="none"><path d="M4 4l16 16M20 4L4 20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+          <a href="#" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="3.6" stroke="currentColor" stroke-width="1.4"/><circle cx="17.2" cy="6.8" r="0.9" fill="currentColor"/></svg></a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span data-i18n="footer.copyright">© 2026 Growly. All rights reserved.</span>
+      <div class="footer-bottom-links">
+        <a href="/privacy" data-i18n="footer.privacy">Privacy</a>
+        <a href="/terms" data-i18n="footer.terms">Terms</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="/landing/i18n.js"></script>
+<script src="/landing/main.js"></script>
 </body>
 </html>

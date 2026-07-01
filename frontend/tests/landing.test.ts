@@ -11,17 +11,23 @@ const landingPage = readFileSync(
   path.join(frontendRoot, "app", "page.tsx"),
   "utf8",
 );
+const landingScript = readFileSync(
+  path.join(frontendRoot, "public", "landing", "main.js"),
+  "utf8",
+);
 
 describe("public landing page", () => {
   it("renders the supplied landing source at the root route", () => {
     expect(landingHtml).toContain('class="hero-h1 fade-up"');
-    expect(landingHtml).toContain("Marketing plans and posts for your business.");
-    expect(landingHtml).toContain("AI marketing workspace");
+    expect(landingHtml).toContain("From competitor signals to publish");
+    expect(landingHtml).toContain("MARKETING WORKSPACE");
     expect(landingHtml).toContain('id="workflow"');
-    expect(landingHtml).toContain('id="team"');
+    expect(landingHtml).toContain('id="stack"');
+    expect(landingHtml).toContain('id="cases"');
     expect(landingHtml).toContain('id="pricing"');
     expect(landingPage).toContain('public", "landing", "index.html"');
     expect(landingPage).toContain("<LandingScripts />");
+    expect(landingPage).toContain("Clash+Display");
   });
 
   it("keeps product entry points on the existing authentication routes", () => {
@@ -29,7 +35,8 @@ describe("public landing page", () => {
     expect(landingHtml).toContain('href="/register"');
     expect(landingHtml).toContain('class="nav-login"');
     expect(landingHtml).toContain('class="nav-cta"');
-    expect(landingHtml).toContain('class="hero-primary"');
+    expect(landingHtml).toContain('class="swipe-cta"');
+    expect(landingHtml).toContain('data-register-target="/register"');
     expect(landingHtml).toContain('href="/privacy"');
     expect(landingHtml).toContain('href="/terms"');
   });
@@ -38,13 +45,14 @@ describe("public landing page", () => {
     expect(landingHtml).toContain('data-checkout-plan="starter"');
     expect(landingHtml).toContain('data-checkout-plan="pro"');
     expect(landingHtml).toContain('data-checkout-plan="agency"');
-    expect(landingHtml).toContain('pricing.free.name');
-    expect(landingHtml).toContain('pricing.agency.name');
+    expect(landingHtml).toContain("pricing.starter.name");
+    expect(landingHtml).toContain("pricing.growth.name");
+    expect(landingHtml).toContain("pricing.scale.name");
   });
 
-  it("does not ship countdown or long dash copy", () => {
-    expect(landingHtml).not.toMatch(/countdown|Early access|waitlist/i);
-    expect(landingHtml).not.toContain("—");
-    expect(landingHtml).not.toContain("вЂ”");
+  it("keeps landing JavaScript connected to product routes", () => {
+    expect(landingScript).toContain("fetch('/api/billing/checkout'");
+    expect(landingScript).toContain("window.location.assign(`/register${query}`)");
+    expect(landingScript).toContain("response.status === 401");
   });
 });
