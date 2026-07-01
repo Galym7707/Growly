@@ -95,9 +95,7 @@
   document.querySelectorAll('[data-register-target]').forEach((element) => {
     element.addEventListener('click', (event) => {
       if (event.target.closest('input')) return;
-      const emailInput = element.querySelector('input[type="email"]') || document.querySelector('.cta-input');
-      const email = emailInput && emailInput.value.includes('@') ? `?email=${encodeURIComponent(emailInput.value)}` : '';
-      window.location.assign(`/register${email}`);
+      window.location.assign('/register');
     });
     element.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -149,35 +147,15 @@
 
   // ---------- SWIPE CTA ----------
   const swipeCta = document.getElementById('swipeCta');
-  const swipeEmailInput = document.getElementById('swipeEmailInput');
 
   if (swipeCta) {
     swipeCta.addEventListener('mouseenter', () => swipeCta.classList.add('glow'));
     swipeCta.addEventListener('mouseleave', () => {
       if (!swipeCta.classList.contains('expanded')) swipeCta.classList.remove('glow');
     });
-    swipeCta.addEventListener('click', (e) => {
-      if (!swipeCta.classList.contains('expanded')) {
-        swipeCta.classList.add('expanded', 'glow');
-        setTimeout(() => swipeEmailInput && swipeEmailInput.focus(), 400);
-        return;
-      }
-      if (e.target.closest('.swipe-arrow-track')) {
-        if (swipeEmailInput && swipeEmailInput.value.includes('@')) {
-          openRegister();
-        } else if (swipeEmailInput) {
-          swipeEmailInput.focus();
-        }
-      }
+    swipeCta.addEventListener('click', () => {
+      openRegister();
     });
-    if (swipeEmailInput) {
-      swipeEmailInput.addEventListener('click', (e) => e.stopPropagation());
-      swipeEmailInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && swipeEmailInput.value.includes('@')) {
-          openRegister();
-        }
-      });
-    }
   }
 
   // ---------- LOGO LOOP (real colored brand logos, no emoji) ----------
