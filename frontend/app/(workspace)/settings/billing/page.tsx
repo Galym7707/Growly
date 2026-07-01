@@ -89,6 +89,10 @@ export default function BillingSettingsPage() {
     () => getBillingPlanDisplay(billing?.plan || "free", locale),
     [billing?.plan, locale],
   );
+  const selectablePlans = useMemo(
+    () => billingPlans.filter((plan) => plan.id !== "free"),
+    [],
+  );
 
   async function openPortal() {
     setPortalLoading(true);
@@ -303,17 +307,14 @@ export default function BillingSettingsPage() {
             <div className="section-heading">
               <div>
                 <p className="eyebrow">{t("Тарифы")}</p>
-                <h2>{t("Выберите размер рабочей области")}</h2>
+                <h2>{t("Выберите тариф")}</h2>
               </div>
             </div>
             <div className="billing-plan-grid">
-              {billingPlans.map((plan) => {
+              {selectablePlans.map((plan) => {
                 const planDisplay = getBillingPlanDisplay(plan.id, locale);
-                const paidPlanId =
-                  plan.id === "free" ? null : (plan.id as PaidBillingPlanId);
-                const configured = paidPlanId
-                  ? billing.configuredPlans[paidPlanId]
-                  : true;
+                const paidPlanId = plan.id as PaidBillingPlanId;
+                const configured = billing.configuredPlans[paidPlanId];
                 return (
                   <article
                     className={`billing-plan-card ${
@@ -336,16 +337,18 @@ export default function BillingSettingsPage() {
                           <span>{feature}</span>
                         </li>
                       ))}
+                      {planDisplay.unavailableFeatures?.map((feature) => (
+                        <li className="unavailable" key={feature}>
+                          <Icon name="close" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
                     </ul>
-                    {plan.id === "free" ? (
-                      <Link className="button button-secondary" href="/register">
-                        {t("Create account")}
-                      </Link>
-                    ) : configured ? (
+                    {configured ? (
                       <button
                         className="button button-primary"
                         disabled={checkoutLoading === paidPlanId}
-                        onClick={() => paidPlanId && startCheckout(paidPlanId)}
+                        onClick={() => startCheckout(paidPlanId)}
                         type="button"
                       >
                         {checkoutLoading === paidPlanId

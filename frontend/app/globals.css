@@ -1483,7 +1483,7 @@ input:disabled {
 .billing-plan-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .billing-plan-card {
@@ -1552,6 +1552,14 @@ input:disabled {
   height: 15px;
   margin-top: 2px;
   width: 15px;
+}
+
+.billing-plan-card li.unavailable {
+  color: color-mix(in srgb, var(--muted) 65%, transparent);
+}
+
+.billing-plan-card li.unavailable svg {
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
 }
 
 .legal-page {
