@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import { LandingScripts } from "@/components/landing-scripts";
 
 export const metadata: Metadata = {
-  title: "Growly - AI Content Intelligence",
+  title: "Growly - Content Intelligence",
   description:
     "Growly tracks competitors, reads market signals, and turns them into a ready content plan.",
 };

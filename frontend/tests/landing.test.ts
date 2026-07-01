@@ -19,7 +19,7 @@ const landingScript = readFileSync(
 describe("public landing page", () => {
   it("renders the supplied landing source at the root route", () => {
     expect(landingHtml).toContain('class="hero-h1 fade-up"');
-    expect(landingHtml).toContain("From competitor signals to publish");
+    expect(landingHtml).toContain("Market signals into ready content.");
     expect(landingHtml).toContain("MARKETING WORKSPACE");
     expect(landingHtml).toContain('id="workflow"');
     expect(landingHtml).toContain('id="stack"');

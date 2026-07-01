@@ -180,51 +180,6 @@
     }
   }
 
-  // ---------- COUNTDOWN TIMER (7 days from first visit, persisted) ----------
-  (function initCountdown() {
-    const KEY = 'growly_waitlist_deadline';
-    let deadline = localStorage.getItem(KEY);
-    if (!deadline) {
-      deadline = Date.now() + 7 * 24 * 60 * 60 * 1000;
-      localStorage.setItem(KEY, deadline);
-    } else {
-      deadline = parseInt(deadline, 10);
-    }
-
-    const elD = document.getElementById('td');
-    const elH = document.getElementById('th');
-    const elM = document.getElementById('tm');
-    const elS = document.getElementById('ts');
-    if (!elD) return;
-
-    function pad(n) { return String(n).padStart(2, '0'); }
-
-    function setIfChanged(el, value) {
-      if (el.textContent !== value) {
-        el.textContent = value;
-        el.classList.remove('num-pop');
-        void el.offsetWidth;
-        el.classList.add('num-pop');
-      }
-    }
-
-    function tick() {
-      const now = Date.now();
-      let diff = deadline - now;
-      if (diff < 0) diff = 0;
-      const days = Math.floor(diff / (24 * 60 * 60 * 1000));
-      const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-      const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
-      const secs = Math.floor((diff % (60 * 1000)) / 1000);
-      setIfChanged(elD, pad(days));
-      setIfChanged(elH, pad(hours));
-      setIfChanged(elM, pad(mins));
-      setIfChanged(elS, pad(secs));
-    }
-    tick();
-    setInterval(tick, 1000);
-  })();
-
   // ---------- LOGO LOOP (real colored brand logos, no emoji) ----------
   const logos = [
     { name: 'Telegram', svg: '<svg viewBox="0 0 240 240" width="20" height="20"><circle cx="120" cy="120" r="120" fill="#229ED9"/><path fill="#fff" d="M98 172c-4 0-3.4-1.5-4.8-5.3L82 132l95-57z"/><path fill="#fff" d="M98 172c3 0 4.4-1.4 6.2-3.1l16.8-16.3-21-12.6z"/><path fill="#fff" d="M100 140l50.6 37.4c5.8 3.2 10 1.5 11.4-5.4l20.7-97.6c2-8.4-3.2-12.2-8.8-9.6L52.4 109.2c-8.2 3.3-8.1 7.9-1.5 9.9l30.8 9.6 71.4-45c3.4-2 6.5-1 4 1.2"/></svg>' },
