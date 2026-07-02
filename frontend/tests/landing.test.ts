@@ -31,7 +31,8 @@ describe("public landing page", () => {
     expect(landingHtml).toContain('id="pricing"');
     expect(landingPage).toContain('public", "landing", "index.html"');
     expect(landingPage).toContain("<LandingScripts />");
-    expect(landingPage).toContain("Clash+Display");
+    expect(landingPage).toContain("family=Sora");
+    expect(landingPage).not.toContain("Clash+Display");
   });
 
   it("keeps product entry points on the existing authentication routes", () => {
