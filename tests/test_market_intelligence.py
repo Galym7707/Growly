@@ -476,8 +476,9 @@ async def test_market_scan_saves_before_groq_and_syncs_after_failure(
         groq_status: str,
         region_language: str,
         workspace_id: str | None = None,
+        output_language: str | None = None,
     ) -> Report:
-        del workspace_id
+        del workspace_id, output_language
         events.append("partial_report")
         return Report(
             id=99,

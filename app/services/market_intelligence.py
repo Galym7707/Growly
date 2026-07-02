@@ -282,6 +282,7 @@ class MarketIntelligenceService:
                 groq_status,
                 region_language,
                 workspace_id,
+                output_language,
             )
         await self._update_job(
             job_id,
@@ -386,6 +387,14 @@ class MarketIntelligenceService:
                 existing_report_id=report.id,
                 job_id=job_id,
                 progress=progress,
+                output_language=(
+                    str(
+                        metadata.get("language")
+                        or stored_context.get("language")
+                        or ""
+                    ).strip()
+                    or None
+                ),
             )
             logger.info("groq_status=ready")
             logger.info("groq_analysis_finished")
@@ -471,6 +480,7 @@ class MarketIntelligenceService:
             saved,
             job_id=job_id,
             progress=progress,
+            output_language=output_language,
         )
         saved = await asyncio.to_thread(
             self._apply_source_analysis,
@@ -493,6 +503,7 @@ class MarketIntelligenceService:
                 queries,
                 region_language,
                 workspace_id,
+                output_language,
             )
         else:
             report = await asyncio.to_thread(
@@ -512,6 +523,7 @@ class MarketIntelligenceService:
         *,
         job_id: int | None = None,
         progress: ProgressCallback | None = None,
+        output_language: str | None = None,
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         analyses: list[dict[str, Any]] = []
         known_urls = {item.url for item in saved if item.url}
@@ -536,6 +548,8 @@ class MarketIntelligenceService:
                     {
                         "query": query,
                         "batch_number": batch_number,
+                        "language": output_language,
+                        "output_language": output_language,
                         "source_items": [
                             self._compact_source_item(item) for item in batch
                         ],
@@ -608,6 +622,7 @@ class MarketIntelligenceService:
                     "sources_count": len(saved_source_items),
                     "generated_at": datetime.now(UTC).isoformat(),
                     "language": output_language,
+                    "output_language": output_language,
                 }
             ),
             timeout=GROQ_GENERATION_TIMEOUT_SECONDS,
@@ -1315,6 +1330,20 @@ class MarketIntelligenceService:
             workspace_id=workspace_id,
         )
 
+    _MARKET_SCAN_TITLE_PREFIXES = {
+        "ru": "Анализ рынка",
+        "en": "Market analysis",
+        "kk": "Нарық талдауы",
+    }
+
+    @classmethod
+    def _market_scan_title(cls, query: str, language: str | None) -> str:
+        prefix = cls._MARKET_SCAN_TITLE_PREFIXES.get(
+            (language or "ru").strip().lower(),
+            cls._MARKET_SCAN_TITLE_PREFIXES["ru"],
+        )
+        return f"{prefix}: {query}"
+
     @classmethod
     def _save_market_scan_report(
         cls,
@@ -1324,12 +1353,19 @@ class MarketIntelligenceService:
         queries: list[str],
         region_language: str = "",
         workspace_id: str | None = None,
+        output_language: str | None = None,
     ) -> Report:
         body = cls.render_market_scan_report(payload)
+        market_context = build_market_context(query, region_language)
+        language = (
+            (output_language or "").strip()
+            or str(market_context.get("language") or "").strip()
+            or "ru"
+        )
         with session_scope() as session:
             report = ReportsRepository(session).create_report(
                 report_type="market_scan",
-                title=f"Анализ рынка: {query}",
+                title=cls._market_scan_title(query, language),
                 report_text=body,
                 summary=str(payload.get("executive_summary") or "")[:1800],
                 query=query,
@@ -1340,10 +1376,8 @@ class MarketIntelligenceService:
                     **payload,
                     "source_item_ids": [item.id for item in source_items],
                     "queries": queries,
-                    "market_context": build_market_context(
-                        query,
-                        region_language,
-                    ),
+                    "market_context": market_context,
+                    "language": language,
                     "groq_status": "ready",
                 },
                 status="ready",
@@ -1351,6 +1385,38 @@ class MarketIntelligenceService:
             )
             cls._persist_active_context(session, report)
             return report
+
+    _PARTIAL_SCAN_MESSAGES = {
+        "ru": {
+            "rate_limited": (
+                "Результаты поиска сохранены, но ИИ-анализ отложен из-за "
+                "ограничения запросов."
+            ),
+            "default": (
+                "Результаты поиска сохранены, но ИИ-анализ временно недоступен."
+            ),
+        },
+        "en": {
+            "rate_limited": (
+                "Search results are saved, but AI analysis is postponed "
+                "because of rate limits."
+            ),
+            "default": (
+                "Search results are saved, but AI analysis is temporarily "
+                "unavailable."
+            ),
+        },
+        "kk": {
+            "rate_limited": (
+                "Іздеу нәтижелері сақталды, бірақ AI талдауы сұраныс "
+                "шектеулеріне байланысты кейінге қалдырылды."
+            ),
+            "default": (
+                "Іздеу нәтижелері сақталды, бірақ AI талдауы уақытша "
+                "қолжетімсіз."
+            ),
+        },
+    }
 
     @classmethod
     def _save_partial_market_scan_report(
@@ -1361,20 +1427,23 @@ class MarketIntelligenceService:
         groq_status: str,
         region_language: str = "",
         workspace_id: str | None = None,
+        output_language: str | None = None,
     ) -> Report:
-        if groq_status == "rate_limited":
-            message = (
-                "Результаты поиска сохранены, но ИИ-анализ отложен из-за "
-                "ограничения запросов."
-            )
-        else:
-            message = (
-                "Результаты поиска сохранены, но ИИ-анализ временно недоступен."
-            )
+        market_context = build_market_context(query, region_language)
+        language = (
+            (output_language or "").strip()
+            or str(market_context.get("language") or "").strip()
+            or "ru"
+        )
+        messages = cls._PARTIAL_SCAN_MESSAGES.get(
+            language.lower(),
+            cls._PARTIAL_SCAN_MESSAGES["ru"],
+        )
+        message = messages.get(groq_status, messages["default"])
         with session_scope() as session:
             report = ReportsRepository(session).create_report(
                 report_type="market_scan",
-                title=f"Анализ рынка: {query}",
+                title=cls._market_scan_title(query, language),
                 report_text=message,
                 summary=message,
                 query=query,
@@ -1384,10 +1453,8 @@ class MarketIntelligenceService:
                 raw_json={
                     "source_item_ids": [item.id for item in source_items],
                     "queries": queries,
-                    "market_context": build_market_context(
-                        query,
-                        region_language,
-                    ),
+                    "market_context": market_context,
+                    "language": language,
                     "groq_status": groq_status,
                     "analysis_pending_since": datetime.now(UTC).isoformat(),
                 },
@@ -1434,6 +1501,14 @@ class MarketIntelligenceService:
                         report.query or "",
                         region_language
                         or str(existing_context.get("region_language") or ""),
+                    ),
+                    "language": (
+                        str(
+                            existing_payload.get("language")
+                            or existing_context.get("language")
+                            or ""
+                        ).strip()
+                        or "ru"
                     ),
                     "groq_status": "ready",
                     "analysis_completed_at": datetime.now(UTC).isoformat(),

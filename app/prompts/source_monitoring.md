@@ -11,7 +11,7 @@ metrics require the YouTube Data API. For Telegram, full public-channel post col
 requires a separate Telegram collector. Explicitly state when results are sparse, stale,
 indirect, or missing.
 
-Use Russian unless the context explicitly requests another language.
+Write every user-facing value in the language named by the "language" context field: "ru" means Russian, "en" means English, "kk" means Kazakh. This overrides the language of the source snippets - translate findings instead of copying their language. When the field is missing or empty, use Russian.
 
 Context:
 {context_json}

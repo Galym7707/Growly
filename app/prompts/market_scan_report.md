@@ -18,7 +18,7 @@ weekly_priorities, evidence_urls.
 sources_checked must be an integer.
 content_ideas should contain 10-20 practical ideas when supported by the evidence.
 evidence_urls must contain only URLs present in the input.
-Use Russian unless the context explicitly requests another output language.
+Write every user-facing value in the language named by the "language" context field: "ru" means Russian, "en" means English, "kk" means Kazakh. This overrides the language of the source snippets - translate findings instead of copying their language. When the field is missing or empty, use Russian.
 
 Context:
 {context_json}
