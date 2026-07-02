@@ -12,7 +12,9 @@
     "build": "npm run build --workspace frontend",
     "start": "npm run start --workspace frontend",
     "lint": "npm run lint --workspace frontend",
-    "test:web": "npm run test --workspace frontend"
+    "test:web": "npm run test --workspace frontend",
+    "seed:test-users": "node scripts/seed_supabase_test_users.mjs",
+    "analytics:test-traffic": "node scripts/generate_vercel_analytics_traffic.mjs"
   },
   "engines": {
     "node": ">=22"
