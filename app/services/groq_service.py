@@ -63,6 +63,7 @@ class GroqService:
         temperature: float = 0.35,
         max_tokens: int = 3000,
     ) -> str:
+        language = context.get("language") if isinstance(context, dict) else None
         model = self.settings.require_text("groq_model", "GROQ_MODEL")
         template = load_prompt(prompt_name)
         context = self._apply_prompt_budget(context)
@@ -104,7 +105,7 @@ class GroqService:
                                         "content": (
                                             "Follow the task exactly. Never fabricate facts, "
                                             "metrics, quotes, customer evidence, or guarantees. "
-                                            + self.settings.user_language_instruction()
+                                            + self.settings.user_language_instruction(language)
                                         ),
                                     },
                                     {"role": "user", "content": prompt},

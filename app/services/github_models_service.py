@@ -125,6 +125,7 @@ class GitHubModelsService:
                 "with models:read permission."
             )
 
+        language = context.get("language") if isinstance(context, dict) else None
         template = load_prompt(prompt_name)
         bounded_context = GroqService._apply_prompt_budget(context)
         context_json = (
@@ -158,7 +159,7 @@ class GitHubModelsService:
                         "content": (
                             "Follow the task exactly. Never fabricate facts, "
                             "metrics, quotes, customer evidence, or guarantees. "
-                            + self.settings.user_language_instruction()
+                            + self.settings.user_language_instruction(language)
                         ),
                     },
                     {"role": "user", "content": prompt},

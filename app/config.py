@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import ClassVar
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -308,16 +309,25 @@ class Settings(BaseSettings):
             if origin.strip()
         ]
 
-    def user_language_instruction(self) -> str:
-        if self.default_language.strip().lower() == "ru":
-            return (
-                "Write all user-facing text in Russian. Keep only required "
-                "JSON keys, URLs, brand names, and channel names unchanged."
-            )
+    _LANGUAGE_NAMES: ClassVar[dict[str, str]] = {
+        "ru": "Russian",
+        "en": "English",
+        "kk": "Kazakh",
+    }
+
+    def user_language_instruction(self, language: str | None = None) -> str:
+        """Instruction telling the model which language to answer in.
+
+        When a per-request ``language`` is provided (e.g. the current UI
+        locale sent from the web app), it takes precedence over the global
+        ``DEFAULT_LANGUAGE`` so the assistant replies in the same language
+        as the user instead of always defaulting to Russian.
+        """
+        raw = (language or self.default_language or "ru").strip()
+        name = self._LANGUAGE_NAMES.get(raw.lower(), raw)
         return (
-            f"Write all user-facing text in {self.default_language.strip()}. "
-            "Keep only required JSON keys, URLs, brand names, and channel "
-            "names unchanged."
+            f"Write all user-facing text in {name}. Keep only required "
+            "JSON keys, URLs, brand names, and channel names unchanged."
         )
 
 
