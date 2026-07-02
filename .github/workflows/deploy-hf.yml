@@ -1,0 +1,109 @@
+name: Deploy to HuggingFace Space
+
+# Pushes this repo to the HuggingFace Docker Space Galym7707/GrowlyAI.
+# GitHub runners can reach huggingface.co (the Claude Code cloud env cannot),
+# so this is the automated path to deploy.
+#
+# One-time setup in GitHub → Settings → Secrets and variables → Actions:
+#   - HF_TOKEN   (required)  a HuggingFace *write* token
+#                            https://huggingface.co/settings/tokens
+#   - HF_ENV     (optional)  the full contents of your .env file. If set, every
+#                            KEY=VALUE line is registered as a Space Secret so
+#                            the app has its runtime config. Leave unset if you
+#                            prefer to set Space secrets by hand in the HF UI.
+#
+# Run it: Actions tab → "Deploy to HuggingFace Space" → Run workflow.
+# It also runs automatically on every push to main that changes backend code.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "migrations/**"
+      - "scripts/**"
+      - "run_*.py"
+      - "requirements.txt"
+      - "Dockerfile"
+      - "README.md"
+
+concurrency:
+  group: deploy-hf
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HF_SPACE: Galym7707/GrowlyAI
+      HF_USERNAME: Galym7707
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify HF_TOKEN is configured
+        run: |
+          if [ -z "${{ secrets.HF_TOKEN }}" ]; then
+            echo "::error::HF_TOKEN secret is not set. Add it in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - name: Push code to the HuggingFace Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add hf "https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}"
+          # The Space is a deploy target; force-push main so it always mirrors GitHub.
+          git push --force hf HEAD:main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install huggingface_hub
+        run: pip install "huggingface_hub>=0.25"
+
+      - name: Sync Space secrets from HF_ENV (optional)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_ENV: ${{ secrets.HF_ENV }}
+        run: |
+          if [ -z "${HF_ENV:-}" ]; then
+            echo "HF_ENV secret not set — skipping Space secret sync."
+            echo "Set the Space env vars manually in the HuggingFace UI if needed."
+            exit 0
+          fi
+          python3 - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          space = os.environ["HF_SPACE"]
+
+          count = 0
+          for line in os.environ["HF_ENV"].splitlines():
+              line = line.strip()
+              if not line or line.startswith("#") or "=" not in line:
+                  continue
+              key, value = line.split("=", 1)
+              key, value = key.strip(), value.strip().strip('"').strip("'")
+              if not key:
+                  continue
+              api.add_space_secret(repo_id=space, key=key, value=value)
+              count += 1
+              print(f"set secret: {key}")
+
+          api.add_space_variable(repo_id=space, key="RUN_DATABASE_MIGRATIONS", value="true")
+          print(f"Done: {count} secrets synced.")
+          PY
+
+      - name: Summary
+        run: |
+          echo "Deployed to https://huggingface.co/spaces/${HF_SPACE}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Watch the container build there." >> "$GITHUB_STEP_SUMMARY"
