@@ -10,23 +10,10 @@ name: Deploy to HuggingFace Space
 #   HF_ENV    (optional)  full contents of your .env file. If set, every
 #                         KEY=VALUE line is registered as a Space Secret.
 #
-# Run it: Actions tab -> "Deploy to HuggingFace Space" -> Run workflow.
+# Run it manually: Actions tab -> "Deploy to HuggingFace Space" -> Run workflow.
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "app/**"
-      - "migrations/**"
-      - "scripts/**"
-      - "run_api.py"
-      - "run_bot.py"
-      - "run_space.py"
-      - "requirements.txt"
-      - "Dockerfile"
-      - "README.md"
 
 permissions:
   contents: read
