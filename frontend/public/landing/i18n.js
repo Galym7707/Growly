@@ -7,7 +7,7 @@ const translations = {
     "nav.cta": "Open Growly",
 
     "hero.eyebrow": "MARKETING WORKSPACE",
-    "hero.headline": "Market signals into ready content.",
+    "hero.headline": "Market signals into ready content",
     "hero.sub": "Growly tracks competitors, reads market signals, and turns them into a ready content plan — research, planning and publishing in one workflow.",
     "hero.cta_primary": "Start now",
     "hero.cta_placeholder": "your@email.com",
@@ -48,7 +48,7 @@ const translations = {
     "logos.label": "Built to monitor and publish across",
 
     "workflow.eyebrow": "WORKFLOW",
-    "workflow.headline": "Every output stays connected to evidence.",
+    "workflow.headline": "Every output stays connected to evidence",
     "workflow.sub": "Growly saves discovered sources first, analyzes them, and only then builds plans and drafts.",
     "workflow.step1": "Enter the niche and region",
     "workflow.step1desc": "Tell Growly your market and where your audience is.",
@@ -62,7 +62,7 @@ const translations = {
     "workflow.step5desc": "Approve in Telegram and it publishes itself.",
 
     "stack.eyebrow": "WHAT GROWLY DOES",
-    "stack.headline": "The full stack. Built for content teams.",
+    "stack.headline": "The full stack. Built for content teams",
     "stack.tab1": "Intelligence",
     "stack.tab2": "Content Creation",
     "stack.tab3": "Publishing",
@@ -129,7 +129,7 @@ const translations = {
     "stack.report.side4.desc": "Reports land where you work",
 
     "preview.eyebrow": "PRODUCT PREVIEW",
-    "preview.headline": "Everything your team needs in one view.",
+    "preview.headline": "Everything your team needs in one view",
     "preview.sub": "Built for marketers who want results, not dashboards to babysit.",
     "preview.url": "growly.ai — Competitive Intelligence",
     "preview.sidebar.main": "MAIN",
@@ -155,7 +155,7 @@ const translations = {
     "preview.ai.text2": "Gap detected: no one is covering pricing objections. First‑mover opportunity.",
 
     "cases.eyebrow": "WHO IT IS FOR",
-    "cases.headline": "For teams that need a managed content process.",
+    "cases.headline": "For teams that need a managed content process",
     "cases.card1.title": "Small business",
     "cases.card1.desc": "Understand the market and ship content regularly without a separate department.",
     "cases.card2.title": "Marketer",
@@ -166,7 +166,7 @@ const translations = {
     "cases.card4.desc": "Connect competitor analysis directly to practical topics and ready drafts.",
 
     "pricing.eyebrow": "PRICING",
-    "pricing.headline": "Simple, transparent pricing.",
+    "pricing.headline": "Simple, transparent pricing",
     "pricing.caption": "Your content team, for the price of one post boost.",
     "pricing.subcaption": "Choose a plan and start using Growly today.",
     "pricing.popular": "MOST POPULAR",
@@ -193,7 +193,7 @@ const translations = {
 
     "faq.eyebrow": "FAQ",
     "faq.headline_p1": "The honest answers",
-    "faq.headline_p2": "most founders ask first.",
+    "faq.headline_p2": "most founders ask first",
     "faq.contact": "Didn't find yours? Email <a href=\"mailto:whoisnelya@mail.ru\">whoisnelya@mail.ru</a> — Nelya replies personally.",
     "faq.q1": "Is this just a writing tool?",
     "faq.a1": "No. Writing is one piece. Growly also monitors competitors, reads reviews, builds the content plan, and publishes after your approval. Most tools stop at the draft.",
@@ -205,7 +205,7 @@ const translations = {
     "faq.a4": "Yes, but only after your approval. Your team reviews drafts inside Growly. Once you approve a post, it's scheduled and published automatically. No copy-pasting.",
     "faq.more": "More questions →",
 
-    "cta.headline": "Start with your first market scan.",
+    "cta.headline": "Start with your first market scan",
     "cta.sub": "Create an account and start your first market scan today.",
     "cta.placeholder": "your@email.com",
     "cta.button": "Open workspace",
@@ -237,7 +237,7 @@ const translations = {
     "nav.cta": "Открыть Growly",
 
     "hero.eyebrow": "МАРКЕТИНГОВОЕ РАБОЧЕЕ ПРОСТРАНСТВО",
-    "hero.headline": "Контент-план и публикации из рыночных сигналов.",
+    "hero.headline": "Контент-план и публикации из рыночных сигналов",
     "hero.sub": "Growly следит за конкурентами, анализирует рыночные сигналы и превращает их в готовый контент‑план — исследование, планирование и публикация в одном процессе.",
     "hero.cta_primary": "Начать сейчас",
     "hero.cta_placeholder": "your@email.com",
@@ -278,7 +278,7 @@ const translations = {
     "logos.label": "Создано для мониторинга и публикации в",
 
     "workflow.eyebrow": "РАБОЧИЙ ПРОЦЕСС",
-    "workflow.headline": "Каждый вывод остаётся связан с источником.",
+    "workflow.headline": "Каждый вывод остаётся связан с источником",
     "workflow.sub": "Growly сначала сохраняет найденные источники, анализирует их и только потом формирует план и черновики.",
     "workflow.step1": "Укажите нишу и регион",
     "workflow.step1desc": "Расскажите Growly о вашем рынке и аудитории.",
@@ -292,7 +292,7 @@ const translations = {
     "workflow.step5desc": "Согласуйте в Telegram — и контент опубликуется сам.",
 
     "stack.eyebrow": "ЧТО ДЕЛАЕТ GROWLY",
-    "stack.headline": "Полный стек. Создан для контент‑команд.",
+    "stack.headline": "Полный стек. Создан для контент‑команд",
     "stack.tab1": "Аналитика",
     "stack.tab2": "Создание контента",
     "stack.tab3": "Публикация",
@@ -359,7 +359,7 @@ const translations = {
     "stack.report.side4.desc": "Отчёты появляются там, где вы работаете",
 
     "preview.eyebrow": "ПРЕВЬЮ ПРОДУКТА",
-    "preview.headline": "Всё необходимое команде в одном окне.",
+    "preview.headline": "Всё необходимое команде в одном окне",
     "preview.sub": "Создано для маркетологов, которым нужны результаты, а не дашборды, которые нужно нянчить.",
     "preview.url": "growly.ai — Конкурентная разведка",
     "preview.sidebar.main": "ОСНОВНОЕ",
@@ -385,7 +385,7 @@ const translations = {
     "preview.ai.text2": "Найден пробел: никто не закрывает возражения по цене. Возможность быть первым.",
 
     "cases.eyebrow": "ДЛЯ КОГО",
-    "cases.headline": "Для команд, которым нужен управляемый контент‑процесс.",
+    "cases.headline": "Для команд, которым нужен управляемый контент‑процесс",
     "cases.card1.title": "Малый бизнес",
     "cases.card1.desc": "Понимать рынок и регулярно готовить материалы без отдельного отдела.",
     "cases.card2.title": "Маркетолог",
@@ -396,7 +396,7 @@ const translations = {
     "cases.card4.desc": "Связать анализ конкурентов напрямую с практическими темами и готовыми черновиками.",
 
     "pricing.eyebrow": "ЦЕНЫ",
-    "pricing.headline": "Простые и прозрачные тарифы.",
+    "pricing.headline": "Простые и прозрачные тарифы",
     "pricing.caption": "Ваша контент‑команда — за цену одного продвижения поста.",
     "pricing.subcaption": "Выберите тариф и начните пользоваться Growly сегодня.",
     "pricing.popular": "ПОПУЛЯРНЫЙ",
@@ -423,7 +423,7 @@ const translations = {
 
     "faq.eyebrow": "FAQ",
     "faq.headline_p1": "Честные ответы",
-    "faq.headline_p2": "на вопросы, которые задают первыми.",
+    "faq.headline_p2": "на вопросы, которые задают первыми",
     "faq.contact": "Не нашли свой вопрос? Напишите на <a href=\"mailto:whoisnelya@mail.ru\">whoisnelya@mail.ru</a> — Неля отвечает лично.",
     "faq.q1": "Это просто инструмент для текстов?",
     "faq.a1": "Нет. Текст — лишь часть. Growly также следит за конкурентами, анализирует отзывы, строит контент‑план и публикует после вашего согласования. Большинство инструментов останавливаются на черновике.",
@@ -435,7 +435,7 @@ const translations = {
     "faq.a4": "Да, но только после вашего согласования. Команда проверяет черновики внутри Growly. После того как вы одобрите пост, он автоматически планируется и публикуется. Без копирования.",
     "faq.more": "Больше вопросов →",
 
-    "cta.headline": "Начните с первого анализа рынка.",
+    "cta.headline": "Начните с первого анализа рынка",
     "cta.sub": "Создайте аккаунт и запустите первый анализ рынка сегодня.",
     "cta.placeholder": "your@email.com",
     "cta.button": "Открыть рабочую область",
@@ -467,7 +467,7 @@ const translations = {
     "nav.cta": "Growly ашу",
 
     "hero.eyebrow": "МАРКЕТИНГТІК ЖҦМЫС КЕҢІСТІГІ",
-    "hero.headline": "Нарық сигналдарынан дайын контентке дейін.",
+    "hero.headline": "Нарық сигналдарынан дайын контентке дейін",
     "hero.sub": "Growly бәсекелестерді бақылайды, нарық сигналдарын талдайды және оларды дайын контент‑жоспарға айналдырады — зерттеу, жоспарлау және жариялау бір процесте.",
     "hero.cta_primary": "Қазір бастау",
     "hero.cta_placeholder": "your@email.com",
@@ -508,7 +508,7 @@ const translations = {
     "logos.label": "Бақылау және жариялау үшін жасалған",
 
     "workflow.eyebrow": "ЖҦМЫС ПРОЦЕСІ",
-    "workflow.headline": "Әрбір қорытынды дәлелмен байланысты қалады.",
+    "workflow.headline": "Әрбір қорытынды дәлелмен байланысты қалады",
     "workflow.sub": "Growly алдымен табылған дереккөздерді сақтайды, оларды талдайды және содан кейін ғана жоспарлар мен жобаларды құрады.",
     "workflow.step1": "Нишаны және аймақты көрсетіңіз",
     "workflow.step1desc": "Growly‑ге нарығыңыз мен аудиторияңыз туралы айтыңыз.",
@@ -522,7 +522,7 @@ const translations = {
     "workflow.step5desc": "Telegram‑де мақұлдаңыз — ол өзі жарияланады.",
 
     "stack.eyebrow": "GROWLY НЕ ІСТЕЙДІ",
-    "stack.headline": "Толық стек. Контент командалары үшін жасалған.",
+    "stack.headline": "Толық стек. Контент командалары үшін жасалған",
     "stack.tab1": "Аналитика",
     "stack.tab2": "Контент жасау",
     "stack.tab3": "Жариялау",
@@ -589,7 +589,7 @@ const translations = {
     "stack.report.side4.desc": "Есептер сіз жұмыс істейтін жерге келеді",
 
     "preview.eyebrow": "ӞНІМ АЛДЫН АЛА КӞРУ",
-    "preview.headline": "Командаға қажет барлық нәрсе бір экранда.",
+    "preview.headline": "Командаға қажет барлық нәрсе бір экранда",
     "preview.sub": "Нәтиже қажет, ал күтуге қажет дашборд емес маркетологтар үшін жасалған.",
     "preview.url": "growly.ai — Бәсекелестік аналитика",
     "preview.sidebar.main": "НЕГІЗГІ",
@@ -615,7 +615,7 @@ const translations = {
     "preview.ai.text2": "Бос орын табылды: баға қарсылықтарын ешкім қамтымайды. Бірінші болу мүмкіндігі.",
 
     "cases.eyebrow": "КІМДЕР ҦШІН",
-    "cases.headline": "Басқарылатын контент процесі қажет командалар үшін.",
+    "cases.headline": "Басқарылатын контент процесі қажет командалар үшін",
     "cases.card1.title": "Шағын бизнес",
     "cases.card1.desc": "Бөлек бөлім құрмай‑ақ нарықты түсіну және тұрақты түрде контент шығару.",
     "cases.card2.title": "Маркетолог",
@@ -626,7 +626,7 @@ const translations = {
     "cases.card4.desc": "Бәсекелестерді талдауды нақты тақырыптар мен дайын жобалармен тікелей байланыстыру.",
 
     "pricing.eyebrow": "БАҒАЛАР",
-    "pricing.headline": "Қарапайым және ашық баға саясаты.",
+    "pricing.headline": "Қарапайым және ашық баға саясаты",
     "pricing.caption": "Контент командаңыз — бір пост жылжытудың бағасына.",
     "pricing.subcaption": "Тарифті таңдап, Growly-ді бүгін пайдаланыңыз.",
     "pricing.popular": "ЕҪ ПОПУЛЯРЛЫ",
@@ -653,7 +653,7 @@ const translations = {
 
     "faq.eyebrow": "FAQ",
     "faq.headline_p1": "Негізін қалаушылар бірінші қоятын",
-    "faq.headline_p2": "сұрақтарға шынайы жауаптар.",
+    "faq.headline_p2": "сұрақтарға шынайы жауаптар",
     "faq.contact": "Сұрағыңызды таппадыңыз ба? <a href=\"mailto:whoisnelya@mail.ru\">whoisnelya@mail.ru</a> поштасына жазыңыз — Неля жеке жауап береді.",
     "faq.q1": "Бұл жай ғана жазу құралы ма?",
     "faq.a1": "Жоқ. Жазу — тек бір бөлік. Growly сонымен қатар бәсекелестерді бақылайды, пікірлерді оқиды, контент‑жоспар құрады және сіз мақұлдағаннан кейін жариялайды. Көптеген құралдар жобада тоқтайды.",
@@ -665,7 +665,7 @@ const translations = {
     "faq.a4": "Иә, бірақ тек сіз мақұлдағаннан кейін. Команда жобаларды Growly ішінде тексереді. Жазбаны мақұлдағаннан кейін ол автоматты түрде жоспарланып, жарияланады. Көшіру қажет емес.",
     "faq.more": "Көбірек сұрақтар →",
 
-    "cta.headline": "Бірінші нарықты талдаудан бастаңыз.",
+    "cta.headline": "Бірінші нарықты талдаудан бастаңыз",
     "cta.sub": "Аккаунт ашып, алғашқы нарық талдауын бүгін бастаңыз.",
     "cta.placeholder": "your@email.com",
     "cta.button": "Жұмыс кеңістігін ашу",

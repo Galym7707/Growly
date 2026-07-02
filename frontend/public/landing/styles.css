@@ -644,8 +644,8 @@ a { color: inherit; }
   .swipe-cta { width: min(100%, 310px); }
   .swipe-cta.expanded .swipe-arrow-track { transform: translateX(calc(min(100vw - 44px, 310px) - 54px)) rotate(90deg); }
   .btn-ghost { justify-content: center; min-height: 44px; }
-  .device-frame { grid-template-columns: 52px 1fr; max-width: 100%; border-radius: 14px; }
-  .device-sidebar { padding: 16px 0; gap: 22px; }
+  .device-frame { grid-template-columns: 1fr; max-width: 100%; border-radius: 14px; }
+  .device-sidebar { display: none; }
   .device-main { padding: 22px 18px 22px; }
   .device-action-title { font-size: 22px; }
   .device-statrow { grid-template-columns: 1fr; }
