@@ -22,7 +22,10 @@ from app.repositories.workspace_repo import WorkspaceRepository
 from app.services.content_plan_service import ContentPlanService
 from app.services.draft_service import DraftService
 from app.services.email_service import EmailService
-from app.services.market_intelligence import MarketIntelligenceService
+from app.services.market_intelligence import (
+    MARKET_SCAN_PENDING_STATUS,
+    MarketIntelligenceService,
+)
 from app.services.notion_service import NotionService
 from app.services.report_service import ReportService
 from app.services.social_connection_service import SocialConnectionService
@@ -204,7 +207,7 @@ async def _require_report_visible(
     if row is None or not _visible_in_workspace(
         getattr(row, "workspace_id", None), membership
     ):
-        raise HTTPException(status_code=404, detail="РћС‚С‡С‘С‚ РЅРµ РЅР°Р№РґРµРЅ.")
+        raise HTTPException(status_code=404, detail="Отчёт не найден.")
     return row
 
 
@@ -219,7 +222,7 @@ def _require_content_plan_visible(
         if item is None or not _visible_in_workspace(
             getattr(item, "workspace_id", None), membership
         ):
-            raise HTTPException(status_code=404, detail="РљРѕРЅС‚РµРЅС‚-РїР»Р°РЅ РЅРµ РЅР°Р№РґРµРЅ.")
+            raise HTTPException(status_code=404, detail="Контент-план не найден.")
 
 
 def _require_draft_visible(draft_id: int, membership: Membership | None) -> None:
@@ -230,7 +233,7 @@ def _require_draft_visible(draft_id: int, membership: Membership | None) -> None
         if draft is None or not _visible_in_workspace(
             getattr(draft, "workspace_id", None), membership
         ):
-            raise HTTPException(status_code=404, detail="Р§РµСЂРЅРѕРІРёРє РЅРµ РЅР°Р№РґРµРЅ.")
+            raise HTTPException(status_code=404, detail="Черновик не найден.")
 
 
 def require_admin(
@@ -911,7 +914,7 @@ def _set_active_context(
                 )
             )
             if not visible:
-                raise HTTPException(status_code=404, detail="РћС‚С‡С‘С‚ РЅРµ РЅР°Р№РґРµРЅ.")
+                raise HTTPException(status_code=404, detail="Отчёт не найден.")
         payload = _active_payload_from_report(report, {})
         settings_repo.set(
             "active_report_id",
@@ -1077,7 +1080,7 @@ async def market_scan_job(
     if not _visible_in_workspace(job.get("workspace_id"), membership):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Р—Р°РґР°РЅРёРµ Р°РЅР°Р»РёР·Р° СЂС‹РЅРєР° РЅРµ РЅР°Р№РґРµРЅРѕ.",
+            detail="Задание анализа рынка не найдено.",
         )
     return {
         "status": job["status"],
@@ -1089,6 +1092,46 @@ async def market_scan_job(
         "report_id": job["report_id"],
         "report_status": job["report_status"],
         "error_message": job["error_message"],
+    }
+
+
+async def _run_retry_analysis_job(
+    service: MarketIntelligenceService,
+    report_id: int,
+) -> None:
+    try:
+        await service.retry_latest_analysis(report_id)
+    except Exception as exc:
+        logger.exception(
+            "Web retry analysis for report %s failed: %s",
+            report_id,
+            type(exc).__name__,
+        )
+
+
+@secured_router.post(
+    "/reports/{report_id}/retry-analysis",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def retry_report_analysis(
+    report_id: int,
+    membership: Membership | None = Depends(current_membership),
+) -> dict[str, Any]:
+    report = await _require_report_visible(report_id, membership)
+    if report.status != MARKET_SCAN_PENDING_STATUS:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Этот отчёт не ожидает ИИ-анализа.",
+        )
+    task = asyncio.create_task(
+        _run_retry_analysis_job(MarketIntelligenceService(), report_id)
+    )
+    _market_scan_tasks.add(task)
+    task.add_done_callback(_market_scan_tasks.discard)
+    return {
+        "status": "accepted",
+        "message": "ИИ-анализ перезапущен.",
+        "report_id": report_id,
     }
 
 
@@ -1489,7 +1532,7 @@ async def settings(
     if not _visible_in_workspace(job.get("workspace_id"), membership):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Р—Р°РґР°РЅРёРµ Р°РЅР°Р»РёР·Р° СЂС‹РЅРєР° РЅРµ РЅР°Р№РґРµРЅРѕ.",
+            detail="Задание анализа рынка не найдено.",
         )
     return {
         "workspace_mode": "workspace" if membership is not None else "single",

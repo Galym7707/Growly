@@ -3850,3 +3850,17 @@ input:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* Fast cross-fade for language switching (View Transitions API) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 160ms;
+  animation-timing-function: ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}

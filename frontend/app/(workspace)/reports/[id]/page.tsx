@@ -32,6 +32,8 @@ export default function ReportPage() {
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const [routing, setRouting] = useState<null | "plan" | "post">(null);
   const { locale, t } = useLanguage();
   const { applyReport } = useActiveContext();
@@ -49,6 +51,7 @@ export default function ReportPage() {
 
   const load = useCallback(async () => {
     setError("");
+    setReloading(true);
     try {
       const response = await apiRequest<{ report: Report }>(
         `/reports/${params.id}?language=${encodeURIComponent(locale)}`,
@@ -56,12 +59,43 @@ export default function ReportPage() {
       setReport(response.report);
     } catch (value) {
       setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
+    } finally {
+      setReloading(false);
     }
   }, [locale, params.id, t]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const analysisPending = report?.status === "search_saved_analysis_pending";
+
+  useEffect(() => {
+    if (!retrying) return;
+    const timer = setInterval(() => {
+      void load();
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [retrying, load]);
+
+  useEffect(() => {
+    if (retrying && report && report.status !== "search_saved_analysis_pending") {
+      setRetrying(false);
+    }
+  }, [retrying, report]);
+
+  async function retryAnalysis() {
+    setRetrying(true);
+    setError("");
+    try {
+      await apiRequest(`/reports/${params.id}/retry-analysis`, {
+        method: "POST",
+      });
+    } catch (value) {
+      setRetrying(false);
+      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
+    }
+  }
 
   async function syncNotion() {
     setSyncing(true);
@@ -115,6 +149,9 @@ export default function ReportPage() {
           />
           <div className="report-layout">
             <main className="report-main">
+              {reloading ? (
+                <p className="muted">{t("Переводим отчёт…")}</p>
+              ) : null}
               <ReportView report={report} />
             </main>
             <aside className="report-aside">
@@ -152,6 +189,17 @@ export default function ReportPage() {
                 </a>
               ) : null}
               <div className="report-aside-actions">
+                {analysisPending ? (
+                  <button
+                    className="button button-primary button-wide"
+                    disabled={retrying}
+                    onClick={retryAnalysis}
+                    type="button"
+                  >
+                    <Icon name="sparkles" />
+                    {t(retrying ? "Анализируем…" : "Запустить ИИ-анализ")}
+                  </button>
+                ) : null}
                 <button
                   className="button button-secondary button-wide"
                   disabled={routing !== null}

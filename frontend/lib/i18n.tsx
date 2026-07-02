@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 
 export type Locale = "ru" | "en" | "kk";
 type Variables = Record<string, string | number>;
@@ -353,6 +354,9 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Действия": "Actions",
     "Конкуренты": "Competitors",
     "Сохранить в Notion": "Save to Notion",
+    "Запустить ИИ-анализ": "Run AI analysis",
+    "Анализируем…": "Analyzing…",
+    "Переводим отчёт…": "Translating the report…",
     "Сообщение": "Message",
     "Отправить": "Send",
     "Ошибка": "Error",
@@ -1230,6 +1234,9 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
     "Действия": "Әрекеттер",
     "Конкуренты": "Бәсекелестер",
     "Сохранить в Notion": "Notion-ға сақтау",
+    "Запустить ИИ-анализ": "AI талдауын іске қосу",
+    "Анализируем…": "Талдап жатырмыз…",
+    "Переводим отчёт…": "Есепті аударып жатырмыз…",
     "Сообщение": "Хабарлама",
     "Отправить": "Жіберу",
     "Ошибка": "Қате",
@@ -1816,10 +1823,23 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setLocale = useCallback((next: Locale) => {
-    setLocaleState(next);
-    window.localStorage.setItem("growly_locale", next);
-    document.cookie = `growly_locale=${next}; path=/; max-age=31536000; samesite=lax`;
-    document.documentElement.lang = next;
+    const apply = () => {
+      setLocaleState(next);
+      window.localStorage.setItem("growly_locale", next);
+      document.cookie = `growly_locale=${next}; path=/; max-age=31536000; samesite=lax`;
+      document.documentElement.lang = next;
+    };
+    // Cross-fade the language change when the browser supports it.
+    const transition = (
+      document as Document & {
+        startViewTransition?: (callback: () => void) => void;
+      }
+    ).startViewTransition;
+    if (typeof transition === "function") {
+      transition.call(document, () => flushSync(apply));
+    } else {
+      apply();
+    }
   }, []);
 
   const t = useCallback(

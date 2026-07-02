@@ -676,3 +676,17 @@ a { color: inherit; }
   .eyebrow { font-size: 11px; padding: 6px 12px; }
   .swipe-cta { width: 100%; }
 }
+
+/* Fast cross-fade for language switching (View Transitions API) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 160ms;
+  animation-timing-function: ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}

@@ -71,8 +71,18 @@
     localStorage.setItem('growly_lang', currentLang);
   }
 
+  function switchLang(lang) {
+    if (!lang || lang === currentLang) return;
+    // Cross-fade the language change when the browser supports it.
+    if (typeof document.startViewTransition === 'function') {
+      document.startViewTransition(() => applyLang(lang));
+    } else {
+      applyLang(lang);
+    }
+  }
+
   document.querySelectorAll('.lang-btn').forEach((btn) => {
-    btn.addEventListener('click', () => applyLang(btn.getAttribute('data-lang')));
+    btn.addEventListener('click', () => switchLang(btn.getAttribute('data-lang')));
   });
 
   const stored = localStorage.getItem('growly_lang');

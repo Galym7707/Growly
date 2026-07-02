@@ -230,6 +230,7 @@ export function formatStatusLabel(
   const labels: Record<Locale, Record<string, string>> = {
     ru: {
       active: "Активен",
+      analysis_pending: "Анализ ожидается",
       approved: "Согласован",
       canceled: "Отменён",
       cancelled: "Отменён",
@@ -245,6 +246,7 @@ export function formatStatusLabel(
       queued: "В очереди",
       ready: "Готов",
       rejected: "Отклонён",
+      search_saved_analysis_pending: "Источники сохранены, анализ ожидается",
       running: "Выполняется",
       scheduled: "Запланирован",
       submitted: "Отправлен",
@@ -252,6 +254,7 @@ export function formatStatusLabel(
     },
     en: {
       active: "Active",
+      analysis_pending: "Analysis pending",
       approved: "Approved",
       canceled: "Canceled",
       cancelled: "Canceled",
@@ -267,6 +270,7 @@ export function formatStatusLabel(
       queued: "Queued",
       ready: "Ready",
       rejected: "Rejected",
+      search_saved_analysis_pending: "Sources saved, analysis pending",
       running: "Running",
       scheduled: "Scheduled",
       submitted: "Submitted",
@@ -274,6 +278,7 @@ export function formatStatusLabel(
     },
     kk: {
       active: "Белсенді",
+      analysis_pending: "Талдау күтілуде",
       approved: "Бекітілді",
       canceled: "Бас тартылды",
       cancelled: "Бас тартылды",
@@ -289,6 +294,7 @@ export function formatStatusLabel(
       queued: "Кезекте",
       ready: "Дайын",
       rejected: "Қабылданбады",
+      search_saved_analysis_pending: "Дереккөздер сақталды, талдау күтілуде",
       running: "Орындалуда",
       scheduled: "Жоспарланған",
       submitted: "Жіберілді",
