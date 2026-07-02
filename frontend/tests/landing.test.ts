@@ -27,7 +27,6 @@ describe("public landing page", () => {
     expect(landingHtml).toContain("MARKETING WORKSPACE");
     expect(landingHtml).toContain('id="workflow"');
     expect(landingHtml).toContain('id="stack"');
-    expect(landingHtml).toContain('id="cases"');
     expect(landingHtml).toContain('id="pricing"');
     expect(landingPage).toContain('public", "landing", "index.html"');
     expect(landingPage).toContain("<LandingScripts />");

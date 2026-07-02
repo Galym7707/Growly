@@ -895,6 +895,23 @@ input:disabled {
   background: var(--green-soft);
   color: var(--green-dark);
   font-weight: 650;
+  overflow: hidden;
+  position: relative;
+}
+
+/* moving light sweep across the active row */
+.task-progress div.active::after {
+  animation: task-row-shimmer 1.9s ease-in-out infinite;
+  background: rgba(42, 138, 99, 0.12);
+  bottom: 0;
+  content: "";
+  filter: blur(14px);
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  transform: translateX(-120%);
+  width: 34%;
 }
 
 .task-progress div.done {
@@ -902,8 +919,108 @@ input:disabled {
 }
 
 .task-progress svg {
+  flex-shrink: 0;
   height: 17px;
   width: 17px;
+}
+
+.task-progress div.active svg {
+  animation: task-spin 0.9s linear infinite;
+}
+
+.task-progress div.done svg {
+  animation: task-check-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  color: var(--green-dark);
+}
+
+/* overall progress bar on top of the card */
+.task-progress-track {
+  background: var(--line);
+  display: block;
+  height: 3px;
+  overflow: hidden;
+}
+
+.task-progress-fill {
+  background: var(--green-dark, #1f6f50);
+  display: block;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.task-progress-fill::after {
+  animation: task-bar-sheen 1.4s linear infinite;
+  background: rgba(255, 255, 255, 0.5);
+  bottom: 0;
+  content: "";
+  filter: blur(3px);
+  left: 0;
+  position: absolute;
+  top: 0;
+  transform: translateX(-200%);
+  width: 30%;
+}
+
+/* animated ellipsis after the active step label */
+.task-step-dots::after {
+  animation: task-dots 1.4s steps(4, end) infinite;
+  content: "";
+  display: inline-block;
+  text-align: left;
+  width: 1.2em;
+}
+
+@keyframes task-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes task-row-shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  55%,
+  100% {
+    transform: translateX(340%);
+  }
+}
+
+@keyframes task-bar-sheen {
+  from {
+    transform: translateX(-200%);
+  }
+  to {
+    transform: translateX(450%);
+  }
+}
+
+@keyframes task-check-pop {
+  from {
+    opacity: 0.4;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes task-dots {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75% {
+    content: "...";
+  }
 }
 
 .feedback {

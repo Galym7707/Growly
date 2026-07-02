@@ -177,6 +177,14 @@ export default function MarketScanPage() {
       </form>
       {loading ? (
         <div className="task-progress" aria-live="polite">
+          <span className="task-progress-track">
+            <span
+              className="task-progress-fill"
+              style={{
+                width: `${Math.min(((activeStep + 0.5) / steps.length) * 100, 100)}%`,
+              }}
+            />
+          </span>
           {steps.map((step, index) => (
             <div
               className={
@@ -197,7 +205,9 @@ export default function MarketScanPage() {
                       : "chevron"
                 }
               />
-              {t(step)}
+              <span className={index === activeStep ? "task-step-dots" : undefined}>
+                {t(step)}
+              </span>
             </div>
           ))}
         </div>
