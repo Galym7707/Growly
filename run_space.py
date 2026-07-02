@@ -1,3 +1,5 @@
+"""Entrypoint for the HuggingFace Docker Space (runs the FastAPI web server)."""
+
 from __future__ import annotations
 
 import os
