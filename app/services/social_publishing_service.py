@@ -136,10 +136,16 @@ class SocialPublishingService:
         integration, rows, targets = await asyncio.to_thread(
             self._load_blotato_state, workspace
         )
-        configured = bool(integration and integration.api_key_encrypted)
-        configured = configured or self.blotato.api_key_configured()
+        workspace_key = bool(integration and integration.api_key_encrypted)
+        env_key = self.blotato.api_key_configured()
+        configured = workspace_key or env_key
         # "enabled" mirrors whether a usable key exists (UI- or env-supplied).
         enabled = configured
+        # The shared (server) subscription is active when the platform owner's
+        # env key is used and the workspace has not stored its own key. The UI
+        # then hides the key step entirely: users request account connections
+        # instead of bringing their own Blotato subscription.
+        shared_key_active = env_key and not workspace_key
         accounts = [self._account_to_dict(row) for row in rows]
         target_by_platform = {
             target.platform: target for target in targets if target.platform
@@ -166,6 +172,7 @@ class SocialPublishingService:
         return {
             "enabled": enabled,
             "api_key_configured": configured,
+            "shared_key_active": shared_key_active,
             "connected": connected,
             "accounts_count": accounts_count,
             "last_checked_at": last_checked_at,

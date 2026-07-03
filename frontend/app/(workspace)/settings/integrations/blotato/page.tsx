@@ -31,6 +31,12 @@ const STEPS = [
   "Для Facebook выберите страницу, для Pinterest укажите Board ID.",
 ];
 
+const SHARED_STEPS = [
+  "Нажмите «Запросить подключение» у нужной платформы и укажите логин аккаунта.",
+  "Команда Growly подключит аккаунт — обычно в течение рабочего дня.",
+  "Когда аккаунт появится в списке, выберите его и сохраните настройки.",
+];
+
 function emptyMapping(): MappingDraft {
   return { account_id: "", page_id: "" };
 }
@@ -55,6 +61,8 @@ export default function BlotatoSetupPage() {
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [noticeKind, setNoticeKind] = useState<"success" | "error">("success");
+  const [requestUsernames, setRequestUsernames] = useState<Record<string, string>>({});
+  const [requestedPlatforms, setRequestedPlatforms] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,6 +116,7 @@ export default function BlotatoSetupPage() {
   }, [accounts]);
 
   const readyCount = platforms.filter((platform) => platformReady(platform)).length;
+  const shared = Boolean(status?.shared_key_active);
 
   function flash(message: string, kind: "success" | "error" = "success") {
     setNotice(message);
@@ -197,6 +206,28 @@ export default function BlotatoSetupPage() {
     }
   }
 
+  async function requestConnection(platform: string) {
+    setBusy(`request-${platform}`);
+    setNotice("");
+    try {
+      await apiRequest("/integrations/social/request", {
+        method: "POST",
+        body: JSON.stringify({
+          platform,
+          username: (requestUsernames[platform] || "").trim() || null,
+        }),
+      });
+      setRequestedPlatforms((current) => ({ ...current, [platform]: true }));
+      flash(
+        t("Заявка отправлена. Мы подключим аккаунт, и он появится в этом списке."),
+      );
+    } catch (value) {
+      flash(errorMessage(value, t("Не удалось отправить заявку.")), "error");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function saveMappings() {
     setBusy("save");
     setNotice("");
@@ -247,58 +278,77 @@ export default function BlotatoSetupPage() {
         </div>
       ) : null}
 
-      <section className="integration-card integration-card-wide">
-        <div className="integration-card-head">
-          <div>
-            <p className="eyebrow">{t("Шаг 1")}</p>
-            <h2>{t("Ключ Blotato")}</h2>
+      {shared ? (
+        <section className="integration-card integration-card-wide">
+          <div className="integration-card-head">
+            <div>
+              <p className="eyebrow">{t("Публикация")}</p>
+              <h2>{t("Публикация включена через Growly")}</h2>
+            </div>
+            <Status value="active">{t("Подключено")}</Status>
           </div>
-          <Status value={status?.enabled ? "active" : "disabled"}>
-            {status?.enabled ? t("Ключ сохранён") : t("Ключ не сохранён")}
-          </Status>
-        </div>
-        <p className="muted">
-          {t("Ключ нужен только backend-части Growly. Мы сохраняем его зашифрованным и никогда не показываем обратно в интерфейсе.")}
-        </p>
-        <div className="secret-connect-row">
-          <label>
-            <span>{t("Blotato API key")}</span>
-            <input
-              autoComplete="off"
-              onChange={(event) => setApiKey(event.target.value)}
-              placeholder="blotato_..."
-              type="password"
-              value={apiKey}
-            />
-          </label>
-          <button
-            className="button button-primary"
-            disabled={busy !== ""}
-            onClick={connect}
-            type="button"
-          >
-            {busy === "connect" ? t("Проверяем") : status?.enabled ? t("Заменить ключ") : t("Подключить")}
-          </button>
-          {status?.enabled ? (
+          <p className="muted">
+            {t("Свой ключ и сторонние сервисы не нужны: Growly публикует через собственную подписку. Просто запросите подключение нужных аккаунтов ниже.")}
+          </p>
+        </section>
+      ) : (
+        <section className="integration-card integration-card-wide">
+          <div className="integration-card-head">
+            <div>
+              <p className="eyebrow">{t("Шаг 1")}</p>
+              <h2>{t("Ключ Blotato")}</h2>
+            </div>
+            <Status value={status?.enabled ? "active" : "disabled"}>
+              {status?.enabled ? t("Ключ сохранён") : t("Ключ не сохранён")}
+            </Status>
+          </div>
+          <p className="muted">
+            {t("Ключ нужен только backend-части Growly. Мы сохраняем его зашифрованным и никогда не показываем обратно в интерфейсе.")}
+          </p>
+          <div className="secret-connect-row">
+            <label>
+              <span>{t("Blotato API key")}</span>
+              <input
+                autoComplete="off"
+                onChange={(event) => setApiKey(event.target.value)}
+                placeholder="blotato_..."
+                type="password"
+                value={apiKey}
+              />
+            </label>
             <button
-              className="button button-secondary"
+              className="button button-primary"
               disabled={busy !== ""}
-              onClick={disconnect}
+              onClick={connect}
               type="button"
             >
-              {busy === "disconnect" ? t("Отключаем") : t("Отключить")}
+              {busy === "connect" ? t("Проверяем") : status?.enabled ? t("Заменить ключ") : t("Подключить")}
             </button>
-          ) : null}
-        </div>
-      </section>
+            {status?.enabled ? (
+              <button
+                className="button button-secondary"
+                disabled={busy !== ""}
+                onClick={disconnect}
+                type="button"
+              >
+                {busy === "disconnect" ? t("Отключаем") : t("Отключить")}
+              </button>
+            ) : null}
+          </div>
+        </section>
+      )}
 
       <section className="form-panel">
         <div className="section-heading">
           <h2>{t("Как подключить соцсети")}</h2>
-          <p className="muted">{t("Growly работает с теми аккаунтами, которые уже подключены внутри Blotato.")}</p>
+          <p className="muted">
+            {shared
+              ? t("Опишите, какие аккаунты нужны, — команда Growly подключит их за вас.")
+              : t("Growly работает с теми аккаунтами, которые уже подключены внутри Blotato.")}
+          </p>
         </div>
         <ol className="setup-checklist">
-          {STEPS.map((step, index) => (
+          {(shared ? SHARED_STEPS : STEPS).map((step, index) => (
             <li key={step}>
               <span className="setup-step-index">{index + 1}</span>
               {t(step)}
@@ -335,7 +385,9 @@ export default function BlotatoSetupPage() {
         ) : null}
         {status?.enabled && accounts.length === 0 ? (
           <p className="plan-note plan-note-muted">
-            {t("Аккаунты не найдены. Подключите соцсети в Blotato и нажмите «Обновить аккаунты».")}
+            {shared
+              ? t("Аккаунты ещё не подключены. Запросите подключение нужной платформы ниже — это бесплатно и не требует регистрации в сторонних сервисах.")
+              : t("Аккаунты не найдены. Подключите соцсети в Blotato и нажмите «Обновить аккаунты».")}
           </p>
         ) : null}
 
@@ -412,6 +464,40 @@ export default function BlotatoSetupPage() {
                         value={mapping.page_id}
                       />
                     </label>
+                  ) : null}
+
+                  {shared && !options.length ? (
+                    requestedPlatforms[platform.slug] ? (
+                      <p className="mapping-helper">
+                        {t("Заявка отправлена. Аккаунт появится здесь после подключения.")}
+                      </p>
+                    ) : (
+                      <div className="secret-connect-row">
+                        <label>
+                          <span>{t("Логин или ссылка на аккаунт")}</span>
+                          <input
+                            onChange={(event) =>
+                              setRequestUsernames((current) => ({
+                                ...current,
+                                [platform.slug]: event.target.value,
+                              }))
+                            }
+                            placeholder="@username"
+                            value={requestUsernames[platform.slug] || ""}
+                          />
+                        </label>
+                        <button
+                          className="button button-secondary"
+                          disabled={busy !== ""}
+                          onClick={() => requestConnection(platform.slug)}
+                          type="button"
+                        >
+                          {busy === `request-${platform.slug}`
+                            ? t("Отправляем")
+                            : t("Запросить подключение")}
+                        </button>
+                      </div>
+                    )
                   ) : null}
                 </div>
               </div>

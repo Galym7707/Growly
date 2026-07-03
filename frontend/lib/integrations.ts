@@ -19,6 +19,7 @@ export type IntegrationsStatus = {
 export type BlotatoStatus = {
   enabled: boolean;
   api_key_configured: boolean;
+  shared_key_active?: boolean;
   connected: boolean;
   accounts_count: number;
   last_checked_at: string | null;
