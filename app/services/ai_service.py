@@ -5,6 +5,7 @@ import logging
 from typing import Any, Protocol
 
 from app.config import Settings, get_settings
+from app.services.gemini_service import GeminiService
 from app.services.github_models_service import GitHubModelsService
 from app.services.groq_service import GroqService
 from app.utils.errors import AIServiceError, ConfigurationError
@@ -41,10 +42,12 @@ class AIService:
         *,
         github_models: TextGenerationProvider | None = None,
         groq: TextGenerationProvider | None = None,
+        gemini: TextGenerationProvider | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.github_models = github_models or GitHubModelsService(self.settings)
         self.groq = groq or GroqService(self.settings)
+        self.gemini = gemini or GeminiService(self.settings)
         self.last_provider_name: str | None = None
         self.last_model_name: str | None = None
 
@@ -150,9 +153,11 @@ class AIService:
             return self.github_models
         if name == "groq":
             return self.groq
+        if name == "gemini":
+            return self.gemini
         raise ConfigurationError(
             f"Unsupported AI provider {name!r}. "
-            "Use 'github_models' or 'groq'."
+            "Use 'github_models', 'groq' or 'gemini'."
         )
 
     def _provider_is_configured(self, name: str) -> bool:
@@ -170,6 +175,13 @@ class AIService:
                 and key.get_secret_value().strip()
                 and self.settings.groq_model.strip()
             )
+        if name == "gemini":
+            service = self.gemini
+            configured = getattr(service, "is_configured", None)
+            if callable(configured):
+                return bool(configured())
+            key = self.settings.gemini_api_key
+            return bool(key and key.get_secret_value().strip())
         return False
 
     def _mark_success(self, provider_name: str) -> None:
@@ -179,9 +191,9 @@ class AIService:
     @staticmethod
     def _normalize_provider(value: str, env_name: str) -> str:
         normalized = (value or "").strip().lower()
-        if normalized not in {"github_models", "groq"}:
+        if normalized not in {"github_models", "groq", "gemini"}:
             raise ConfigurationError(
-                f"{env_name} must be 'github_models' or 'groq'."
+                f"{env_name} must be 'github_models', 'groq' or 'gemini'."
             )
         return normalized
 

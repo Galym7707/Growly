@@ -48,6 +48,15 @@ class Settings(BaseSettings):
         default="openai/gpt-5-mini",
         alias="GITHUB_MODELS_MODEL",
     )
+    gemini_api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
+    gemini_base_url: str = Field(
+        default="https://generativelanguage.googleapis.com/v1beta/openai",
+        alias="GEMINI_BASE_URL",
+    )
+    gemini_model: str = Field(
+        default="gemini-3.5-flash",
+        alias="GEMINI_MODEL",
+    )
     ai_primary_provider: str = Field(
         default="github_models",
         alias="AI_PRIMARY_PROVIDER",
@@ -239,6 +248,9 @@ class Settings(BaseSettings):
             "GITHUB_MODELS_TOKEN",
         )
 
+    def gemini_key(self) -> str:
+        return self.require_secret("gemini_api_key", "GEMINI_API_KEY")
+
     def ai_model_name(self, provider: str | None = None) -> str:
         provider_name = (provider or self.ai_primary_provider).strip().lower()
         if provider_name == "github_models":
@@ -248,9 +260,11 @@ class Settings(BaseSettings):
             )
         if provider_name == "groq":
             return self.require_text("groq_model", "GROQ_MODEL")
+        if provider_name == "gemini":
+            return self.require_text("gemini_model", "GEMINI_MODEL")
         raise ConfigurationError(
             f"Unsupported AI provider {provider_name!r}. "
-            "Use 'github_models' or 'groq'."
+            "Use 'github_models', 'groq' or 'gemini'."
         )
 
     def tavily_key(self) -> str:
