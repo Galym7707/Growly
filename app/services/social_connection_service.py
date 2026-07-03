@@ -19,6 +19,7 @@ from app.database import session_scope
 from app.models import SocialAccount, SocialConnectionRequest
 from app.repositories.integrations_repo import IntegrationsRepository
 from app.services.blotato_service import BlotatoService
+from app.services.email_service import EmailService
 from app.services.social_publishing_service import normalize_workspace
 from app.utils.errors import BlotatoServiceError, GrowlyError
 
@@ -39,9 +40,11 @@ class SocialConnectionService:
         self,
         settings: Settings | None = None,
         blotato: BlotatoService | None = None,
+        email_service: EmailService | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.blotato = blotato or BlotatoService(self.settings)
+        self.email_service = email_service or EmailService(self.settings)
 
     # -- serialization -----------------------------------------------------
 
@@ -131,23 +134,46 @@ class SocialConnectionService:
         workspace = normalize_workspace(workspace_id)
         slug = (platform or "instagram").strip().lower()
 
-        def run() -> None:
+        def run() -> dict[str, Any] | None:
             with session_scope() as session:
                 repo = IntegrationsRepository(session)
                 if repo.connected_account(workspace, slug):
                     raise GrowlyError("Этот аккаунт уже подключён.")
                 existing = repo.latest_request(workspace, slug)
                 if existing and existing.status in ACTIVE_REQUEST_STATES:
-                    return  # idempotent: an active request already exists
-                repo.create_request(
+                    return None  # idempotent: an active request already exists
+                request = repo.create_request(
                     workspace_id=workspace,
                     user_email=user_email,
                     platform=slug,
                     requested_username=(username or "").strip() or None,
                 )
+                return self._request_payload(request)
 
-        await asyncio.to_thread(run)
+        request_payload = await asyncio.to_thread(run)
+        if request_payload is not None:
+            await asyncio.to_thread(
+                self._notify_admins_about_request, request_payload
+            )
         return await self.status(workspace, slug)
+
+    def _notify_admins_about_request(self, request: dict[str, Any]) -> None:
+        admin_emails = self.settings.admin_email_set()
+        if not admin_emails:
+            return
+        admin_url = None
+        base_url = (self.settings.app_base_url or "").strip().rstrip("/")
+        if base_url:
+            admin_url = f"{base_url}/admin/integrations/blotato"
+        for email in sorted(admin_emails):
+            self.email_service.send_social_connection_request(
+                to_email=email,
+                platform=str(request.get("platform") or "instagram"),
+                workspace_id=request.get("workspace_id"),
+                user_email=request.get("user_email"),
+                requested_username=request.get("requested_username"),
+                admin_url=admin_url,
+            )
 
     async def cancel_request(
         self, workspace_id: str | None, request_id: int

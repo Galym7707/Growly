@@ -76,6 +76,77 @@ def _patch_repo(monkeypatch, *, account=None, request=None) -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_request_notifies_admins(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "admin_emails", "owner@growly.app")
+    monkeypatch.setattr(settings, "app_base_url", "https://growly.example")
+    created_request = SimpleNamespace(
+        id=9,
+        workspace_id="ws-1",
+        user_email="user@example.com",
+        platform="instagram",
+        requested_username="@brand",
+        status="pending",
+        admin_note=None,
+        user_note=None,
+        created_at=None,
+        resolved_at=None,
+    )
+
+    @contextmanager
+    def fake_scope():
+        yield SimpleNamespace()
+
+    monkeypatch.setattr(
+        "app.services.social_connection_service.session_scope", fake_scope
+    )
+
+    state = {"request": None}
+
+    class FakeRepo:
+        def __init__(self, session) -> None:
+            pass
+
+        def connected_account(self, workspace, platform):
+            return None
+
+        def latest_request(self, workspace, platform):
+            return state["request"]
+
+        def create_request(self, **kwargs):
+            state["request"] = created_request
+            return created_request
+
+    sent: list[dict] = []
+
+    class FakeEmail:
+        def send_social_connection_request(self, **kwargs):
+            sent.append(kwargs)
+            return True
+
+    monkeypatch.setattr(
+        "app.services.social_connection_service.IntegrationsRepository",
+        FakeRepo,
+    )
+    service = SocialConnectionService(settings=settings, email_service=FakeEmail())
+    result = await service.create_request(
+        "ws-1", "user@example.com", "instagram", "@brand"
+    )
+
+    assert result["state"] == "pending"
+    assert sent == [
+        {
+            "to_email": "owner@growly.app",
+            "platform": "instagram",
+            "workspace_id": "ws-1",
+            "user_email": "user@example.com",
+            "requested_username": "@brand",
+            "admin_url": "https://growly.example/admin/integrations/blotato",
+        }
+    ]
+
+
+@pytest.mark.asyncio
 async def test_status_not_connected(monkeypatch) -> None:
     _patch_repo(monkeypatch, account=None, request=None)
     result = await SocialConnectionService().status("ws-1", "instagram")

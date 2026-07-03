@@ -55,6 +55,45 @@ class EmailService:
             logger.warning("Could not send invitation email: %s", type(exc).__name__)
             return False
 
+    def send_social_connection_request(
+        self,
+        *,
+        to_email: str,
+        platform: str,
+        workspace_id: str | None,
+        user_email: str | None,
+        requested_username: str | None,
+        admin_url: str | None,
+    ) -> bool:
+        """Notify an admin about a new social account connection request."""
+        if not self.is_configured():
+            return False
+        message = EmailMessage()
+        message["Subject"] = f"Growly: new {platform} connection request"
+        message["From"] = self.settings.smtp_from or ""
+        message["To"] = to_email
+
+        lines = [
+            "A Growly user requested a social account connection.",
+            "",
+            f"Platform: {platform}",
+            f"Workspace: {workspace_id or '-'}",
+            f"User email: {user_email or '-'}",
+            f"Requested username: {requested_username or '-'}",
+        ]
+        if admin_url:
+            lines.extend(["", f"Open admin panel: {admin_url}"])
+        message.set_content("\n".join(lines))
+        try:
+            self._deliver(message)
+            return True
+        except Exception as exc:  # noqa: BLE001 - email is best-effort
+            logger.warning(
+                "Could not send social connection request email: %s",
+                type(exc).__name__,
+            )
+            return False
+
     def _deliver(self, message: EmailMessage) -> None:
         host = self.settings.smtp_host or ""
         port = self.settings.smtp_port
