@@ -496,6 +496,50 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
       "For example: calm, specific, without exaggerated claims",
     "Не удалось войти. Проверьте почту и пароль.":
       "Sign-in failed. Check your email and password.",
+    "Регистрация":
+      "Sign up",
+    "Нет аккаунта? Зарегистрироваться":
+      "No account? Sign up",
+    "Уже есть аккаунт? Войти":
+      "Already have an account? Sign in",
+    "Создать рабочую область":
+      "Create a workspace",
+    "Создаём аккаунт":
+      "Creating your account",
+    "Создайте аккаунт, чтобы работать только со своими данными.":
+      "Create an account to work with your own data only.",
+    "Откройте Blotato и подключите нужные соцсети там.":
+      "Open Blotato and connect the social networks you need there.",
+    "Скопируйте API key Blotato и вставьте его в Growly.":
+      "Copy the Blotato API key and paste it into Growly.",
+    "Обновите аккаунты и выберите аккаунт для каждой платформы.":
+      "Refresh the accounts and pick one for each platform.",
+    "Для Facebook выберите страницу, для Pinterest укажите Board ID.":
+      "For Facebook select a page; for Pinterest enter the Board ID.",
+    "Добавьте изображение или видео для публикации в Instagram.":
+      "Add an image or video to publish to Instagram.",
+    "У вашего аккаунта нет доступа к этому workspace.":
+      "Your account has no access to this workspace.",
+    "Опубликовано":
+      "Published",
+    "Не удалось сгенерировать":
+      "Generation failed",
+    "Требуется вход в Growly.":
+      "You need to sign in to Growly.",
+    "Подтвердите email, чтобы продолжить работу в Growly.":
+      "Confirm your email to continue using Growly.",
+    "В аккаунте Supabase нет подтвержденного email.":
+      "The Supabase account has no confirmed email.",
+    "Не удалось подключиться к Growly API. Проверьте адрес бэкенда и его состояние.":
+      "Could not reach the Growly API. Check the backend address and its status.",
+    "@channel или chat ID":
+      "@channel or chat ID",
+    "URL или ID без API-ключа":
+      "URL or ID without an API key",
+    "Сайт":
+      "Website",
+    "Supabase Auth не настроен.":
+      "Supabase Auth is not configured.",
     "или": "or",
     "Продолжить с Google": "Continue with Google",
     "Не удалось открыть вход через Google. Попробуйте позже.":
@@ -1558,6 +1602,50 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
       "Мысалы: сабырлы, нақты, асыра уәде бермей",
     "Не удалось войти. Проверьте почту и пароль.":
       "Кіру мүмкін болмады. Пошта мен құпиясөзді тексеріңіз.",
+    "Регистрация":
+      "Тіркелу",
+    "Нет аккаунта? Зарегистрироваться":
+      "Аккаунт жоқ па? Тіркелу",
+    "Уже есть аккаунт? Войти":
+      "Аккаунт бар ма? Кіру",
+    "Создать рабочую область":
+      "Жұмыс кеңістігін құру",
+    "Создаём аккаунт":
+      "Аккаунт құрылып жатыр",
+    "Создайте аккаунт, чтобы работать только со своими данными.":
+      "Тек өз деректеріңізбен жұмыс істеу үшін аккаунт құрыңыз.",
+    "Откройте Blotato и подключите нужные соцсети там.":
+      "Blotato ашып, керек әлеуметтік желілерді сол жерде қосыңыз.",
+    "Скопируйте API key Blotato и вставьте его в Growly.":
+      "Blotato API кілтін көшіріп, Growly-ге қойыңыз.",
+    "Обновите аккаунты и выберите аккаунт для каждой платформы.":
+      "Аккаунттарды жаңартып, әр платформа үшін аккаунт таңдаңыз.",
+    "Для Facebook выберите страницу, для Pinterest укажите Board ID.":
+      "Facebook үшін бетті таңдаңыз, Pinterest үшін Board ID енгізіңіз.",
+    "Добавьте изображение или видео для публикации в Instagram.":
+      "Instagram-да жариялау үшін сурет немесе бейне қосыңыз.",
+    "У вашего аккаунта нет доступа к этому workspace.":
+      "Аккаунтыңыздың бұл workspace-ке қатынасы жоқ.",
+    "Опубликовано":
+      "Жарияланды",
+    "Не удалось сгенерировать":
+      "Жасау мүмкін болмады",
+    "Требуется вход в Growly.":
+      "Growly-ге кіру қажет.",
+    "Подтвердите email, чтобы продолжить работу в Growly.":
+      "Growly-де жұмысты жалғастыру үшін email-ды растаңыз.",
+    "В аккаунте Supabase нет подтвержденного email.":
+      "Supabase аккаунтында расталған email жоқ.",
+    "Не удалось подключиться к Growly API. Проверьте адрес бэкенда и его состояние.":
+      "Growly API-ге қосылу мүмкін болмады. Backend мекенжайы мен күйін тексеріңіз.",
+    "@channel или chat ID":
+      "@channel немесе chat ID",
+    "URL или ID без API-ключа":
+      "API кілтінсіз URL немесе ID",
+    "Сайт":
+      "Сайт",
+    "Supabase Auth не настроен.":
+      "Supabase Auth бапталмаған.",
     "или": "немесе",
     "Продолжить с Google": "Google арқылы жалғастыру",
     "Не удалось открыть вход через Google. Попробуйте позже.":

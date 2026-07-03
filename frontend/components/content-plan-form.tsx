@@ -303,7 +303,7 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
           {channelOptions.map((option) => (
             <Chip
               key={option.value}
-              label={option.label}
+              label={t(option.label)}
               selected={channels.includes(option.value)}
               onClick={() => toggleChannel(option.value)}
             />

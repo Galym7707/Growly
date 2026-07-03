@@ -152,7 +152,7 @@ export default function SettingsPage() {
                 onChange={(event) =>
                   update("business_telegram_channel", event.target.value)
                 }
-                placeholder="@channel или chat ID"
+                placeholder={t("@channel или chat ID")}
                 value={values.business_telegram_channel || ""}
               />
             </label>
@@ -162,7 +162,7 @@ export default function SettingsPage() {
                 onChange={(event) =>
                   update("business_notion_root", event.target.value)
                 }
-                placeholder="URL или ID без API-ключа"
+                placeholder={t("URL или ID без API-ключа")}
                 value={values.business_notion_root || ""}
               />
             </label>
