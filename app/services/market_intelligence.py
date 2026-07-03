@@ -543,25 +543,23 @@ class MarketIntelligenceService:
             )
             await self._set_job_step(job_id, batch_step)
             await self._emit_progress(progress, batch_step)
-            response = await asyncio.wait_for(
-                self.ai.analyze_market_search(
-                    {
-                        "query": query,
-                        "batch_number": batch_number,
-                        "language": output_language,
-                        "output_language": output_language,
-                        "source_items": [
-                            self._compact_source_item(item) for item in batch
-                        ],
-                        "limitations": (
-                            "These are saved public web search results only. No private "
-                            "social-media or platform analytics are available."
-                        ),
-                    }
+            batch_context = {
+                "query": query,
+                "batch_number": batch_number,
+                "language": output_language,
+                "output_language": output_language,
+                "source_items": [
+                    self._compact_source_item(item) for item in batch
+                ],
+                "limitations": (
+                    "These are saved public web search results only. No private "
+                    "social-media or platform analytics are available."
                 ),
-                timeout=GROQ_GENERATION_TIMEOUT_SECONDS,
+            }
+            payload = await self._generate_json_dict(
+                lambda: self.ai.analyze_market_search(batch_context),
+                "Market search analysis",
             )
-            payload = self._parse_dict(response, "Market search analysis")
             payload["source_items"] = [
                 row
                 for row in payload.get("source_items", [])
@@ -606,28 +604,26 @@ class MarketIntelligenceService:
         aggregate_summary = self._batch_summary(
             self._merge_batch_analyses(batch_summaries or [])
         )
-        response = await asyncio.wait_for(
-            self.ai.generate_market_scan(
+        scan_context = {
+            "query": query,
+            "saved_source_item_batch_summary": aggregate_summary,
+            "source_evidence": [
                 {
-                    "query": query,
-                    "saved_source_item_batch_summary": aggregate_summary,
-                    "source_evidence": [
-                        {
-                            "id": item.get("id"),
-                            "title": str(item.get("title") or "")[:160],
-                            "url": str(item.get("url") or "")[:500],
-                        }
-                        for item in saved_source_items
-                    ],
-                    "sources_count": len(saved_source_items),
-                    "generated_at": datetime.now(UTC).isoformat(),
-                    "language": output_language,
-                    "output_language": output_language,
+                    "id": item.get("id"),
+                    "title": str(item.get("title") or "")[:160],
+                    "url": str(item.get("url") or "")[:500],
                 }
-            ),
-            timeout=GROQ_GENERATION_TIMEOUT_SECONDS,
+                for item in saved_source_items
+            ],
+            "sources_count": len(saved_source_items),
+            "generated_at": datetime.now(UTC).isoformat(),
+            "language": output_language,
+            "output_language": output_language,
+        }
+        payload = await self._generate_json_dict(
+            lambda: self.ai.generate_market_scan(scan_context),
+            "Market scan",
         )
-        payload = self._parse_dict(response, "Market scan")
         payload = self._sanitize_report_payload(payload)
         payload["sources_checked"] = len(saved_source_items)
         return payload
@@ -652,11 +648,10 @@ class MarketIntelligenceService:
                 "Нет сохранённых материалов источников. Сначала выполните "
                 "анализ рынка."
             )
-        response = await asyncio.wait_for(
-            self.ai.generate_competitor_report(context),
-            timeout=GROQ_GENERATION_TIMEOUT_SECONDS,
+        payload = await self._generate_json_dict(
+            lambda: self.ai.generate_competitor_report(context),
+            "Competitor report",
         )
-        payload = self._parse_dict(response, "Competitor report")
         payload = self._sanitize_report_payload(payload)
         allowed_urls = [
             str(row["url"])
@@ -1030,8 +1025,42 @@ class MarketIntelligenceService:
     def _parse_dict(response: str, label: str) -> dict[str, Any]:
         payload = parse_json_response(response)
         if not isinstance(payload, dict):
-            raise AIServiceError(f"{label} response was not a JSON object.")
+            raise AIServiceError(
+                f"{label} response was not a JSON object.",
+                reason="invalid_response",
+            )
         return payload
+
+    async def _generate_json_dict(
+        self,
+        generate: Any,
+        label: str,
+        *,
+        attempts: int = 2,
+    ) -> dict[str, Any]:
+        """Run an AI generation and parse the JSON, regenerating once when
+        the model returns malformed or truncated JSON."""
+        last_error: AIServiceError | None = None
+        for attempt in range(1, attempts + 1):
+            response = await asyncio.wait_for(
+                generate(),
+                timeout=GROQ_GENERATION_TIMEOUT_SECONDS,
+            )
+            try:
+                return self._parse_dict(response, label)
+            except AIServiceError as exc:
+                if exc.reason != "invalid_response":
+                    raise
+                last_error = exc
+                logger.warning(
+                    "%s returned invalid JSON (attempt %d/%d).",
+                    label,
+                    attempt,
+                    attempts,
+                )
+        raise last_error if last_error else AIServiceError(
+            f"{label} generation failed.",
+        )
 
     @staticmethod
     def _deduplicate_results(results: list[SearchResult]) -> list[SearchResult]:

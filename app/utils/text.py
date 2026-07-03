@@ -37,16 +37,36 @@ def strip_code_fence(value: str) -> str:
 
 
 def parse_json_response(value: str) -> Any:
+    """Parse an AI JSON reply, tolerating code fences and surrounding prose.
+
+    Truncated or malformed output raises AIServiceError (reason
+    "invalid_response") instead of a bare JSONDecodeError, so pipelines
+    report a readable failure and can retry the generation.
+    """
+    from app.utils.errors import AIServiceError
+
     text = strip_code_fence(value)
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
         start_candidates = [index for index in (text.find("{"), text.find("[")) if index >= 0]
         if not start_candidates:
-            raise
+            raise AIServiceError(
+                "The AI response was not valid JSON.",
+                reason="invalid_response",
+            ) from exc
         start = min(start_candidates)
         end = max(text.rfind("}"), text.rfind("]"))
         if end <= start:
-            raise
-        return json.loads(text[start : end + 1])
+            raise AIServiceError(
+                "The AI response was not valid JSON.",
+                reason="invalid_response",
+            ) from exc
+        try:
+            return json.loads(text[start : end + 1])
+        except json.JSONDecodeError as inner:
+            raise AIServiceError(
+                "The AI response was not valid JSON (likely truncated).",
+                reason="invalid_response",
+            ) from inner
 

@@ -174,7 +174,7 @@ class ContentPlanService:
             "Шаг 3/4: генерирую контент-план...",
         )
         try:
-            response = await self.ai.generate_content_plan(context)
+            payload = await self._generate_plan_payload(context)
         except AIServiceError as exc:
             if exc.status != 413:
                 raise
@@ -183,12 +183,9 @@ class ContentPlanService:
                 "Content plan payload was rejected with 413; retrying with "
                 "report-summary-only context."
             )
-            response = await self.ai.generate_content_plan(
+            payload = await self._generate_plan_payload(
                 self._summary_only_context(context)
             )
-        payload = parse_json_response(response)
-        if not isinstance(payload, list):
-            raise AIServiceError("The content plan response was not a JSON array.")
         normalized = [
             self._normalize_item(item) for item in payload if isinstance(item, dict)
         ]
@@ -217,6 +214,37 @@ class ContentPlanService:
         await self._emit_progress(progress, "Готово.")
         return items
 
+    async def _generate_plan_payload(
+        self,
+        context: dict[str, Any],
+        *,
+        attempts: int = 2,
+    ) -> list[Any]:
+        """Generate the weekly plan, regenerating once on malformed JSON."""
+        last_error: AIServiceError | None = None
+        for attempt in range(1, attempts + 1):
+            response = await self.ai.generate_content_plan(context)
+            try:
+                payload = parse_json_response(response)
+                if not isinstance(payload, list):
+                    raise AIServiceError(
+                        "The content plan response was not a JSON array.",
+                        reason="invalid_response",
+                    )
+                return payload
+            except AIServiceError as exc:
+                if exc.reason != "invalid_response":
+                    raise
+                last_error = exc
+                logger.warning(
+                    "Content plan returned invalid JSON (attempt %d/%d).",
+                    attempt,
+                    attempts,
+                )
+        raise last_error if last_error else AIServiceError(
+            "Content plan generation failed.",
+        )
+
     async def _build_bounded_context(
         self,
         data: dict[str, Any],
@@ -239,21 +267,15 @@ class ContentPlanService:
             start=1,
         ):
             batch = source_items[start : start + CONTENT_PLAN_BATCH_SIZE]
-            response = await self.ai.summarize_content_plan_sources(
-                {
-                    "batch_number": batch_number,
-                    "language": data.get("language"),
-                    "output_language": data.get("language"),
-                    "source_items": [
-                        self._compact_source_item(item) for item in batch
-                    ],
-                }
-            )
-            parsed = parse_json_response(response)
-            if not isinstance(parsed, dict):
-                raise AIServiceError(
-                    "Content plan source summary was not a JSON object."
-                )
+            batch_context = {
+                "batch_number": batch_number,
+                "language": data.get("language"),
+                "output_language": data.get("language"),
+                "source_items": [
+                    self._compact_source_item(item) for item in batch
+                ],
+            }
+            parsed = await self._summarize_sources_payload(batch_context)
             parsed.pop("raw_json", None)
             parsed["evidence_urls"] = self._list(parsed.get("evidence_urls"))[
                 :CONTENT_PLAN_MAX_EVIDENCE_URLS
@@ -269,6 +291,37 @@ class ContentPlanService:
         data["source_items"] = []
         data["source_batch_summaries"] = batch_summaries
         return data
+
+    async def _summarize_sources_payload(
+        self,
+        context: dict[str, Any],
+        *,
+        attempts: int = 2,
+    ) -> dict[str, Any]:
+        """Summarize a source batch, regenerating once on malformed JSON."""
+        last_error: AIServiceError | None = None
+        for attempt in range(1, attempts + 1):
+            response = await self.ai.summarize_content_plan_sources(context)
+            try:
+                parsed = parse_json_response(response)
+                if not isinstance(parsed, dict):
+                    raise AIServiceError(
+                        "Content plan source summary was not a JSON object.",
+                        reason="invalid_response",
+                    )
+                return parsed
+            except AIServiceError as exc:
+                if exc.reason != "invalid_response":
+                    raise
+                last_error = exc
+                logger.warning(
+                    "Source summary returned invalid JSON (attempt %d/%d).",
+                    attempt,
+                    attempts,
+                )
+        raise last_error if last_error else AIServiceError(
+            "Content plan source summary generation failed.",
+        )
 
     @staticmethod
     def _compact_source_item(item: SourceItem) -> dict[str, Any]:
