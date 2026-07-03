@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { Logo } from "@/components/logo";
@@ -35,6 +35,12 @@ function LoginContent() {
   const configured = isSupabaseConfigured();
   const localModeAllowed = isLocalAuthBypassAllowed();
   const { t } = useLanguage();
+
+  useEffect(() => {
+    if (searchParams.get("error") === "oauth") {
+      setError(t("Не удалось войти через Google. Попробуйте ещё раз."));
+    }
+  }, [searchParams, t]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -119,6 +125,26 @@ function LoginContent() {
     router.refresh();
   }
 
+  async function signInWithGoogle() {
+    if (!configured) return;
+    const nextPath = getSafeNextPath(searchParams.get("next"));
+    setLoading(true);
+    setError("");
+    setNotice("");
+    const supabase = createClient();
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
+      },
+    });
+    if (oauthError) {
+      setLoading(false);
+      setError(t("Не удалось открыть вход через Google. Попробуйте позже."));
+    }
+    // On success the browser navigates away to Google.
+  }
+
   return (
     <main className="auth-page">
       <div className="auth-brand">
@@ -199,6 +225,22 @@ function LoginContent() {
             <Icon name="arrow" />
           </button>
           {configured ? (
+            <>
+              <div className="auth-divider">
+                <span>{t("или")}</span>
+              </div>
+              <button
+                className="button button-secondary button-wide auth-google"
+                disabled={loading}
+                onClick={signInWithGoogle}
+                type="button"
+              >
+                <GoogleMark />
+                {t("Продолжить с Google")}
+              </button>
+            </>
+          ) : null}
+          {configured ? (
             <button
               className="auth-switch"
               onClick={() => {
@@ -223,6 +265,29 @@ function LoginContent() {
         </form>
       </div>
     </main>
+  );
+}
+
+function GoogleMark() {
+  return (
+    <svg aria-hidden="true" height="18" viewBox="0 0 48 48" width="18">
+      <path
+        d="M44 24.5c0-1.6-.1-2.8-.4-4H24v7.6h11.4c-.2 1.9-1.5 4.8-4.4 6.7l-.04.27 6.4 4.96.44.04C41.9 35.9 44 30.7 44 24.5z"
+        fill="#4285F4"
+      />
+      <path
+        d="M24 44c5.9 0 10.9-1.9 14.5-5.3l-6.9-5.3c-1.9 1.3-4.5 2.3-7.6 2.3-5.8 0-10.7-3.9-12.5-9.2l-.25.02-6.65 5.16-.09.24C8 39.5 15.4 44 24 44z"
+        fill="#34A853"
+      />
+      <path
+        d="M11.5 26.5c-.5-1.4-.7-2.9-.7-4.5s.3-3.1.7-4.5l-.02-.3-6.74-5.24-.22.1A19.9 19.9 0 002 22c0 3.2.8 6.3 2.2 9l7.3-4.5z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M24 9.8c4.1 0 6.9 1.8 8.5 3.3l6.2-6C34.9 3.6 29.9 2 24 2 15.4 2 8 6.5 4.2 13l7.3 5.6C13.3 13.7 18.2 9.8 24 9.8z"
+        fill="#EA4335"
+      />
+    </svg>
   );
 }
 
