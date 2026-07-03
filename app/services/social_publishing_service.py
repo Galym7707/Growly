@@ -21,6 +21,7 @@ from app.database import session_scope
 from app.models import Draft, ManualPublishPackage, Publication, SocialAccount
 from app.repositories.integrations_repo import IntegrationsRepository
 from app.services.blotato_service import BlotatoService
+from app.services.whatsapp_service import WhatsAppService, WhatsAppServiceError
 from app.utils.crypto import decrypt_secret, encrypt_secret
 from app.utils.errors import BlotatoServiceError, GrowlyError
 
@@ -104,6 +105,7 @@ class SocialPublishingService:
 
     async def integrations_status(self, workspace_id: str | None) -> dict[str, Any]:
         blotato = await self.blotato_status(workspace_id)
+        whatsapp = WhatsAppService(self.settings)
         return {
             "telegram": {
                 "connected": self._telegram_connected(),
@@ -120,6 +122,12 @@ class SocialPublishingService:
                 "connected": blotato["connected"],
                 "accounts_count": blotato["accounts_count"],
                 "instagram": blotato.get("instagram"),
+            },
+            "whatsapp": {
+                "connected": whatsapp.is_configured(),
+                "group_configured": bool(
+                    (self.settings.whatsapp_group_chat_id or "").strip()
+                ),
             },
         }
 
@@ -549,8 +557,12 @@ class SocialPublishingService:
         text = (draft.draft_text or "").strip()
         if not text:
             raise GrowlyError("Черновик пуст; публикация невозможна.")
+        needs_blotato = any(
+            (platform or "").strip().lower() not in {"telegram", "whatsapp"}
+            for platform in platforms
+        )
         blotato = await self._blotato(workspace_id)
-        if not blotato.is_enabled():
+        if needs_blotato and not blotato.is_enabled():
             raise BlotatoServiceError(
                 "Blotato не подключён. Автопубликация в соцсети временно недоступна."
             )
@@ -569,6 +581,15 @@ class SocialPublishingService:
                         "error": "Telegram публикуется через Telegram, не через Blotato.",
                     }
                 )
+                continue
+            if slug == "whatsapp":
+                # WhatsApp groups are published through Green API, not Blotato.
+                submission = await self._publish_whatsapp(
+                    workspace, draft_id, text
+                )
+                if submission.get("publication_id"):
+                    publication_ids.append(int(submission.pop("publication_id")))
+                submissions.append(submission)
                 continue
             if not blotato.validate_platform(slug):
                 submissions.append(
@@ -694,6 +715,86 @@ class SocialPublishingService:
             "blotato_submissions": submissions,
         }
 
+    async def _publish_whatsapp(
+        self,
+        workspace: str,
+        draft_id: int,
+        text: str,
+    ) -> dict[str, Any]:
+        whatsapp = WhatsAppService(self.settings)
+        if not whatsapp.is_configured():
+            message = (
+                "WhatsApp не подключён. Задайте GREEN_API_INSTANCE_ID, "
+                "GREEN_API_TOKEN и WHATSAPP_GROUP_CHAT_ID на сервере."
+            )
+            pub_id = await asyncio.to_thread(
+                self._record_publication,
+                workspace,
+                draft_id,
+                "whatsapp",
+                None,
+                None,
+                "failed",
+                None,
+                None,
+                None,
+                message,
+                "green-api",
+            )
+            return {
+                "platform": "whatsapp",
+                "post_submission_id": None,
+                "status": "failed",
+                "error": message,
+                "publication_id": pub_id,
+            }
+        try:
+            result = await whatsapp.send_text(text)
+        except WhatsAppServiceError as exc:
+            message = str(exc)
+            pub_id = await asyncio.to_thread(
+                self._record_publication,
+                workspace,
+                draft_id,
+                "whatsapp",
+                None,
+                None,
+                "failed",
+                None,
+                None,
+                None,
+                message,
+                "green-api",
+            )
+            return {
+                "platform": "whatsapp",
+                "post_submission_id": None,
+                "status": "failed",
+                "error": message,
+                "publication_id": pub_id,
+            }
+        message_id = str(result.get("message_id") or "")
+        pub_id = await asyncio.to_thread(
+            self._record_publication,
+            workspace,
+            draft_id,
+            "whatsapp",
+            None,
+            None,
+            "submitted",
+            None,
+            message_id,
+            None,
+            None,
+            "green-api",
+        )
+        return {
+            "platform": "whatsapp",
+            "post_submission_id": message_id,
+            "status": "submitted",
+            "publication_id": pub_id,
+        }
+
     @staticmethod
     def _load_existing_submission(
         workspace: str,
@@ -785,6 +886,7 @@ class SocialPublishingService:
         submission_id: str | None,
         external_post_url: str | None,
         error_message: str | None,
+        provider: str = "blotato",
     ) -> int:
         scheduled = None
         if scheduled_time:
@@ -798,7 +900,7 @@ class SocialPublishingService:
                 draft_id=draft_id,
                 channel=platform,
                 platform=platform,
-                provider="blotato",
+                provider=provider,
                 account_id=account_id,
                 page_id=page_id,
                 status=status,

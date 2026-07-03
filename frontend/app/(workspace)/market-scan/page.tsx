@@ -46,6 +46,7 @@ async function waitForMarketScan(
     if (attempt > 0) await delay(MARKET_SCAN_POLL_INTERVAL_MS);
     const response = await apiRequest<MarketScanResponse>(
       marketScanJobPath(jobId),
+      { noStore: true },
     );
     onProgress(response);
     if (reportPathFromGeneratedResponse(response)) return response;
@@ -169,7 +170,10 @@ export default function MarketScanPage() {
           </label>
         </div>
         <div className="form-actions">
-          <button className="button button-primary" disabled={loading}>
+          <button
+            className={`button button-primary${loading ? " button-loading" : ""}`}
+            disabled={loading}
+          >
             <Icon name={loading ? "sync" : "search"} />
             {t(loading ? "Анализ выполняется" : "Запустить анализ")}
           </button>

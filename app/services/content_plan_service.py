@@ -242,6 +242,8 @@ class ContentPlanService:
             response = await self.ai.summarize_content_plan_sources(
                 {
                     "batch_number": batch_number,
+                    "language": data.get("language"),
+                    "output_language": data.get("language"),
                     "source_items": [
                         self._compact_source_item(item) for item in batch
                     ],
@@ -533,10 +535,21 @@ class ContentPlanService:
                 ]
             )[:CONTENT_PLAN_MAX_EVIDENCE_URLS]
             today = datetime.now(UTC).date()
+            plan_language = (
+                requested_business.get("language")
+                or brief.get("language")
+                or requested_business.get("business_language")
+                or (active_market_context or {}).get("language")
+                or profile.get("business_language")
+            )
             return {
                 "weekly_objective": business_context
                 or {"note": "No additional brief supplied."},
                 "workspace_id": workspace_id,
+                # Top-level "language" drives the provider system prompt
+                # (user_language_instruction); business.language alone is not
+                # enough because the system message would still say Russian.
+                "language": plan_language,
                 "current_date": today.isoformat(),
                 "planning_window": {
                     "start": today.isoformat(),
@@ -556,13 +569,7 @@ class ContentPlanService:
                         or (active_market_context or {}).get("region")
                         or profile.get("business_region")
                     ),
-                    "language": (
-                        requested_business.get("language")
-                        or brief.get("language")
-                        or requested_business.get("business_language")
-                        or (active_market_context or {}).get("language")
-                        or profile.get("business_language")
-                    ),
+                    "language": plan_language,
                     "offer": profile.get("business_offer"),
                     "audience": profile.get("business_audience"),
                 },

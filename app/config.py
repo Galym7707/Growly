@@ -57,6 +57,18 @@ class Settings(BaseSettings):
         alias="AI_FALLBACK_PROVIDER",
     )
 
+    green_api_base_url: str = Field(
+        default="https://api.green-api.com",
+        alias="GREEN_API_BASE_URL",
+    )
+    green_api_instance_id: str | None = Field(
+        default=None, alias="GREEN_API_INSTANCE_ID"
+    )
+    green_api_token: SecretStr | None = Field(default=None, alias="GREEN_API_TOKEN")
+    whatsapp_group_chat_id: str | None = Field(
+        default=None, alias="WHATSAPP_GROUP_CHAT_ID"
+    )
+
     search_provider: str | None = Field(default=None, alias="SEARCH_PROVIDER")
     tavily_api_key: SecretStr | None = Field(default=None, alias="TAVILY_API_KEY")
     search_max_results: int = Field(default=10, ge=1, le=20, alias="SEARCH_MAX_RESULTS")

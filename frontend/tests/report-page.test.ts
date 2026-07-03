@@ -13,6 +13,6 @@ describe("report page localization", () => {
     expect(reportPage).toContain(
       "`/reports/${params.id}?language=${encodeURIComponent(locale)}`",
     );
-    expect(reportPage).toContain("}, [locale, params.id, t]);");
+    expect(reportPage).toContain("[locale, params.id, t],");
   });
 });

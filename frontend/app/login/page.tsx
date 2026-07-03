@@ -49,32 +49,70 @@ function LoginContent() {
     setError("");
     setNotice("");
     const supabase = createClient();
-    const { data, error: authError } =
-      mode === "register"
-        ? await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              emailRedirectTo: `${window.location.origin}${nextPath}`,
-            },
-          })
-        : await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
+
+    if (mode === "register") {
+      // Server-side sign-up creates a pre-confirmed account, so no
+      // confirmation email is sent and Supabase SMTP rate limits cannot
+      // block registration.
+      let registered = false;
+      try {
+        const response = await fetch("/api/growly/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        if (response.ok) {
+          registered = true;
+        } else if (response.status === 409) {
+          setNotice(t("Аккаунт с этой почтой уже существует. Выполняем вход."));
+          registered = true;
+        } else if (response.status !== 404 && response.status !== 502) {
+          const body = await response.json().catch(() => ({}));
+          setLoading(false);
+          setError(
+            typeof body.detail === "string" && body.detail
+              ? t(body.detail)
+              : t("Не удалось зарегистрироваться. Проверьте почту и пароль."),
+          );
+          return;
+        }
+      } catch {
+        // Backend unreachable: fall through to the legacy sign-up below.
+      }
+      if (!registered) {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}${nextPath}`,
+          },
+        });
+        setLoading(false);
+        if (signUpError) {
+          setError(describeAuthError(signUpError.message, t));
+          return;
+        }
+        if (!data.session) {
+          setNotice(t("Проверьте почту, чтобы подтвердить регистрацию."));
+          return;
+        }
+        router.push(nextPath);
+        router.refresh();
+        return;
+      }
+    }
+
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     setLoading(false);
     if (authError) {
       setError(
-        t(
-          mode === "register"
-            ? "Не удалось зарегистрироваться. Проверьте почту и пароль."
-            : "Не удалось войти. Проверьте почту и пароль.",
-        ),
+        mode === "register"
+          ? describeAuthError(authError.message, t)
+          : t("Не удалось войти. Проверьте почту и пароль."),
       );
-      return;
-    }
-    if (mode === "register" && !data.session) {
-      setNotice(t("Проверьте почту, чтобы подтвердить регистрацию."));
       return;
     }
     router.push(nextPath);
@@ -191,4 +229,23 @@ function LoginContent() {
 function getSafeNextPath(next: string | null): string {
   if (next?.startsWith("/") && !next.startsWith("//")) return next;
   return "/dashboard";
+}
+
+function describeAuthError(
+  message: string,
+  t: (source: string) => string,
+): string {
+  const normalized = (message || "").toLowerCase();
+  if (normalized.includes("rate limit")) {
+    return t(
+      "Слишком много попыток регистрации. Подождите несколько минут и попробуйте снова.",
+    );
+  }
+  if (normalized.includes("already registered") || normalized.includes("already exists")) {
+    return t("Аккаунт с этой почтой уже существует. Войдите вместо регистрации.");
+  }
+  if (normalized.includes("password")) {
+    return t("Пароль слишком простой. Используйте не менее 8 символов.");
+  }
+  return t("Не удалось зарегистрироваться. Проверьте почту и пароль.");
 }

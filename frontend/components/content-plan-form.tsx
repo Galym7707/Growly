@@ -28,6 +28,16 @@ const EMPTY_OPTIONS: ContentPlanOptions = {
   ctas: [],
 };
 
+// Shown on the submit button while the plan is being generated so the user
+// sees what the backend is doing right now instead of a frozen label.
+const BUILD_STAGES = [
+  "Читаю отчёт и выбранные параметры",
+  "Подбираю темы и форматы под каналы",
+  "Расписываю публикации по датам",
+  "Проверяю план и сохраняю",
+];
+const BUILD_STAGE_INTERVAL_MS = 12_000;
+
 const CHANNEL_DEFAULTS: ContentPlanOption[] = [
   { label: "Telegram", value: "telegram" },
   { label: "Instagram", value: "instagram" },
@@ -65,6 +75,7 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
   const [custom, setCustom] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
+  const [buildStage, setBuildStage] = useState(0);
   const [submitError, setSubmitError] = useState("");
   const [submitDebug, setSubmitDebug] = useState<ApiDebugInfo | null>(null);
   const [createdPath, setCreatedPath] = useState<string | null>(null);
@@ -101,6 +112,19 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
   useEffect(() => {
     void loadOptions();
   }, [loadOptions]);
+
+  useEffect(() => {
+    if (!submitting) {
+      setBuildStage(0);
+      return;
+    }
+    const timer = setInterval(
+      () =>
+        setBuildStage((stage) => Math.min(stage + 1, BUILD_STAGES.length - 1)),
+      BUILD_STAGE_INTERVAL_MS,
+    );
+    return () => clearInterval(timer);
+  }, [submitting]);
 
   // Restore a locally saved draft for this report (once).
   useEffect(() => {
@@ -329,9 +353,16 @@ export function ContentPlanForm({ active }: { active: ActiveContext }) {
         >
           {t("Сохранить как черновик")}
         </button>
-        <button className="button button-primary" disabled={submitting}>
+        <button
+          className={`button button-primary${submitting ? " button-loading" : ""}`}
+          disabled={submitting}
+        >
           <Icon name={submitting ? "sync" : "book"} />
-          {submitting ? t("Формируем план") : t("Создать контент-план")}
+          {submitting ? (
+            <span className="task-step-dots">{t(BUILD_STAGES[buildStage])}</span>
+          ) : (
+            t("Создать контент-план")
+          )}
         </button>
       </div>
     </form>

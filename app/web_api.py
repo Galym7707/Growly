@@ -6,6 +6,8 @@ import logging
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal, NoReturn
 
+import httpx
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, or_, select
@@ -266,6 +268,70 @@ secured_router = APIRouter(dependencies=[Depends(require_web_api_key)])
 admin_router = APIRouter(
     prefix="/admin", dependencies=[Depends(require_web_api_key)]
 )
+
+
+class RegisterRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=320, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    password: str = Field(min_length=8, max_length=72)
+
+
+@secured_router.post("/auth/register", status_code=status.HTTP_201_CREATED)
+async def register_user(payload: RegisterRequest) -> dict[str, Any]:
+    """Create a pre-confirmed Supabase user.
+
+    Registration goes through the service-role admin API instead of the
+    public sign-up flow, so no confirmation email is sent and Supabase's
+    built-in SMTP rate limit (a few emails per hour) cannot block sign-ups.
+    """
+    settings = get_settings()
+    supabase_url = settings.supabase_url
+    service_key = settings.supabase_secret_api_key
+    if not supabase_url or not service_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Регистрация временно недоступна: Supabase не настроен.",
+        )
+    base = supabase_url.get_secret_value().rstrip("/")
+    key = service_key.get_secret_value()
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{base}/auth/v1/admin/users",
+            headers={
+                "apikey": key,
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "email": payload.email,
+                "password": payload.password,
+                "email_confirm": True,
+            },
+        )
+    if response.status_code in {200, 201}:
+        return {"status": "created"}
+    body: dict[str, Any] = {}
+    try:
+        body = response.json()
+    except ValueError:
+        pass
+    message = str(body.get("msg") or body.get("message") or "").lower()
+    if response.status_code == 422 or "already" in message:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Аккаунт с этой почтой уже существует. Войдите вместо регистрации.",
+        )
+    if "password" in message:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Пароль слишком простой. Используйте не менее 8 символов.",
+        )
+    logger.warning(
+        "Supabase admin sign-up failed with status %s", response.status_code
+    )
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail="Не удалось создать аккаунт. Попробуйте позже.",
+    )
 
 
 class MarketScanRequest(BaseModel):

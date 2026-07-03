@@ -17,6 +17,14 @@ type SupabaseUserWithConfirmation = {
 // link (GET /share-links/{token}) and reading invitation details
 // (GET /invitations/{token}). Everything else requires authentication.
 function isPublicPath(path: string[], method: string): boolean {
+  if (
+    method === "POST" &&
+    path.length === 2 &&
+    path[0] === "auth" &&
+    path[1] === "register"
+  ) {
+    return true;
+  }
   if (method !== "GET") return false;
   if (path.length === 2 && path[0] === "share-links") return true;
   if (path.length === 2 && path[0] === "invitations") return true;

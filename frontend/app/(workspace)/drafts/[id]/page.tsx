@@ -377,7 +377,7 @@ export default function DraftDetailPage() {
         if (token.cancelled) return;
         visual = await apiRequest<VisualResult>(
           `${statusPath}/${encodeURIComponent(visualId)}`,
-          { signal: token.controller.signal },
+          { signal: token.controller.signal, noStore: true },
         );
       }
       throw new Error(

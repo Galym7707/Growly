@@ -36,7 +36,66 @@ export function apiErrorDebugInfo(value: unknown): ApiDebugInfo | null {
   };
 }
 
+// Short-lived cache for GET responses so switching between workspace tabs
+// renders instantly instead of refetching everything from the backend.
+// Any mutation clears the whole cache; polling call sites opt out.
+const GET_CACHE_TTL_MS = 30_000;
+const getCache = new Map<string, { at: number; body: unknown }>();
+const inflightGets = new Map<string, Promise<unknown>>();
+
+export function invalidateApiCache(): void {
+  getCache.clear();
+}
+
+function cloneBody<T>(body: T): T {
+  if (body === null || typeof body !== "object") return body;
+  try {
+    return structuredClone(body);
+  } catch {
+    return body;
+  }
+}
+
+export type ApiRequestOptions = RequestInit & {
+  /** Skip the GET cache (polling endpoints that must see fresh state). */
+  noStore?: boolean;
+};
+
 export async function apiRequest<T>(
+  path: string,
+  options: ApiRequestOptions = {},
+): Promise<T> {
+  const { noStore, ...requestOptions } = options;
+  const method = (requestOptions.method || "GET").toUpperCase();
+  const cacheable = method === "GET" && !noStore;
+  const cacheKey = buildApiUrl(path);
+  if (cacheable) {
+    const cached = getCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < GET_CACHE_TTL_MS) {
+      return cloneBody(cached.body) as T;
+    }
+    const inflight = inflightGets.get(cacheKey);
+    if (inflight) {
+      return inflight.then((body) => cloneBody(body) as T);
+    }
+    const request = performApiRequest<T>(path, requestOptions)
+      .then((body) => {
+        getCache.set(cacheKey, { at: Date.now(), body });
+        return body;
+      })
+      .finally(() => {
+        inflightGets.delete(cacheKey);
+      });
+    inflightGets.set(cacheKey, request as Promise<unknown>);
+    return request.then((body) => cloneBody(body));
+  }
+  if (method !== "GET") {
+    getCache.clear();
+  }
+  return performApiRequest<T>(path, requestOptions);
+}
+
+async function performApiRequest<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {

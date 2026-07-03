@@ -49,20 +49,24 @@ export default function ReportPage() {
     );
   }
 
-  const load = useCallback(async () => {
-    setError("");
-    setReloading(true);
-    try {
-      const response = await apiRequest<{ report: Report }>(
-        `/reports/${params.id}?language=${encodeURIComponent(locale)}`,
-      );
-      setReport(response.report);
-    } catch (value) {
-      setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
-    } finally {
-      setReloading(false);
-    }
-  }, [locale, params.id, t]);
+  const load = useCallback(
+    async (fresh = false) => {
+      setError("");
+      setReloading(true);
+      try {
+        const response = await apiRequest<{ report: Report }>(
+          `/reports/${params.id}?language=${encodeURIComponent(locale)}`,
+          fresh ? { noStore: true } : undefined,
+        );
+        setReport(response.report);
+      } catch (value) {
+        setError(value instanceof Error ? t(value.message) : t("Неизвестная ошибка"));
+      } finally {
+        setReloading(false);
+      }
+    },
+    [locale, params.id, t],
+  );
 
   useEffect(() => {
     void load();
@@ -73,7 +77,7 @@ export default function ReportPage() {
   useEffect(() => {
     if (!retrying) return;
     const timer = setInterval(() => {
-      void load();
+      void load(true);
     }, 6000);
     return () => clearInterval(timer);
   }, [retrying, load]);

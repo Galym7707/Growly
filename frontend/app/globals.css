@@ -963,6 +963,11 @@ input:disabled {
   width: 30%;
 }
 
+/* spinning icon on any loading button */
+.button-loading svg {
+  animation: task-spin 0.9s linear infinite;
+}
+
 /* animated ellipsis after the active step label */
 .task-step-dots::after {
   animation: task-dots 1.4s steps(4, end) infinite;
@@ -2287,7 +2292,14 @@ input:disabled {
 }
 
 .chip-input {
-  max-width: 520px;
+  display: block;
+  margin-top: 12px;
+  max-width: 100%;
+  width: 100%;
+}
+
+.chip-row + .chip-input {
+  margin-top: 14px;
 }
 
 .plan-builder-custom {
