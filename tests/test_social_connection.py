@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from app.config import get_settings
 from app.main import app
@@ -13,6 +14,13 @@ from app.services.social_connection_service import SocialConnectionService
 
 def _open_api(monkeypatch) -> None:
     monkeypatch.setattr(get_settings(), "growly_web_api_key", None)
+
+
+def test_smtp_app_password_ignores_display_spaces(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "smtp_password", SecretStr("wmtt ispb clbi mwzd"))
+
+    assert settings.smtp_password_value() == "wmttispbclbimwzd"
 
 
 # -- admin gating -------------------------------------------------------------

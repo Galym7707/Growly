@@ -226,7 +226,8 @@ class Settings(BaseSettings):
         if self.smtp_password is None:
             return None
         secret = self.smtp_password.get_secret_value().strip()
-        return secret or None
+        normalized = "".join(secret.split())
+        return normalized or None
 
     def database_dsn(self) -> str:
         return self.require_secret("database_url", "DATABASE_URL")
