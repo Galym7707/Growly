@@ -18,6 +18,9 @@ FALLBACK_REASONS = {
     "timeout",
     "connection",
     "temporary_server_error",
+    # A provider that answered with empty or malformed output is as useless
+    # as one that errored - give the fallback provider a chance.
+    "invalid_response",
 }
 AUTH_REASONS = {"authentication"}
 

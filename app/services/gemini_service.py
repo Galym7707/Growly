@@ -36,6 +36,10 @@ logger = logging.getLogger(__name__)
 GEMINI_DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
 GEMINI_DEFAULT_MODEL = "gemini-3.5-flash"
 GEMINI_REQUEST_TIMEOUT_SECONDS = 120.0
+# Gemini flash is a thinking model on the OpenAI-compatible endpoint:
+# max_tokens covers thoughts plus the visible answer, so short caps get
+# eaten by reasoning and truncate the JSON. Give every call headroom.
+GEMINI_MIN_COMPLETION_TOKENS = 16384
 TEMPORARY_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
@@ -165,7 +169,7 @@ class GeminiService:
                     {"role": "user", "content": prompt},
                 ],
                 temperature=temperature,
-                max_tokens=max_tokens,
+                max_tokens=max(max_tokens, GEMINI_MIN_COMPLETION_TOKENS),
                 **request_kwargs,
             )
             content = response.choices[0].message.content
