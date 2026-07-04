@@ -48,6 +48,15 @@ class Settings(BaseSettings):
         default="openai/gpt-5-mini",
         alias="GITHUB_MODELS_MODEL",
     )
+    nvidia_api_key: SecretStr | None = Field(default=None, alias="NVIDIA_API_KEY")
+    nvidia_base_url: str = Field(
+        default="https://integrate.api.nvidia.com/v1",
+        alias="NVIDIA_BASE_URL",
+    )
+    nvidia_model: str = Field(
+        default="deepseek-ai/deepseek-v4-flash",
+        alias="NVIDIA_MODEL",
+    )
     gemini_api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
     gemini_base_url: str = Field(
         default="https://generativelanguage.googleapis.com/v1beta/openai",
@@ -252,6 +261,9 @@ class Settings(BaseSettings):
     def gemini_key(self) -> str:
         return self.require_secret("gemini_api_key", "GEMINI_API_KEY")
 
+    def nvidia_key(self) -> str:
+        return self.require_secret("nvidia_api_key", "NVIDIA_API_KEY")
+
     def ai_model_name(self, provider: str | None = None) -> str:
         provider_name = (provider or self.ai_primary_provider).strip().lower()
         if provider_name == "github_models":
@@ -263,9 +275,11 @@ class Settings(BaseSettings):
             return self.require_text("groq_model", "GROQ_MODEL")
         if provider_name == "gemini":
             return self.require_text("gemini_model", "GEMINI_MODEL")
+        if provider_name == "nvidia":
+            return self.require_text("nvidia_model", "NVIDIA_MODEL")
         raise ConfigurationError(
             f"Unsupported AI provider {provider_name!r}. "
-            "Use 'github_models', 'groq' or 'gemini'."
+            "Use 'nvidia', 'gemini', 'groq' or 'github_models'."
         )
 
     def tavily_key(self) -> str:

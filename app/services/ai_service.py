@@ -6,6 +6,7 @@ from typing import Any, Protocol
 
 from app.config import Settings, get_settings
 from app.services.gemini_service import GeminiService
+from app.services.nvidia_service import NvidiaService
 from app.services.github_models_service import GitHubModelsService
 from app.services.groq_service import GroqService
 from app.utils.errors import AIServiceError, ConfigurationError
@@ -47,11 +48,13 @@ class AIService:
         github_models: TextGenerationProvider | None = None,
         groq: TextGenerationProvider | None = None,
         gemini: TextGenerationProvider | None = None,
+        nvidia: TextGenerationProvider | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.github_models = github_models or GitHubModelsService(self.settings)
         self.groq = groq or GroqService(self.settings)
         self.gemini = gemini or GeminiService(self.settings)
+        self.nvidia = nvidia or NvidiaService(self.settings)
         self.last_provider_name: str | None = None
         self.last_model_name: str | None = None
 
@@ -121,7 +124,7 @@ class AIService:
                 json_mode=json_mode,
             )
 
-    _ALL_PROVIDERS = ("gemini", "groq", "github_models")
+    _ALL_PROVIDERS = ("nvidia", "gemini", "groq", "github_models")
 
     async def _fallback_or_raise(
         self,
@@ -197,9 +200,11 @@ class AIService:
             return self.groq
         if name == "gemini":
             return self.gemini
+        if name == "nvidia":
+            return self.nvidia
         raise ConfigurationError(
             f"Unsupported AI provider {name!r}. "
-            "Use 'github_models', 'groq' or 'gemini'."
+            "Use 'nvidia', 'gemini', 'groq' or 'github_models'."
         )
 
     def _provider_is_configured(self, name: str) -> bool:
@@ -224,6 +229,13 @@ class AIService:
                 return bool(configured())
             key = self.settings.gemini_api_key
             return bool(key and key.get_secret_value().strip())
+        if name == "nvidia":
+            service = self.nvidia
+            configured = getattr(service, "is_configured", None)
+            if callable(configured):
+                return bool(configured())
+            key = self.settings.nvidia_api_key
+            return bool(key and key.get_secret_value().strip())
         return False
 
     def _mark_success(self, provider_name: str) -> None:
@@ -233,9 +245,10 @@ class AIService:
     @staticmethod
     def _normalize_provider(value: str, env_name: str) -> str:
         normalized = (value or "").strip().lower()
-        if normalized not in {"github_models", "groq", "gemini"}:
+        if normalized not in {"github_models", "groq", "gemini", "nvidia"}:
             raise ConfigurationError(
-                f"{env_name} must be 'github_models', 'groq' or 'gemini'."
+                f"{env_name} must be 'nvidia', 'gemini', 'groq' or "
+                "'github_models'."
             )
         return normalized
 
