@@ -38,7 +38,10 @@ logger = logging.getLogger(__name__)
 
 NVIDIA_DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1"
 NVIDIA_DEFAULT_MODEL = "deepseek-ai/deepseek-v4-flash"
-NVIDIA_REQUEST_TIMEOUT_SECONDS = 120.0
+# Free NIM endpoints queue heavily at peak: keep the per-request timeout
+# short and retries off so a slow queue fails fast and the provider chain
+# moves on to Gemini/Groq instead of eating the whole generation budget.
+NVIDIA_REQUEST_TIMEOUT_SECONDS = 90.0
 TEMPORARY_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
@@ -89,8 +92,7 @@ class NvidiaService:
                 base_url=self._base_url(),
                 api_key=self._api_key(),
                 timeout=NVIDIA_REQUEST_TIMEOUT_SECONDS,
-                # The SDK retries transient 429/5xx with backoff.
-                max_retries=2,
+                max_retries=0,
             )
         return self._client
 
