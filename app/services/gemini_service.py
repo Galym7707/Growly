@@ -86,7 +86,9 @@ class GeminiService:
                 base_url=self._base_url(),
                 api_key=self._api_key(),
                 timeout=GEMINI_REQUEST_TIMEOUT_SECONDS,
-                max_retries=0,
+                # Gemini's free tier intermittently returns 503 (model
+                # overloaded); the SDK retries 429/5xx with backoff.
+                max_retries=2,
             )
         return self._client
 
@@ -116,6 +118,7 @@ class GeminiService:
         *,
         temperature: float = 0.35,
         max_tokens: int = 3000,
+        json_mode: bool = False,
     ) -> str:
         if not self.is_configured():
             raise ConfigurationError(
@@ -144,6 +147,9 @@ class GeminiService:
         )
         prompt = template.replace("{context_json}", context_json)
 
+        request_kwargs: dict[str, Any] = {}
+        if json_mode:
+            request_kwargs["response_format"] = {"type": "json_object"}
         try:
             response = await self._get_client().chat.completions.create(
                 model=self.model_name(),
@@ -160,6 +166,7 @@ class GeminiService:
                 ],
                 temperature=temperature,
                 max_tokens=max_tokens,
+                **request_kwargs,
             )
             content = response.choices[0].message.content
             if not content or not str(content).strip():

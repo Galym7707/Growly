@@ -62,6 +62,7 @@ class GroqService:
         *,
         temperature: float = 0.35,
         max_tokens: int = 3000,
+        json_mode: bool = False,
     ) -> str:
         language = context.get("language") if isinstance(context, dict) else None
         model = self.settings.require_text("groq_model", "GROQ_MODEL")
@@ -84,6 +85,26 @@ class GroqService:
             prompt_name,
         )
         prompt = template.replace("{context_json}", context_json)
+        request_body: dict[str, Any] = {
+            "model": model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Follow the task exactly. Never fabricate facts, "
+                        "metrics, quotes, customer evidence, or guarantees. "
+                        + self.settings.user_language_instruction(language)
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if json_mode:
+            # Forces syntactically valid JSON output (prompts already say
+            # "Return valid JSON", which Groq's JSON mode requires).
+            request_body["response_format"] = {"type": "json_object"}
         last_error: Exception | None = None
         try:
             for attempt in range(GROQ_MAX_ATTEMPTS):
@@ -97,22 +118,7 @@ class GroqService:
                                 "Authorization": f"Bearer {self.settings.groq_key()}",
                                 "Content-Type": "application/json",
                             },
-                            json={
-                                "model": model,
-                                "messages": [
-                                    {
-                                        "role": "system",
-                                        "content": (
-                                            "Follow the task exactly. Never fabricate facts, "
-                                            "metrics, quotes, customer evidence, or guarantees. "
-                                            + self.settings.user_language_instruction(language)
-                                        ),
-                                    },
-                                    {"role": "user", "content": prompt},
-                                ],
-                                "temperature": temperature,
-                                "max_tokens": max_tokens,
-                            },
+                            json=request_body,
                         )
                     if response.status_code == 429 or response.status_code >= 500:
                         retry_after = self._retry_after_seconds(
@@ -278,16 +284,25 @@ class GroqService:
             context,
             temperature=0.1,
             max_tokens=1400,
+            json_mode=True,
         )
 
     async def generate_competitor_report(self, context: dict[str, Any]) -> str:
         return await self.generate_text(
-            "competitor_report.md", context, temperature=0.2, max_tokens=4500
+            "competitor_report.md",
+            context,
+            temperature=0.2,
+            max_tokens=4500,
+            json_mode=True,
         )
 
     async def generate_content_plan_options(self, context: dict[str, Any]) -> str:
         return await self.generate_text(
-            "content_plan_options.md", context, temperature=0.3, max_tokens=2000
+            "content_plan_options.md",
+            context,
+            temperature=0.3,
+            max_tokens=2000,
+            json_mode=True,
         )
 
     async def answer_report_question(self, context: dict[str, Any]) -> str:
@@ -297,7 +312,11 @@ class GroqService:
 
     async def analyze_market_search(self, context: dict[str, Any]) -> str:
         return await self.generate_text(
-            "market_search_analysis.md", context, temperature=0.1, max_tokens=6000
+            "market_search_analysis.md",
+            context,
+            temperature=0.1,
+            max_tokens=6000,
+            json_mode=True,
         )
 
     async def extract_source_candidates(self, context: dict[str, Any]) -> str:
@@ -312,7 +331,11 @@ class GroqService:
 
     async def generate_market_scan(self, context: dict[str, Any]) -> str:
         return await self.generate_text(
-            "market_scan_report.md", context, temperature=0.1, max_tokens=6000
+            "market_scan_report.md",
+            context,
+            temperature=0.1,
+            max_tokens=6000,
+            json_mode=True,
         )
 
     async def analyze_reviews(self, context: dict[str, Any]) -> str:

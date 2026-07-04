@@ -118,6 +118,7 @@ class GitHubModelsService:
         *,
         temperature: float = 0.35,
         max_tokens: int = 3000,
+        json_mode: bool = False,
     ) -> str:
         if not self.is_configured():
             raise ConfigurationError(
@@ -150,6 +151,9 @@ class GitHubModelsService:
         )
         prompt = template.replace("{context_json}", context_json)
 
+        request_kwargs: dict[str, Any] = {}
+        if json_mode:
+            request_kwargs["response_format"] = {"type": "json_object"}
         try:
             response = await self._get_client().chat.completions.create(
                 model=self.model_name(),
@@ -166,6 +170,7 @@ class GitHubModelsService:
                 ],
                 temperature=temperature,
                 max_tokens=max_tokens,
+                **request_kwargs,
             )
             content = response.choices[0].message.content
             if not content or not str(content).strip():

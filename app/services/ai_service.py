@@ -30,6 +30,7 @@ class TextGenerationProvider(Protocol):
         *,
         temperature: float = 0.35,
         max_tokens: int = 3000,
+        json_mode: bool = False,
     ) -> str: ...
 
 
@@ -64,7 +65,11 @@ class AIService:
         *,
         temperature: float = 0.35,
         max_tokens: int = 3000,
+        json_mode: bool = False,
     ) -> str:
+        # json_mode is forwarded only when set so simple test doubles that
+        # implement the old signature keep working.
+        extra_kwargs: dict[str, Any] = {"json_mode": True} if json_mode else {}
         primary_name = self._normalize_provider(
             self.settings.ai_primary_provider,
             "AI_PRIMARY_PROVIDER",
@@ -82,6 +87,7 @@ class AIService:
                 context,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                **extra_kwargs,
             )
             self._mark_success(primary_name)
             return result
@@ -95,6 +101,7 @@ class AIService:
                 max_tokens,
                 exc,
                 reason="configuration",
+                json_mode=json_mode,
             )
         except AIServiceError as exc:
             if not self._should_fallback(exc):
@@ -108,6 +115,7 @@ class AIService:
                 max_tokens,
                 exc,
                 reason=exc.reason or "temporary_error",
+                json_mode=json_mode,
             )
 
     async def _fallback_or_raise(
@@ -121,6 +129,7 @@ class AIService:
         original_error: Exception,
         *,
         reason: str,
+        json_mode: bool = False,
     ) -> str:
         if fallback_name == primary_name:
             raise original_error
@@ -134,12 +143,14 @@ class AIService:
 
         self._log_fallback(primary_name, fallback_name, reason)
         fallback = self._provider(fallback_name)
+        extra_kwargs: dict[str, Any] = {"json_mode": True} if json_mode else {}
         try:
             result = await fallback.generate_text(
                 prompt_name,
                 context,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                **extra_kwargs,
             )
         except ConfigurationError as exc:
             raise ConfigurationError(

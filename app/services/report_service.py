@@ -189,6 +189,7 @@ class ReportService:
             },
             temperature=0.1,
             max_tokens=6000,
+            json_mode=True,
         )
         payload = parse_json_response(response)
         if not isinstance(payload, dict):
