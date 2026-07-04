@@ -121,6 +121,8 @@ class AIService:
                 json_mode=json_mode,
             )
 
+    _ALL_PROVIDERS = ("gemini", "groq", "github_models")
+
     async def _fallback_or_raise(
         self,
         primary_name: str,
@@ -134,33 +136,59 @@ class AIService:
         reason: str,
         json_mode: bool = False,
     ) -> str:
-        if fallback_name == primary_name:
-            raise original_error
-        if not self._provider_is_configured(fallback_name):
-            if isinstance(original_error, ConfigurationError):
-                raise ConfigurationError(
-                    f"{original_error} The configured fallback provider "
-                    f"{fallback_name!r} is not configured."
-                ) from original_error
-            raise original_error
+        """Try the configured fallback, then any remaining configured provider.
 
-        self._log_fallback(primary_name, fallback_name, reason)
-        fallback = self._provider(fallback_name)
+        Free-tier quotas run out independently per provider, so exhausting
+        the primary and the named fallback should still reach the third
+        provider instead of failing the request.
+        """
+        candidates = [fallback_name] + [
+            name
+            for name in self._ALL_PROVIDERS
+            if name not in {primary_name, fallback_name}
+        ]
         extra_kwargs: dict[str, Any] = {"json_mode": True} if json_mode else {}
-        try:
-            result = await fallback.generate_text(
-                prompt_name,
-                context,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                **extra_kwargs,
-            )
-        except ConfigurationError as exc:
+        previous_name = primary_name
+        current_reason = reason
+        last_error: Exception = original_error
+        attempted_any = False
+        for name in candidates:
+            if name == primary_name or not self._provider_is_configured(name):
+                continue
+            self._log_fallback(previous_name, name, current_reason)
+            try:
+                result = await self._provider(name).generate_text(
+                    prompt_name,
+                    context,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    **extra_kwargs,
+                )
+            except ConfigurationError as exc:
+                attempted_any = True
+                previous_name = name
+                current_reason = "configuration"
+                last_error = ConfigurationError(
+                    f"AI fallback provider {name!r} is not configured."
+                )
+                last_error.__cause__ = exc
+                continue
+            except AIServiceError as exc:
+                attempted_any = True
+                if not self._should_fallback(exc):
+                    raise
+                previous_name = name
+                current_reason = exc.reason or "temporary_error"
+                last_error = exc
+                continue
+            self._mark_success(name)
+            return result
+        if not attempted_any and isinstance(original_error, ConfigurationError):
             raise ConfigurationError(
-                f"AI fallback provider {fallback_name!r} is not configured."
-            ) from exc
-        self._mark_success(fallback_name)
-        return result
+                f"{original_error} The configured fallback provider "
+                f"{fallback_name!r} is not configured."
+            ) from original_error
+        raise last_error
 
     def _provider(self, name: str) -> TextGenerationProvider:
         if name == "github_models":
