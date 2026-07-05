@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import time
 from typing import Any, Protocol
 
 from app.config import Settings, get_settings
@@ -57,6 +58,10 @@ class AIService:
         self.nvidia = nvidia or NvidiaService(self.settings)
         self.last_provider_name: str | None = None
         self.last_model_name: str | None = None
+        # Per-instance cooldowns: a provider that hit a rate limit is skipped
+        # for the rest of this service's lifetime (one job/request scope), so
+        # a long batch pipeline does not re-walk dead providers on every call.
+        self._cooldown_until: dict[str, float] = {}
 
     def __getattr__(self, name: str):
         wrapper = getattr(GroqService, name, None)
@@ -84,6 +89,23 @@ class AIService:
             self.settings.ai_fallback_provider,
             "AI_FALLBACK_PROVIDER",
         )
+        if self._is_cooling_down(primary_name):
+            return await self._fallback_or_raise(
+                primary_name,
+                fallback_name,
+                prompt_name,
+                context,
+                temperature,
+                max_tokens,
+                AIServiceError(
+                    f"AI provider {primary_name!r} is rate-limited.",
+                    status=429,
+                    provider=primary_name,
+                    reason="rate_limit",
+                ),
+                reason="rate_limit",
+                json_mode=json_mode,
+            )
         primary = self._provider(primary_name)
         logger.info("Using primary AI provider: %s", primary_name)
 
@@ -112,6 +134,7 @@ class AIService:
         except AIServiceError as exc:
             if not self._should_fallback(exc):
                 raise
+            self._note_failure(primary_name, exc)
             return await self._fallback_or_raise(
                 primary_name,
                 fallback_name,
@@ -156,7 +179,11 @@ class AIService:
         last_error: Exception = original_error
         attempted_any = False
         for name in candidates:
-            if name == primary_name or not self._provider_is_configured(name):
+            if (
+                name == primary_name
+                or self._is_cooling_down(name)
+                or not self._provider_is_configured(name)
+            ):
                 continue
             self._log_fallback(previous_name, name, current_reason)
             try:
@@ -180,6 +207,7 @@ class AIService:
                 attempted_any = True
                 if not self._should_fallback(exc):
                     raise
+                self._note_failure(name, exc)
                 previous_name = name
                 current_reason = exc.reason or "temporary_error"
                 last_error = exc
@@ -192,6 +220,24 @@ class AIService:
                 f"{fallback_name!r} is not configured."
             ) from original_error
         raise last_error
+
+    _RATE_LIMIT_COOLDOWN_SECONDS = 900.0
+
+    def _is_cooling_down(self, name: str) -> bool:
+        return self._cooldown_until.get(name, 0.0) > time.monotonic()
+
+    def _note_failure(self, name: str, error: AIServiceError) -> None:
+        if error.reason != "rate_limit" and error.status != 429:
+            return
+        cooldown = self._RATE_LIMIT_COOLDOWN_SECONDS
+        if error.retry_after:
+            cooldown = min(max(float(error.retry_after), 60.0), 3600.0)
+        self._cooldown_until[name] = time.monotonic() + cooldown
+        logger.warning(
+            "AI provider %s is rate-limited; skipping it for %.0f seconds.",
+            name,
+            cooldown,
+        )
 
     def _provider(self, name: str) -> TextGenerationProvider:
         if name == "github_models":

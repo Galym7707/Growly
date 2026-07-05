@@ -21,6 +21,7 @@ PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
 GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MAX_ATTEMPTS = 3
 GROQ_MAX_RETRY_DELAY_SECONDS = 60.0
+GROQ_MAX_INLINE_RETRY_AFTER_SECONDS = 15.0
 GROQ_REQUEST_TIMEOUT_SECONDS = 120.0
 GROQ_MAX_SOURCE_ITEMS = 8
 GROQ_MAX_SNIPPET_CHARS = 300
@@ -129,6 +130,13 @@ class GroqService:
                             status=response.status_code,
                             retry_after=retry_after,
                         )
+                        if (
+                            retry_after is not None
+                            and retry_after > GROQ_MAX_INLINE_RETRY_AFTER_SECONDS
+                        ):
+                            # Long Retry-After means a daily/hourly quota:
+                            # sleeping here only stalls the provider chain.
+                            raise last_error
                         if attempt < GROQ_MAX_ATTEMPTS - 1:
                             delay = max(2**attempt, retry_after or 0.0)
                             await asyncio.sleep(
