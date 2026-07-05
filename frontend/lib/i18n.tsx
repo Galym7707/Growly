@@ -496,6 +496,12 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
       "For example: calm, specific, without exaggerated claims",
     "Не удалось войти. Проверьте почту и пароль.":
       "Sign-in failed. Check your email and password.",
+    "Вход через Google не работает во встроенном браузере приложения. Откройте сайт в Safari или Chrome.":
+      "Google sign-in does not work inside an app's built-in browser. Open the site in Safari or Chrome.",
+    "Скопировать ссылку на сайт":
+      "Copy the site link",
+    "Ссылка скопирована. Вставьте её в Safari или Chrome.":
+      "Link copied. Paste it into Safari or Chrome.",
     "Регистрация":
       "Sign up",
     "Нет аккаунта? Зарегистрироваться":
@@ -1602,6 +1608,12 @@ const translations: Record<Exclude<Locale, "ru">, Record<string, string>> = {
       "Мысалы: сабырлы, нақты, асыра уәде бермей",
     "Не удалось войти. Проверьте почту и пароль.":
       "Кіру мүмкін болмады. Пошта мен құпиясөзді тексеріңіз.",
+    "Вход через Google не работает во встроенном браузере приложения. Откройте сайт в Safari или Chrome.":
+      "Google арқылы кіру қолданбаның кірістірілген браузерінде жұмыс істемейді. Сайтты Safari немесе Chrome-да ашыңыз.",
+    "Скопировать ссылку на сайт":
+      "Сайт сілтемесін көшіру",
+    "Ссылка скопирована. Вставьте её в Safari или Chrome.":
+      "Сілтеме көшірілді. Оны Safari немесе Chrome-ға қойыңыз.",
     "Регистрация":
       "Тіркелу",
     "Нет аккаунта? Зарегистрироваться":

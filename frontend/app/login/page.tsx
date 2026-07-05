@@ -32,6 +32,7 @@ function LoginContent() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
+  const [inAppBrowser, setInAppBrowser] = useState(false);
   const configured = isSupabaseConfigured();
   const localModeAllowed = isLocalAuthBypassAllowed();
   const { t } = useLanguage();
@@ -41,6 +42,21 @@ function LoginContent() {
       setError(t("Не удалось войти через Google. Попробуйте ещё раз."));
     }
   }, [searchParams, t]);
+
+  // Google blocks OAuth inside embedded app WebViews (403
+  // disallowed_useragent), so the Google button is replaced with guidance.
+  useEffect(() => {
+    setInAppBrowser(isInAppBrowser());
+  }, []);
+
+  async function copySiteLink() {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/login`);
+      setNotice(t("Ссылка скопирована. Вставьте её в Safari или Chrome."));
+    } catch {
+      setNotice(`${window.location.origin}/login`);
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -127,6 +143,15 @@ function LoginContent() {
 
   async function signInWithGoogle() {
     if (!configured) return;
+    if (isInAppBrowser()) {
+      setInAppBrowser(true);
+      setError(
+        t(
+          "Вход через Google не работает во встроенном браузере приложения. Откройте сайт в Safari или Chrome.",
+        ),
+      );
+      return;
+    }
     const nextPath = getSafeNextPath(searchParams.get("next"));
     setLoading(true);
     setError("");
@@ -229,15 +254,31 @@ function LoginContent() {
               <div className="auth-divider">
                 <span>{t("или")}</span>
               </div>
-              <button
-                className="button button-secondary button-wide auth-google"
-                disabled={loading}
-                onClick={signInWithGoogle}
-                type="button"
-              >
-                <GoogleMark />
-                {t("Продолжить с Google")}
-              </button>
+              {inAppBrowser ? (
+                <div className="notice">
+                  {t(
+                    "Вход через Google не работает во встроенном браузере приложения. Откройте сайт в Safari или Chrome.",
+                  )}
+                  <button
+                    className="button button-secondary button-small"
+                    onClick={copySiteLink}
+                    style={{ marginTop: 10 }}
+                    type="button"
+                  >
+                    {t("Скопировать ссылку на сайт")}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="button button-secondary button-wide auth-google"
+                  disabled={loading}
+                  onClick={signInWithGoogle}
+                  type="button"
+                >
+                  <GoogleMark />
+                  {t("Продолжить с Google")}
+                </button>
+              )}
             </>
           ) : null}
           {configured ? (
@@ -294,6 +335,32 @@ function GoogleMark() {
 function getSafeNextPath(next: string | null): string {
   if (next?.startsWith("/") && !next.startsWith("//")) return next;
   return "/dashboard";
+}
+
+// Google rejects OAuth from embedded WebViews with 403 disallowed_useragent.
+// Detect the common in-app browsers so we can guide the user to a real one.
+function isInAppBrowser(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  if (
+    /(FBAN|FBAV|FB_IAB|Instagram|TikTok|musical_ly|BytedanceWebview|Snapchat|WhatsApp|Telegram|Line\/|MicroMessenger|LinkedInApp|VKClient|OKApp)/i.test(
+      ua,
+    )
+  ) {
+    return true;
+  }
+  // Android WebView marker.
+  if (/; wv\)/.test(ua)) return true;
+  // iOS WebView: an iPhone/iPad UA without the Safari token (and not a
+  // full browser like Chrome/Firefox/Edge for iOS).
+  if (
+    /iPhone|iPad|iPod/.test(ua) &&
+    !/Safari\//.test(ua) &&
+    !/CriOS|FxiOS|EdgiOS|OPT\//.test(ua)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function describeAuthError(
