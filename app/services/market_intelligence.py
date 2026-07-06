@@ -32,6 +32,9 @@ from app.utils.text import parse_json_response
 logger = logging.getLogger(__name__)
 
 MARKET_ANALYSIS_BATCH_SIZE = 8
+# How many source batches are analyzed concurrently. Kept modest so a burst
+# does not trip free-tier per-minute limits on the AI providers.
+MARKET_ANALYSIS_CONCURRENCY = 3
 MARKET_SCAN_PENDING_STATUS = "search_saved_analysis_pending"
 TAVILY_QUERY_TIMEOUT_SECONDS = 30.0
 GROQ_GENERATION_TIMEOUT_SECONDS = 600.0
@@ -169,12 +172,14 @@ class MarketIntelligenceService:
         )
         all_results: list[SearchResult] = []
         search_errors: list[str] = []
-        for query in queries:
+        provider = self._provider()
+
+        async def run_query(query: str) -> tuple[list[SearchResult], str | None]:
             logger.info("tavily_query_started query=%s", query)
             try:
                 rows = await asyncio.wait_for(
                     asyncio.to_thread(
-                        self._provider().search,
+                        provider.search,
                         query,
                         self.settings.search_max_results,
                         include_raw_content=False,
@@ -186,21 +191,28 @@ class MarketIntelligenceService:
                     query,
                     len(rows),
                 )
+                return rows, None
             except TimeoutError:
-                rows = []
-                search_errors.append(f"Tavily timeout: {query}")
                 logger.warning(
                     "tavily_query_finished query=%s results_count=0 status=timeout",
                     query,
                 )
+                return [], f"Tavily timeout: {query}"
             except SearchServiceError as exc:
-                rows = []
-                search_errors.append(str(exc))
                 logger.warning(
                     "tavily_query_finished query=%s results_count=0 status=failed",
                     query,
                 )
+                return [], str(exc)
+
+        # All search queries run concurrently: the search stage takes as long
+        # as the slowest query instead of the sum of all of them.
+        for rows, error in await asyncio.gather(
+            *(run_query(query) for query in queries)
+        ):
             all_results.extend(rows)
+            if error:
+                search_errors.append(error)
         unique_results = self._deduplicate_results(all_results)
         logger.info("tavily_results_count=%d", len(unique_results))
         if not unique_results and search_errors:
@@ -525,47 +537,69 @@ class MarketIntelligenceService:
         progress: ProgressCallback | None = None,
         output_language: str | None = None,
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        analyses: list[dict[str, Any]] = []
         known_urls = {item.url for item in saved if item.url}
-        batch_count = max(
-            1,
-            (len(saved) + MARKET_ANALYSIS_BATCH_SIZE - 1)
-            // MARKET_ANALYSIS_BATCH_SIZE,
+        batches = [
+            saved[start : start + MARKET_ANALYSIS_BATCH_SIZE]
+            for start in range(0, len(saved), MARKET_ANALYSIS_BATCH_SIZE)
+        ] or [[]]
+        batch_count = len(batches)
+        start_step = (
+            f"Шаг 4/5: анализирую {batch_count} пакетов ИИ параллельно..."
+            if batch_count > 1
+            else f"Шаг 4/5: пакет ИИ 1/1, источников {len(saved)}..."
         )
-        for batch_number, start in enumerate(
-            range(0, len(saved), MARKET_ANALYSIS_BATCH_SIZE),
-            start=1,
-        ):
-            batch = saved[start : start + MARKET_ANALYSIS_BATCH_SIZE]
-            batch_step = (
-                f"Шаг 4/5: пакет ИИ {batch_number}/{batch_count}, "
-                f"источников {len(batch)}..."
-            )
-            await self._set_job_step(job_id, batch_step)
-            await self._emit_progress(progress, batch_step)
-            batch_context = {
-                "query": query,
-                "batch_number": batch_number,
-                "language": output_language,
-                "output_language": output_language,
-                "source_items": [
-                    self._compact_source_item(item) for item in batch
-                ],
-                "limitations": (
-                    "These are saved public web search results only. No private "
-                    "social-media or platform analytics are available."
-                ),
-            }
-            payload = await self._generate_json_dict(
-                lambda: self.ai.analyze_market_search(batch_context),
-                "Market search analysis",
-            )
+        await self._set_job_step(job_id, start_step)
+        await self._emit_progress(progress, start_step)
+        # Batches run concurrently (bounded), so the analysis stage takes
+        # roughly one batch's latency instead of the sum of all batches.
+        semaphore = asyncio.Semaphore(MARKET_ANALYSIS_CONCURRENCY)
+        done_count = 0
+
+        async def analyze_batch(
+            batch_number: int,
+            batch: list[SourceItem],
+        ) -> dict[str, Any]:
+            nonlocal done_count
+            async with semaphore:
+                batch_context = {
+                    "query": query,
+                    "batch_number": batch_number,
+                    "language": output_language,
+                    "output_language": output_language,
+                    "source_items": [
+                        self._compact_source_item(item) for item in batch
+                    ],
+                    "limitations": (
+                        "These are saved public web search results only. No private "
+                        "social-media or platform analytics are available."
+                    ),
+                }
+                payload = await self._generate_json_dict(
+                    lambda: self.ai.analyze_market_search(batch_context),
+                    "Market search analysis",
+                )
             payload["source_items"] = [
                 row
                 for row in payload.get("source_items", [])
                 if isinstance(row, dict) and row.get("url") in known_urls
             ]
-            analyses.append(payload)
+            done_count += 1
+            if batch_count > 1:
+                progress_step = (
+                    f"Шаг 4/5: готово пакетов ИИ {done_count}/{batch_count}..."
+                )
+                await self._set_job_step(job_id, progress_step)
+                await self._emit_progress(progress, progress_step)
+            return payload
+
+        analyses = list(
+            await asyncio.gather(
+                *(
+                    analyze_batch(number, batch)
+                    for number, batch in enumerate(batches, start=1)
+                )
+            )
+        )
         synthesis_step = "Шаг 4/5: объединяю результаты ИИ-анализа..."
         await self._set_job_step(job_id, synthesis_step)
         await self._emit_progress(progress, synthesis_step)

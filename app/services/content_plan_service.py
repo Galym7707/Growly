@@ -27,6 +27,8 @@ from app.utils.text import parse_json_response
 logger = logging.getLogger(__name__)
 
 CONTENT_PLAN_BATCH_SIZE = 8
+# Bounded concurrency for source-batch summarization.
+CONTENT_PLAN_BATCH_CONCURRENCY = 3
 CONTENT_PLAN_MAX_DIRECT_ITEMS = 8
 CONTENT_PLAN_MAX_SNIPPET_CHARS = 300
 CONTENT_PLAN_MAX_EVIDENCE_URLS = 8
@@ -261,26 +263,40 @@ class ContentPlanService:
             data["source_batch_summaries"] = []
             return data
 
-        batch_summaries: list[dict[str, Any]] = []
-        for batch_number, start in enumerate(
-            range(0, len(source_items), CONTENT_PLAN_BATCH_SIZE),
-            start=1,
-        ):
-            batch = source_items[start : start + CONTENT_PLAN_BATCH_SIZE]
-            batch_context = {
-                "batch_number": batch_number,
-                "language": data.get("language"),
-                "output_language": data.get("language"),
-                "source_items": [
-                    self._compact_source_item(item) for item in batch
-                ],
-            }
-            parsed = await self._summarize_sources_payload(batch_context)
+        batches = [
+            source_items[start : start + CONTENT_PLAN_BATCH_SIZE]
+            for start in range(0, len(source_items), CONTENT_PLAN_BATCH_SIZE)
+        ]
+        # Summarize batches concurrently (bounded) - same speedup as the
+        # market scan analysis stage.
+        semaphore = asyncio.Semaphore(CONTENT_PLAN_BATCH_CONCURRENCY)
+
+        async def summarize(batch_number: int, batch: list[SourceItem]) -> dict[str, Any]:
+            async with semaphore:
+                parsed = await self._summarize_sources_payload(
+                    {
+                        "batch_number": batch_number,
+                        "language": data.get("language"),
+                        "output_language": data.get("language"),
+                        "source_items": [
+                            self._compact_source_item(item) for item in batch
+                        ],
+                    }
+                )
             parsed.pop("raw_json", None)
             parsed["evidence_urls"] = self._list(parsed.get("evidence_urls"))[
                 :CONTENT_PLAN_MAX_EVIDENCE_URLS
             ]
-            batch_summaries.append(parsed)
+            return parsed
+
+        batch_summaries: list[dict[str, Any]] = list(
+            await asyncio.gather(
+                *(
+                    summarize(number, batch)
+                    for number, batch in enumerate(batches, start=1)
+                )
+            )
+        )
 
         await asyncio.to_thread(
             self._save_batch_summaries,
