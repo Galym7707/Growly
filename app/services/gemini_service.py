@@ -34,7 +34,7 @@ from app.utils.errors import AIServiceError, ConfigurationError
 logger = logging.getLogger(__name__)
 
 GEMINI_DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
-GEMINI_DEFAULT_MODEL = "gemini-3.5-flash"
+GEMINI_DEFAULT_MODEL = "gemini-flash-latest"
 GEMINI_REQUEST_TIMEOUT_SECONDS = 45.0
 # Gemini flash is a thinking model on the OpenAI-compatible endpoint:
 # max_tokens covers thoughts plus the visible answer, so short caps get

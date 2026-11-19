@@ -16,7 +16,7 @@ def test_defaults_are_safe() -> None:
     assert settings.ai_fallback_provider == "groq"
     assert settings.github_models_base_url == "https://models.github.ai/inference"
     assert settings.github_models_model == "openai/gpt-5-mini"
-    assert settings.groq_model == "llama-3.3-70b-versatile"
+    assert settings.groq_model == "openai/gpt-oss-120b"
     assert settings.instagram_enabled is False
     assert settings.bitrix_enabled is False
     assert settings.erpnext_enabled is False

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
 from typing import Any
 
@@ -230,3 +231,25 @@ async def test_structured_summary_uses_supported_reasoning_budget(monkeypatch, m
     assert body.get("reasoning_effort") == effort
     assert body["response_format"] == {"type": "json_object"}
     assert body["max_tokens"] == 1400
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("limit", [1, 2])
+async def test_source_batches_obey_the_provider_concurrency_limit(monkeypatch, limit):
+    service = GroqService(Settings(_env_file=None, GROQ_API_KEY="test", GROQ_MAX_CONCURRENT_REQUESTS=limit))
+    active = 0
+    maximum = 0
+
+    class ConcurrentClient(FakeClient):
+        async def post(self, *args, **kwargs):
+            nonlocal active, maximum
+            active += 1
+            maximum = max(maximum, active)
+            await asyncio.sleep(0.01)
+            active -= 1
+            return FakeResponse(200)
+
+    monkeypatch.setattr(groq_service.httpx, "AsyncClient", lambda **kw: ConcurrentClient(iter([]), []))
+    result = await asyncio.gather(*(service.generate_text("connection_test.md", {}) for _ in range(4)))
+    assert result == ["completed"] * 4
+    assert maximum == limit

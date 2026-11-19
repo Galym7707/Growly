@@ -41,6 +41,7 @@ def load_prompt(prompt_name: str) -> str:
 class GroqService:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
+        self._requests = asyncio.Semaphore(self.settings.groq_max_concurrent_requests)
 
     async def _record_failure(self, message: str, details: dict[str, Any]) -> None:
         def write_log() -> None:
@@ -58,6 +59,23 @@ class GroqService:
         await asyncio.to_thread(write_log)
 
     async def generate_text(
+        self,
+        prompt_name: str,
+        context: dict[str, Any] | list[Any] | str,
+        *,
+        temperature: float = 0.35,
+        max_tokens: int = 3000,
+        json_mode: bool = False,
+    ) -> str:
+        # Source batches share this provider instance. Queue its retries too,
+        # so other batches cannot consume a freshly renewed minute window.
+        async with self._requests:
+            return await self._generate_text(
+                prompt_name, context, temperature=temperature,
+                max_tokens=max_tokens, json_mode=json_mode,
+            )
+
+    async def _generate_text(
         self,
         prompt_name: str,
         context: dict[str, Any] | list[Any] | str,

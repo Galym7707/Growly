@@ -33,8 +33,11 @@ class Settings(BaseSettings):
 
     groq_api_key: SecretStr | None = Field(default=None, alias="GROQ_API_KEY")
     groq_model: str = Field(
-        default="llama-3.3-70b-versatile",
+        default="openai/gpt-oss-120b",
         alias="GROQ_MODEL",
+    )
+    groq_max_concurrent_requests: int = Field(
+        default=1, ge=1, le=10, alias="GROQ_MAX_CONCURRENT_REQUESTS"
     )
     github_models_token: SecretStr | None = Field(
         default=None,
@@ -54,7 +57,7 @@ class Settings(BaseSettings):
         alias="NVIDIA_BASE_URL",
     )
     nvidia_model: str = Field(
-        default="deepseek-ai/deepseek-v4-flash",
+        default="google/gemma-4-31b-it",
         alias="NVIDIA_MODEL",
     )
     gemini_api_key: SecretStr | None = Field(default=None, alias="GEMINI_API_KEY")
@@ -63,7 +66,7 @@ class Settings(BaseSettings):
         alias="GEMINI_BASE_URL",
     )
     gemini_model: str = Field(
-        default="gemini-3.5-flash",
+        default="gemini-flash-latest",
         alias="GEMINI_MODEL",
     )
     ai_primary_provider: str = Field(

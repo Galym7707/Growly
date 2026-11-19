@@ -1,6 +1,6 @@
 """NVIDIA NIM provider (OpenAI-compatible endpoint).
 
-build.nvidia.com exposes hosted models (DeepSeek V4 Flash by default) through
+build.nvidia.com exposes hosted models (Gemma 4 31B by default) through
 an OpenAI-compatible API at https://integrate.api.nvidia.com/v1. Free
 endpoints have generous credits; on 429 AIService falls back down the
 provider chain.
@@ -37,7 +37,7 @@ from app.utils.errors import AIServiceError, ConfigurationError
 logger = logging.getLogger(__name__)
 
 NVIDIA_DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1"
-NVIDIA_DEFAULT_MODEL = "deepseek-ai/deepseek-v4-flash"
+NVIDIA_DEFAULT_MODEL = "google/gemma-4-31b-it"
 # Free NIM endpoints queue heavily at peak: keep the per-request timeout
 # short and retries off so a slow queue fails fast and the provider chain
 # moves on to Gemini/Groq instead of eating the whole generation budget.
