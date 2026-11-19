@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isAuthRequired } from "@/lib/auth-config";
+import { isAuthRequired } from "./lib/auth-config";
+import { isPublicGrowlyRequest } from "./lib/api-access";
 
 const protectedPrefixes = [
   "/dashboard",
@@ -22,7 +23,10 @@ export async function proxy(request: NextRequest) {
   const isProtected = protectedPrefixes.some((prefix) =>
     request.nextUrl.pathname.startsWith(prefix),
   );
-  if (!authRequired) {
+  if (
+    !authRequired ||
+    isPublicGrowlyRequest(request.nextUrl.pathname, request.method)
+  ) {
     return NextResponse.next({ request });
   }
   if (!supabaseUrl || !supabaseKey) {

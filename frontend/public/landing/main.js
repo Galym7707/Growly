@@ -189,7 +189,6 @@
 
   // ---------- STACK TABS ----------
   const tabs = document.querySelectorAll('.stack-tab');
-  const panels = document.querySelectorAll('.stack-panel');
   tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
       if (tab.classList.contains('active')) return;

@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthRequired } from "@/lib/auth-config";
+import { isPublicGrowlyPath } from "@/lib/api-access";
 
 type WorkspaceHeaders =
   | { headers: Headers }
@@ -12,24 +13,6 @@ type SupabaseUserWithConfirmation = {
   email_confirmed_at?: string | null;
   confirmed_at?: string | null;
 };
-
-// Public, view-only endpoints reachable without a session: resolving a share
-// link (GET /share-links/{token}) and reading invitation details
-// (GET /invitations/{token}). Everything else requires authentication.
-function isPublicPath(path: string[], method: string): boolean {
-  if (
-    method === "POST" &&
-    path.length === 2 &&
-    path[0] === "auth" &&
-    path[1] === "register"
-  ) {
-    return true;
-  }
-  if (method !== "GET") return false;
-  if (path.length === 2 && path[0] === "share-links") return true;
-  if (path.length === 2 && path[0] === "invitations") return true;
-  return false;
-}
 
 async function resolveWorkspaceHeaders(
   request: NextRequest,
@@ -117,7 +100,7 @@ async function forward(
   if (apiKey) headers.set("X-Growly-API-Key", apiKey);
   const workspace = await resolveWorkspaceHeaders(
     request,
-    isPublicPath(path, request.method),
+    isPublicGrowlyPath(path, request.method),
   );
   if ("response" in workspace) return workspace.response;
   workspace.headers.forEach((value, key) => {
