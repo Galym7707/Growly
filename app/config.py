@@ -104,6 +104,12 @@ class Settings(BaseSettings):
         default=None, alias="SUPABASE_DB_PASSWORD"
     )
     database_url: SecretStr | None = Field(default=None, alias="DATABASE_URL")
+    database_connect_timeout_seconds: int = Field(
+        default=5, ge=2, le=30, alias="DATABASE_CONNECT_TIMEOUT_SECONDS"
+    )
+    database_pool_timeout_seconds: int = Field(
+        default=5, ge=1, le=30, alias="DATABASE_POOL_TIMEOUT_SECONDS"
+    )
 
     notion_api_key: SecretStr | None = Field(default=None, alias="NOTION_API_KEY")
     notion_root_page_id: str | None = Field(default=None, alias="NOTION_ROOT_PAGE_ID")

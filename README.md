@@ -351,6 +351,33 @@ python scripts/test_connections.py
 The script checks environment loading, PostgreSQL, GitHub Models, Groq, Telegram,
 and Notion without printing credentials.
 
+### Backend startup and database recovery
+
+The Docker Space starts its HTTP server immediately and initializes the database
+schema in a background task. If PostgreSQL is unavailable, initialization retries
+every 30 seconds without terminating the web process. Until schema verification
+succeeds, database-backed API routes and `/ready` return HTTP 503; `/health`
+remains available as a process liveness check. A healthy `/health` response alone
+does not establish that the application is ready.
+
+Connection and pool waits are bounded by `DATABASE_CONNECT_TIMEOUT_SECONDS` and
+`DATABASE_POOL_TIMEOUT_SECONDS` (both default to 5 seconds; connection timeout
+applies per resolved database address). Runtime connection failures return a safe
+HTTP 503 response with `Retry-After: 10`. Requests can use the existing connection
+pool again after PostgreSQL recovers. Failed writes are not replayed automatically.
+Set `RUN_DATABASE_MIGRATIONS=false` only when schema migrations are managed
+separately.
+
+When resuming or changing a Supabase project, verify that `DATABASE_URL`,
+`SUPABASE_URL`, both backend Supabase keys, and the frontend Supabase URL/key
+belong to that same project. Restart the Space after updating its secrets and
+redeploy Vercel after changing frontend environment variables. Changing the
+project does not transfer existing users or application data.
+
+Unit tests ignore the checkout's `.env` and use mocked integrations. Passing unit
+tests does not replace checking `/ready`, authentication, and real application
+workflows against the intended deployment.
+
 ## Vercel
 
 1. Import `galym7707/growly` into Vercel.

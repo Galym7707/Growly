@@ -20,12 +20,17 @@ def normalize_database_url(url: str) -> str:
 
 @lru_cache(maxsize=1)
 def get_engine() -> Engine:
-    url = normalize_database_url(get_settings().database_dsn())
+    settings = get_settings()
+    url = normalize_database_url(settings.database_dsn())
     return create_engine(
         url,
         pool_pre_ping=True,
         pool_recycle=300,
-        connect_args={"prepare_threshold": None},
+        pool_timeout=settings.database_pool_timeout_seconds,
+        connect_args={
+            "prepare_threshold": None,
+            "connect_timeout": settings.database_connect_timeout_seconds,
+        },
         echo=False,
         future=True,
     )

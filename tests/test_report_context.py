@@ -13,6 +13,11 @@ from app.web_api import ContentPlanRequest, _build_content_plan_context
 def _no_key(monkeypatch) -> None:
     monkeypatch.setattr(get_settings(), "growly_web_api_key", None)
 
+    async def report_in_workspace(self, report_id):
+        return SimpleNamespace(id=report_id, workspace_id=None)
+
+    monkeypatch.setattr("app.web_api.ReportService.get_report", report_in_workspace)
+
 
 def test_content_plan_options_are_derived_from_report_topic() -> None:
     report = SimpleNamespace(

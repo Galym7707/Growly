@@ -256,6 +256,10 @@ def test_chat_competitors_uses_resolved_membership_for_internal_call(
 ) -> None:
     settings = get_settings()
     monkeypatch.setattr(settings, "growly_web_api_key", None)
+    stamped = []
+    monkeypatch.setattr(
+        "app.web_api._stamp_workspace", lambda *args: stamped.append(args)
+    )
     now = datetime.now(UTC)
     report = SimpleNamespace(
         id=88,
@@ -308,6 +312,7 @@ def test_chat_competitors_uses_resolved_membership_for_internal_call(
     assert response.status_code == 200
     payload = response.json()
     assert payload["result"]["report_id"] == 88
+    assert stamped[0][1:] == (88, "default")
 
 
 def test_chat_returns_clear_message_for_ai_rate_limit(monkeypatch) -> None:
@@ -348,6 +353,10 @@ def test_chat_returns_clear_message_for_ai_rate_limit(monkeypatch) -> None:
 def test_content_plans_create_returns_plan_id_and_passes_language(monkeypatch) -> None:
     settings = get_settings()
     monkeypatch.setattr(settings, "growly_web_api_key", None)
+    stamped = []
+    monkeypatch.setattr(
+        "app.web_api._stamp_workspace", lambda *args: stamped.append(args)
+    )
     now = datetime.now(UTC)
     captured: dict[str, object] = {}
     item = SimpleNamespace(
@@ -391,6 +400,7 @@ def test_content_plans_create_returns_plan_id_and_passes_language(monkeypatch) -
     assert payload["plan_id"] == 45
     assert payload["content_plan_id"] == 45
     assert payload["items"][0]["id"] == 45
+    assert stamped[0][1:] == (45, "default")
     assert captured["context"]["language"] == "en"  # type: ignore[index]
     assert captured["context"]["business"]["language"] == "en"  # type: ignore[index]
 

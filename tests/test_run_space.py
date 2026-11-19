@@ -1,25 +1,25 @@
 from __future__ import annotations
 
+import os
+
 import run_space
 
 
-def test_prepare_database_runs_idempotent_migration(monkeypatch) -> None:
-    calls: list[bool] = []
-    monkeypatch.setenv("DATABASE_URL", "postgresql://configured")
+def test_space_enables_background_migrations(monkeypatch) -> None:
+    calls = []
     monkeypatch.delenv("RUN_DATABASE_MIGRATIONS", raising=False)
-    monkeypatch.setattr(run_space, "initialize_database", lambda: calls.append(True) or 0)
+    monkeypatch.setattr(run_space.uvicorn, "run", lambda *a, **kw: calls.append((a, kw)))
 
-    run_space.prepare_database()
+    run_space.run_web_server()
 
-    assert calls == [True]
+    assert os.environ["RUN_DATABASE_MIGRATIONS"] == "true"
+    assert calls[0][0] == ("app.main:app",)
 
 
-def test_prepare_database_can_be_disabled(monkeypatch) -> None:
-    calls: list[bool] = []
-    monkeypatch.setenv("DATABASE_URL", "postgresql://configured")
+def test_space_preserves_migration_opt_out(monkeypatch) -> None:
     monkeypatch.setenv("RUN_DATABASE_MIGRATIONS", "false")
-    monkeypatch.setattr(run_space, "initialize_database", lambda: calls.append(True) or 0)
+    monkeypatch.setattr(run_space.uvicorn, "run", lambda *a, **kw: None)
 
-    run_space.prepare_database()
+    run_space.run_web_server()
 
-    assert calls == []
+    assert os.environ["RUN_DATABASE_MIGRATIONS"] == "false"

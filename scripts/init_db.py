@@ -13,13 +13,12 @@ import psycopg
 CONNECT_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 5
 # Pooled connections (Supabase/pgbouncer) enforce a statement_timeout that the
-# large init.sql batch can exceed (QueryCanceled). Lift the timeouts for the
-# migration batch itself; prepended to each script so it applies inside the
-# same implicit transaction.
+# large init.sql batch can exceed (QueryCanceled). Give the batch two minutes,
+# while bounding lock waits so startup recovery cannot hang indefinitely.
 SESSION_SETUP_SQL = (
-    "SET statement_timeout = 0;\n"
-    "SET lock_timeout = 0;\n"
-    "SET idle_in_transaction_session_timeout = 0;\n"
+    "SET statement_timeout = 120000;\n"
+    "SET lock_timeout = 15000;\n"
+    "SET idle_in_transaction_session_timeout = 30000;\n"
 )
 
 from app.config import get_settings
@@ -77,7 +76,7 @@ def apply_migrations() -> None:
     with psycopg.connect(
         get_settings().database_dsn(),
         autocommit=True,
-        connect_timeout=30,
+        connect_timeout=get_settings().database_connect_timeout_seconds,
     ) as connection:
         with connection.cursor() as cursor:
             for path in migration_paths():

@@ -369,6 +369,12 @@ def _publish_service(
     recorded: list[dict] = []
     service = SocialPublishingService()
 
+    # These orchestration tests fake persistence and provider calls throughout.
+    monkeypatch.setattr(service, "_stored_api_key", staticmethod(lambda w: None))
+    monkeypatch.setattr(
+        service, "_load_existing_submission", staticmethod(lambda *a: None)
+    )
+
     monkeypatch.setattr(
         service,
         "_load_draft",
