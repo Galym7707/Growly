@@ -21,7 +21,8 @@ PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
 GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MAX_ATTEMPTS = 3
 GROQ_MAX_RETRY_DELAY_SECONDS = 60.0
-GROQ_MAX_INLINE_RETRY_AFTER_SECONDS = 15.0
+GROQ_MAX_INLINE_RETRY_AFTER_SECONDS = 60.0
+GROQ_MAX_TOTAL_RETRY_DELAY_SECONDS = 90.0
 GROQ_REQUEST_TIMEOUT_SECONDS = 120.0
 GROQ_MAX_SOURCE_ITEMS = 8
 GROQ_MAX_SNIPPET_CHARS = 300
@@ -107,6 +108,7 @@ class GroqService:
             # "Return valid JSON", which Groq's JSON mode requires).
             request_body["response_format"] = {"type": "json_object"}
         last_error: Exception | None = None
+        retry_delay_used = 0.0
         try:
             for attempt in range(GROQ_MAX_ATTEMPTS):
                 try:
@@ -129,26 +131,30 @@ class GroqService:
                             f"Groq temporarily returned status {response.status_code}.",
                             status=response.status_code,
                             retry_after=retry_after,
+                            provider="groq",
+                            reason="rate_limit" if response.status_code == 429 else "temporary_server_error",
                         )
                         if (
                             retry_after is not None
                             and retry_after > GROQ_MAX_INLINE_RETRY_AFTER_SECONDS
                         ):
-                            # Long Retry-After means a daily/hourly quota:
-                            # sleeping here only stalls the provider chain.
+                            # Minute windows can need more than 15 seconds.
+                            # Longer waits belong to the provider fallback.
                             raise last_error
                         if attempt < GROQ_MAX_ATTEMPTS - 1:
                             delay = max(2**attempt, retry_after or 0.0)
-                            await asyncio.sleep(
-                                min(delay, GROQ_MAX_RETRY_DELAY_SECONDS)
-                            )
+                            delay = min(delay, GROQ_MAX_RETRY_DELAY_SECONDS)
+                            if retry_delay_used + delay > GROQ_MAX_TOTAL_RETRY_DELAY_SECONDS:
+                                raise last_error
+                            retry_delay_used += delay
+                            await asyncio.sleep(delay)
                             continue
                         raise last_error
                     response.raise_for_status()
                     payload = response.json()
                     content = payload["choices"][0]["message"]["content"]
                     if not content or not str(content).strip():
-                        raise AIServiceError("Groq returned an empty response.")
+                        raise AIServiceError("Groq returned an empty response.", reason="invalid_response")
                     return str(content).strip()
                 except (httpx.TimeoutException, httpx.NetworkError) as exc:
                     last_error = exc
@@ -160,13 +166,24 @@ class GroqService:
                     raise AIServiceError(
                         f"Groq returned status {exc.response.status_code}.",
                         status=exc.response.status_code,
+                        reason=(
+                            "authentication" if exc.response.status_code in {401, 403}
+                            else "model_unavailable" if exc.response.status_code in {404, 410}
+                            else "http_error"
+                        ),
                     ) from exc
                 except (KeyError, IndexError, TypeError, ValueError) as exc:
-                    raise AIServiceError("Groq returned an invalid response.") from exc
+                    raise AIServiceError("Groq returned an invalid response.", reason="invalid_response") from exc
         except Exception as exc:
             status = exc.status if isinstance(exc, AIServiceError) else None
             retry_after = (
                 exc.retry_after if isinstance(exc, AIServiceError) else None
+            )
+            reason = (
+                exc.reason if isinstance(exc, AIServiceError)
+                else "timeout" if isinstance(exc, httpx.TimeoutException)
+                else "connection" if isinstance(exc, httpx.NetworkError)
+                else "invalid_response"
             )
             await self._record_failure(
                 "Groq generation failed.",
@@ -174,6 +191,8 @@ class GroqService:
                     "exception_type": type(exc).__name__,
                     "prompt_name": prompt_name,
                     "status": status,
+                    "reason": reason,
+                    "retry_after": retry_after,
                 },
             )
             if status == 429:
@@ -181,10 +200,14 @@ class GroqService:
                     "AI generation is delayed due to Groq rate limits.",
                     status=status,
                     retry_after=retry_after,
+                    provider="groq",
+                    reason="rate_limit",
                 ) from exc
             raise AIServiceError(
                 "AI generation is temporarily unavailable. Please try again later.",
                 status=status,
+                provider="groq",
+                reason=reason,
             ) from exc
         raise AIServiceError("AI generation did not complete.") from last_error
 

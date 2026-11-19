@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 GEMINI_DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
 GEMINI_DEFAULT_MODEL = "gemini-3.5-flash"
-GEMINI_REQUEST_TIMEOUT_SECONDS = 120.0
+GEMINI_REQUEST_TIMEOUT_SECONDS = 45.0
 # Gemini flash is a thinking model on the OpenAI-compatible endpoint:
 # max_tokens covers thoughts plus the visible answer, so short caps get
 # eaten by reasoning and truncate the JSON. Give every call headroom.
@@ -90,9 +90,9 @@ class GeminiService:
                 base_url=self._base_url(),
                 api_key=self._api_key(),
                 timeout=GEMINI_REQUEST_TIMEOUT_SECONDS,
-                # Gemini's free tier intermittently returns 503 (model
-                # overloaded); the SDK retries 429/5xx with backoff.
-                max_retries=2,
+                # AIService owns fallback. Hidden SDK retries can otherwise
+                # hold each analysis batch here for several minutes.
+                max_retries=0,
             )
         return self._client
 

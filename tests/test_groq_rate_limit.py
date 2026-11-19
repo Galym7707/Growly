@@ -151,3 +151,62 @@ async def test_groq_429_stops_after_three_attempts_without_exposing_key(
     assert delays == [1, 2]
     assert "test-secret-key" not in str(raised.value)
     assert "test-secret-key" not in repr(recorded)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("responses", "expected_delays", "succeeds"),
+    [
+        ([FakeResponse(429, retry_after="45"), FakeResponse(200)], [45.0], True),
+        ([FakeResponse(429, retry_after="3600")], [], False),
+        ([FakeResponse(429, retry_after="55"), FakeResponse(429, retry_after="55")], [55.0], False),
+    ],
+)
+async def test_groq_waits_for_minute_windows_but_bounds_total_wait(
+    monkeypatch, responses, expected_delays, succeeds,
+):
+    calls, delays = [], []
+    service = make_service()
+    iterator = iter(responses)
+    monkeypatch.setattr(groq_service.httpx, "AsyncClient", lambda **kw: FakeClient(iterator, calls))
+
+    async def sleep(delay):
+        delays.append(delay)
+
+    async def record_failure(*args):
+        pass
+
+    monkeypatch.setattr(groq_service.asyncio, "sleep", sleep)
+    monkeypatch.setattr(service, "_record_failure", record_failure)
+    if succeeds:
+        assert await service.generate_text("connection_test.md", {}) == "completed"
+    else:
+        with pytest.raises(AIServiceError) as error:
+            await service.generate_text("connection_test.md", {})
+        assert error.value.reason == "rate_limit"
+        assert error.value.provider == "groq"
+    assert delays == expected_delays
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("exception, reason", [
+    (httpx.ConnectError("unavailable"), "connection"),
+    (httpx.ReadTimeout("unavailable"), "timeout"),
+])
+async def test_groq_preserves_transport_failure_reason_for_provider_fallback(monkeypatch, exception, reason):
+    class UnavailableClient(FakeClient):
+        async def post(self, *args, **kwargs):
+            raise exception
+
+    service = make_service()
+    monkeypatch.setattr(groq_service.httpx, "AsyncClient", lambda **kw: UnavailableClient(iter([]), []))
+
+    async def noop(*args):
+        pass
+
+    monkeypatch.setattr(groq_service.asyncio, "sleep", noop)
+    monkeypatch.setattr(service, "_record_failure", noop)
+    with pytest.raises(AIServiceError) as error:
+        await service.generate_text("connection_test.md", {})
+    assert error.value.reason == reason
+    assert error.value.provider == "groq"
