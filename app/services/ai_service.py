@@ -14,7 +14,7 @@ from app.utils.errors import AIServiceError, ConfigurationError
 
 logger = logging.getLogger(__name__)
 
-FALLBACK_STATUS_CODES = {429, 500, 502, 503, 504}
+FALLBACK_STATUS_CODES = {404, 410, 429, 500, 502, 503, 504}
 FALLBACK_REASONS = {
     "rate_limit",
     "timeout",
@@ -23,6 +23,7 @@ FALLBACK_REASONS = {
     # A provider that answered with empty or malformed output is as useless
     # as one that errored - give the fallback provider a chance.
     "invalid_response",
+    "model_unavailable",
 }
 AUTH_REASONS = {"authentication"}
 

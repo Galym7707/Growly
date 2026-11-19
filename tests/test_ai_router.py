@@ -180,6 +180,8 @@ async def test_missing_github_token_uses_configured_groq_fallback(
 @pytest.mark.parametrize(
     ("status", "reason"),
     [
+        (404, "model_unavailable"),
+        (410, "model_unavailable"),
         (500, "temporary_server_error"),
         (502, "temporary_server_error"),
         (503, "temporary_server_error"),
@@ -219,3 +221,39 @@ async def test_temporary_github_failures_use_groq_fallback(
         await service.generate_text("connection_test.md", {})
         == "fallback"
     )
+
+
+@pytest.mark.asyncio
+async def test_retired_primary_and_missing_fallback_reach_working_provider():
+    primary = FakeProvider(error=AIServiceError(
+        "Retired model", status=410, provider="nvidia", reason="http_error",
+    ))
+    fallback = FakeProvider(error=AIServiceError(
+        "Model missing", status=404, provider="gemini", reason="http_error",
+    ))
+    working = FakeProvider(result="working generation")
+    settings = Settings(
+        _env_file=None,
+        NVIDIA_API_KEY="test-nvidia", GEMINI_API_KEY="test-gemini",
+        GROQ_API_KEY="test-groq",
+        AI_PRIMARY_PROVIDER="nvidia", AI_FALLBACK_PROVIDER="gemini",
+    )
+    service = AIService(settings, nvidia=primary, gemini=fallback, groq=working)
+    assert await service.generate_text("connection_test.md", {}) == "working generation"
+    assert [len(p.calls) for p in (primary, fallback, working)] == [1, 1, 1]
+    assert service.last_provider_name == "groq"
+
+
+@pytest.mark.asyncio
+async def test_invalid_request_is_not_retried_on_other_providers():
+    primary = FakeProvider(error=AIServiceError(
+        "Invalid request", status=400, provider="github_models", reason="http_error",
+    ))
+    fallback = FakeProvider()
+    settings = Settings(
+        _env_file=None, GITHUB_MODELS_TOKEN="test-github", GROQ_API_KEY="test-groq",
+    )
+    service = AIService(settings, github_models=primary, groq=fallback)
+    with pytest.raises(AIServiceError, match="Invalid request"):
+        await service.generate_text("connection_test.md", {})
+    assert fallback.calls == []
