@@ -210,3 +210,23 @@ async def test_groq_preserves_transport_failure_reason_for_provider_fallback(mon
         await service.generate_text("connection_test.md", {})
     assert error.value.reason == reason
     assert error.value.provider == "groq"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("model, effort", [
+    ("openai/gpt-oss-120b", "low"),
+    ("openai/gpt-oss-20b", "low"),
+    ("test-model", None),
+])
+async def test_structured_summary_uses_supported_reasoning_budget(monkeypatch, model, effort):
+    service = make_service()
+    service.settings.groq_model = model
+    calls = []
+    responses = iter([FakeResponse(200, content='{"summary":"ready"}')])
+    monkeypatch.setattr(groq_service.httpx, "AsyncClient", lambda **kw: FakeClient(responses, calls))
+    result = await service.summarize_content_plan_sources({"source_items": []})
+    assert result == '{"summary":"ready"}'
+    body = calls[0]["json"]
+    assert body.get("reasoning_effort") == effort
+    assert body["response_format"] == {"type": "json_object"}
+    assert body["max_tokens"] == 1400

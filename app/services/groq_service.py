@@ -103,6 +103,10 @@ class GroqService:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        if model.startswith("openai/gpt-oss-"):
+            # Keep enough output budget for the requested JSON rather than
+            # exhausting short extraction responses on reasoning tokens.
+            request_body["reasoning_effort"] = "low"
         if json_mode:
             # Forces syntactically valid JSON output (prompts already say
             # "Return valid JSON", which Groq's JSON mode requires).
